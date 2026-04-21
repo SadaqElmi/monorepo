@@ -1,0 +1,36 @@
+/** Keys used by automated posting; every branch must have these rows after seed. */
+export type AccountKey =
+  | 'cash'
+  | 'bank'
+  | 'card_clearing'
+  | 'inventory'
+  | 'accounts_receivable'
+  | 'due_from_branch'
+  | 'accounts_payable'
+  | 'due_to_branch'
+  | 'sales_revenue'
+  | 'cogs'
+  | 'operating_expense'
+  | 'equity_retained';
+
+export type JournalSourceType =
+  | 'sale'
+  | 'customer_invoice'
+  | 'purchase'
+  | 'transfer_ship'
+  | 'transfer_receive'
+  | 'transfer_ship_reversal'
+  | 'transfer_receive_reversal'
+  | 'purchase_reversal'
+  | 'purchase_refund'
+  | 'sale_return'
+  | 'sale_return_reversal'
+  | 'expense'
+  | 'expense_reversal'
+  | 'manual'
+  | 'ap_payment'
+  | 'ar_payment'
+  | 'consolidation_bs'
+  | 'consolidation_pnl'
+  | 'consolidation_reversal'
+  | 'period_adjustment';

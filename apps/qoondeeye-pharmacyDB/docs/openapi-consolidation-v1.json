@@ -1,0 +1,79 @@
+{
+  "openapi": "3.0.3",
+  "info": {
+    "title": "Qoondeeye consolidation API (v1 subset)",
+    "version": "2026-04-20",
+    "description": "Stable surface under /api/v1/reports. Legacy /api/reports paths remain during deprecation."
+  },
+  "servers": [{ "url": "/api/v1/reports" }],
+  "paths": {
+    "/consolidation/run": {
+      "post": {
+        "summary": "Run or draft consolidation",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["periodKey", "asOfDate", "fromDate", "toDate", "scopeHash"],
+                "properties": {
+                  "periodKey": { "type": "string" },
+                  "asOfDate": { "type": "string", "format": "date" },
+                  "fromDate": { "type": "string", "format": "date" },
+                  "toDate": { "type": "string", "format": "date" },
+                  "scopeHash": { "type": "string" },
+                  "branchIds": { "type": "array", "items": { "type": "string", "format": "uuid" } },
+                  "entityId": { "type": "string", "format": "uuid" },
+                  "dryRun": { "type": "boolean" },
+                  "asDraft": { "type": "boolean" },
+                  "replaceDraftRunId": { "type": "string", "format": "uuid" },
+                  "groupCurrency": { "type": "string" },
+                  "ratePolicy": {
+                    "type": "string",
+                    "enum": ["closing", "average", "historical"],
+                    "deprecated": true
+                  },
+                  "fxPolicy": {
+                    "type": "object",
+                    "properties": {
+                      "bs": { "type": "string", "enum": ["closing", "average", "historical"] },
+                      "pnl": { "type": "string", "enum": ["closing", "average", "historical"] },
+                      "equity": { "type": "string", "enum": ["closing", "average", "historical"] }
+                    }
+                  },
+                  "includeAdjustments": { "type": "boolean" }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Run result",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "run": { "type": "object" },
+                    "reversedRunId": { "type": "string", "nullable": true }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/consolidation/runs/{runId}/finalize": {
+      "post": {
+        "summary": "Finalize posted run",
+        "parameters": [
+          { "name": "runId", "in": "path", "required": true, "schema": { "type": "string", "format": "uuid" } }
+        ],
+        "responses": { "200": { "description": "Finalized run" } }
+      }
+    }
+  }
+}

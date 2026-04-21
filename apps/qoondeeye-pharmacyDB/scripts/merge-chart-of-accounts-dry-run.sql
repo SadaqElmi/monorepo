@@ -1,0 +1,45 @@
+-- Chart of accounts merge: detection and operator notes
+-- Replace :schema with your tenant schema name (e.g. test).
+--
+-- IMPORTANT: In a normal tenant, chart_of_accounts has UNIQUE(branch_id, account_key).
+-- Two different UUIDs with the same account_key are usually TWO BRANCHES (expected),
+-- not merge candidates. Do not merge COA rows across branches.
+--
+-- 1) True duplicates (same branch, same account_key — should not happen if UNIQUE exists):
+--
+-- SELECT branch_id, account_key, COUNT(*) AS n, array_agg(id::text ORDER BY id) AS ids
+-- FROM :schema.chart_of_accounts
+-- GROUP BY branch_id, account_key
+-- HAVING COUNT(*) > 1;
+--
+-- 2) "Many rows per key" across the whole tenant (often one row per branch — NOT duplicates):
+--
+-- SELECT account_key, COUNT(*) AS row_count
+-- FROM :schema.chart_of_accounts
+-- WHERE account_type IN ('income', 'expense')
+-- GROUP BY account_key
+-- HAVING COUNT(*) > 1;
+--
+-- ---------------------------------------------------------------------------
+-- Manual merge template (run inside a single transaction; backup first).
+-- :keeper_id = account to keep; :remove_id = duplicate in the SAME branch.
+--
+-- BEGIN;
+-- UPDATE :schema.journal_lines jl
+-- SET account_id = :keeper_id::uuid
+-- WHERE jl.account_id = :remove_id::uuid;
+--
+-- UPDATE :schema.chart_of_accounts c
+-- SET parent_id = :keeper_id::uuid
+-- WHERE c.parent_id = :remove_id::uuid AND c.id <> :keeper_id::uuid;
+--
+-- If the keeper was a child of the row you remove, repoint first, e.g.:
+-- UPDATE :schema.chart_of_accounts SET parent_id = (
+--   SELECT parent_id FROM :schema.chart_of_accounts WHERE id = :remove_id::uuid
+-- ) WHERE id = :keeper_id::uuid AND parent_id = :remove_id::uuid;
+--
+-- Merge branch_account_balance_snapshot rows if that table exists (sum balances
+-- per period, then delete remove_id rows — see API implementation).
+--
+-- DELETE FROM :schema.chart_of_accounts WHERE id = :remove_id::uuid;
+-- COMMIT;

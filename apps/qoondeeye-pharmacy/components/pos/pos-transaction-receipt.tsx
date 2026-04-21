@@ -1,0 +1,225 @@
+"use client";
+
+import * as React from "react";
+import { Building2, CreditCard } from "lucide-react";
+
+import { Badge } from "@/components/ui/badge";
+import { Card, CardContent, CardFooter } from "@/components/ui/card";
+import { Separator } from "@/components/ui/separator";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
+import { cn } from "@/lib/utils";
+
+/** Matches cart / saved sale lines on the POS page. */
+export type PosTransactionLine = {
+  lineId: string;
+  productId: string;
+  name: string;
+  unitPrice: number;
+  qty: number;
+  unitType: string;
+};
+
+export type PosTransaction = {
+  receiptId: string;
+  saleId?: string;
+  createdAt: number;
+  paymentMethod: string;
+  lines: PosTransactionLine[];
+  discount: number;
+  subtotal: number;
+  tax: number;
+  total: number;
+};
+
+const BRAND = "#0d968b";
+
+function formatMoney(n: number) {
+  return new Intl.NumberFormat("en-US", {
+    style: "currency",
+    currency: "USD",
+  }).format(n);
+}
+
+type PosTransactionReceiptProps = {
+  transaction: PosTransaction;
+  registerLabel?: string;
+  className?: string;
+};
+
+/**
+ * Printable transaction receipt — layout inspired by the Zenith mock,
+ * trimmed to real POS data (PharmaCare branding, no fake card / patient / barcode).
+ */
+export function PosTransactionReceipt({
+  transaction: tx,
+  registerLabel = "Register #01",
+  className,
+}: PosTransactionReceiptProps) {
+  const when = new Date(tx.createdAt);
+  const dateStr = new Intl.DateTimeFormat("en-US", {
+    month: "short",
+    day: "numeric",
+    year: "numeric",
+  }).format(when);
+  const timeStr = new Intl.DateTimeFormat("en-US", {
+    hour: "numeric",
+    minute: "2-digit",
+  }).format(when);
+
+  return (
+    <Card
+      className={cn(
+        "receipt-thermal mx-auto w-full max-w-[72mm] overflow-hidden border-0 bg-white text-[12px] leading-[14px] text-neutral-900 shadow-none print:rounded-none print:shadow-none dark:bg-white dark:text-neutral-900",
+        className,
+      )}
+    >
+      <div className="border-b border-neutral-200 px-3 py-4 text-center">
+        <div
+          className="mb-2 inline-flex items-center justify-center rounded-lg p-1.5"
+          style={{ backgroundColor: `${BRAND}1a`, color: BRAND }}
+        >
+          <Building2 className="size-4" aria-hidden />
+        </div>
+        <h1 className="font-sans text-base font-bold tracking-tight" style={{ color: BRAND }}>
+          PharmaCare Pharmacy
+        </h1>
+        <p className="receipt-muted mt-1 text-[11px] leading-[13px]">
+          482 Wellness Plaza, Medical District
+          <br />
+          Care City, CC 50291
+          <br />
+          Tel: (555) 010-PHARM | pharmacare.local
+        </p>
+      </div>
+
+      <CardContent className="space-y-2 px-3 py-3">
+        <div className="flex items-center justify-between gap-3 text-[11px]">
+          <span className="receipt-muted uppercase tracking-wide">Receipt</span>
+          <span className="font-mono font-semibold">{tx.receiptId}</span>
+        </div>
+        <div className="flex items-center justify-between gap-3 text-[11px]">
+          <span className="receipt-muted uppercase tracking-wide">Date</span>
+          <span>{dateStr}</span>
+        </div>
+        <div className="flex items-center justify-between gap-3 text-[11px]">
+          <span className="receipt-muted uppercase tracking-wide">Time</span>
+          <span>{timeStr}</span>
+        </div>
+        <div className="flex items-center justify-between gap-3 text-[11px]">
+          <span className="receipt-muted uppercase tracking-wide">Register</span>
+          <span>{registerLabel}</span>
+        </div>
+        <Separator className="my-1 bg-neutral-300" />
+      </CardContent>
+
+      <div className="p-0.5">
+        <Table>
+          <TableHeader>
+            <TableRow className="border-neutral-300 bg-neutral-100 hover:bg-neutral-100">
+              <TableHead className="px-2 py-1.5 text-[10px] font-bold uppercase tracking-wide text-neutral-700">
+                Description
+              </TableHead>
+              <TableHead className="px-1 py-1.5 text-center text-[10px] font-bold uppercase tracking-wide text-neutral-700">
+                Qty
+              </TableHead>
+              <TableHead className="px-1 py-1.5 text-right text-[10px] font-bold uppercase tracking-wide text-neutral-700">
+                Unit price
+              </TableHead>
+              <TableHead className="px-2 py-1.5 text-right text-[10px] font-bold uppercase tracking-wide text-neutral-700">
+                Total
+              </TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {tx.lines.map((l) => {
+              const lineTotal = l.unitPrice * l.qty;
+              return (
+                <TableRow key={l.lineId} className="border-neutral-200 hover:bg-neutral-50/80">
+                  <TableCell className="px-2 py-1.5 align-top">
+                    <p className="text-[11px] font-semibold text-neutral-900">{l.name}</p>
+                    <p className="receipt-muted text-[10px]">Unit: {l.unitType}</p>
+                  </TableCell>
+                  <TableCell className="px-1 py-1.5 text-center text-[11px] font-medium tabular-nums">
+                    {l.qty}
+                  </TableCell>
+                  <TableCell className="px-1 py-1.5 text-right text-[11px] font-medium tabular-nums">
+                    {formatMoney(l.unitPrice)}
+                  </TableCell>
+                  <TableCell className="px-2 py-1.5 text-right text-[11px] font-bold tabular-nums">
+                    {formatMoney(lineTotal)}
+                  </TableCell>
+                </TableRow>
+              );
+            })}
+          </TableBody>
+        </Table>
+      </div>
+
+      <CardContent className="space-y-2 border-t border-neutral-300 px-3 py-3">
+        <div className="mb-1 flex items-center justify-between text-[11px]">
+          <span className="receipt-muted uppercase tracking-wide">Payment</span>
+          <Badge
+            variant="outline"
+            className="h-5 border-0 px-1.5 text-[10px] font-bold uppercase"
+            style={{ backgroundColor: `${BRAND}1a`, color: BRAND }}
+          >
+            Success
+          </Badge>
+        </div>
+        <div className="flex items-center justify-between gap-2">
+          <div className="flex items-center gap-2">
+            <div
+              className="flex h-6 w-6 items-center justify-center rounded border border-neutral-300 bg-neutral-100"
+              style={{ color: BRAND }}
+            >
+              <CreditCard className="size-3.5" aria-hidden />
+            </div>
+            <span className="text-[11px] font-semibold">{tx.paymentMethod}</span>
+          </div>
+          <span className="receipt-muted text-[10px]">In-store POS</span>
+        </div>
+        <Separator className="my-1 bg-neutral-300" />
+        <div className="space-y-1.5">
+          <div className="flex justify-between text-[11px]">
+            <span className="receipt-muted">Subtotal</span>
+            <span className="font-semibold tabular-nums">{formatMoney(tx.subtotal)}</span>
+          </div>
+          <div className="flex justify-between text-[11px]">
+            <span className="receipt-muted">VAT (15%)</span>
+            <span className="font-semibold tabular-nums">{formatMoney(tx.tax)}</span>
+          </div>
+          <div className="flex justify-between text-[11px]">
+            <span className="font-semibold">Discount</span>
+            <span className="font-semibold tabular-nums">-{formatMoney(tx.discount)}</span>
+          </div>
+          <Separator className="my-1 bg-neutral-400" />
+          <div className="flex items-end justify-between">
+            <span className="font-bold uppercase tracking-wide">Total due</span>
+            <span className="font-sans text-[14px] font-extrabold tabular-nums" style={{ color: BRAND }}>
+              {formatMoney(tx.total)}
+            </span>
+          </div>
+        </div>
+      </CardContent>
+
+      <CardFooter className="flex flex-col gap-2 border-t border-neutral-300 bg-white px-3 py-3 text-center">
+        <div className="space-y-1">
+          <p className="text-[11px] font-semibold">Thank you for choosing PharmaCare Pharmacy.</p>
+          <p className="receipt-muted text-[10px] uppercase leading-relaxed">
+            Prescription items follow dispensing rules. OTC returns within 7 days with this receipt when allowed by policy.
+          </p>
+        </div>
+        <div className="receipt-muted text-[10px] font-mono">
+          Ref: {tx.receiptId} · {when.getTime()}
+        </div>
+      </CardFooter>
+    </Card>
+  );
+}
