@@ -22,27 +22,27 @@ import {
   Smartphone,
   Undo2,
   Wallet,
+  X,
 } from "lucide-react";
 
-import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
+import { Badge } from "@repo/ui/badge";
+import { Button } from "@repo/ui/button";
 import {
   Card,
   CardContent,
   CardFooter,
   CardHeader,
   CardTitle,
-} from "@/components/ui/card";
-import { Input } from "@/components/ui/input";
-import { Separator } from "@/components/ui/separator";
+} from "@repo/ui/card";
+import { Input } from "@repo/ui/input";
+import { Separator } from "@repo/ui/separator";
 import {
   Sheet,
   SheetContent,
   SheetDescription,
   SheetHeader,
   SheetTitle,
-  SheetTrigger,
-} from "@/components/ui/sheet";
+} from "@repo/ui/sheet";
 import { cn } from "@/lib/utils";
 import { PosReturnPanel } from "@/components/pos/pos-return-panel";
 import {
@@ -60,9 +60,12 @@ import {
   createSale,
   getBatches,
   getCategories,
+  getSaleById,
+  getSales,
   getProductByBarcode,
   getProducts,
   type Batch,
+  type Sale,
 } from "@/lib/api";
 
 const brand = "#0d968b";
@@ -240,6 +243,73 @@ function cartTotals(lines: CartLine[], discount: number) {
 
 function cloneLines(lines: CartLine[]): CartLine[] {
   return lines.map((l) => ({ ...l, lineId: crypto.randomUUID() }));
+}
+
+const PAYMENT_METHOD_LABELS: Record<string, string> = {
+  cash: "Cash",
+  card: "Card",
+  mobile: "Mobile money",
+  wallet: "Digital wallet",
+};
+
+function toFiniteNumber(v: unknown): number {
+  const n = typeof v === "number" ? v : Number(v);
+  return Number.isFinite(n) ? n : 0;
+}
+
+function normalizePaymentMethod(v: unknown): string {
+  if (typeof v !== "string") return "Sale";
+  const key = v.trim();
+  if (!key) return "Sale";
+  return PAYMENT_METHOD_LABELS[key.toLowerCase()] ?? key;
+}
+
+function saleToPosTransaction(
+  sale: Sale,
+  productNameById?: Record<string, string>,
+): PosTransaction {
+  const rawLines = Array.isArray(sale.items) ? sale.items : [];
+  const lines = rawLines.map((item, index) => {
+    const qty = Math.max(1, Math.round(toFiniteNumber(item.quantity)));
+    const unitPrice = toFiniteNumber(item.price);
+    const productId = (item.product_id ?? "").trim() || `item-${index + 1}`;
+    const resolvedName =
+      (productNameById && productNameById[productId]) || undefined;
+    return {
+      lineId: (item.id ?? "").trim() || `${sale.id}-${index + 1}`,
+      productId,
+      name: resolvedName || (item.product_id ? "Product" : "Item"),
+      unitPrice,
+      qty,
+      unitType: "PC",
+    };
+  });
+
+  const subtotalFromLines = lines.reduce((sum, line) => sum + line.unitPrice * line.qty, 0);
+  const discount = toFiniteNumber(sale.discount);
+  const tax = toFiniteNumber(sale.tax);
+  const totalAmount = toFiniteNumber(sale.total_amount);
+  const subtotal =
+    subtotalFromLines > 0 ? subtotalFromLines : Math.max(totalAmount + discount - tax, 0);
+  const total = totalAmount > 0 ? totalAmount : Math.max(subtotal + tax - discount, 0);
+  const createdAtParsed = sale.sale_date ? Date.parse(String(sale.sale_date)) : Number.NaN;
+  const createdAt = Number.isFinite(createdAtParsed) ? createdAtParsed : Date.now();
+  const receiptId = (sale.receipt_number ?? "").trim() || sale.id;
+  const paymentMethod = normalizePaymentMethod(
+    (sale as Sale & { payment_method?: string | null }).payment_method,
+  );
+
+  return {
+    receiptId,
+    saleId: sale.id,
+    createdAt,
+    paymentMethod,
+    lines,
+    discount,
+    subtotal,
+    tax,
+    total,
+  };
 }
 
 function StockBadge({ stock }: { stock: Product["stock"] }) {
@@ -452,9 +522,8 @@ function POSUserPageInner() {
     ALL_CATEGORIES_LABEL,
   ]);
   const [catalogProducts, setCatalogProducts] = React.useState<Product[]>([]);
-  const [activeCategory, setActiveCategory] = React.useState<string>(
-    ALL_CATEGORIES_LABEL,
-  );
+  const [activeCategory, setActiveCategory] =
+    React.useState<string>(ALL_CATEGORIES_LABEL);
   const [searchQuery, setSearchQuery] = React.useState("");
   const [cart, setCart] = React.useState<CartLine[]>([]);
   const [heldOrders, setHeldOrders] = React.useState<HeldOrder[]>([]);
@@ -464,6 +533,13 @@ function POSUserPageInner() {
   );
   const [now, setNow] = React.useState(() => new Date());
   const [heldSheetOpen, setHeldSheetOpen] = React.useState(false);
+  const selectMainTab = React.useCallback(
+    (tab: "register" | "transactions" | "returns") => {
+      if (tab !== "register") setHeldSheetOpen(false);
+      setMainTab(tab);
+    },
+    [],
+  );
   const [transactions, setTransactions] = React.useState<PosTransaction[]>([]);
   const [selectedReceipt, setSelectedReceipt] =
     React.useState<PosTransaction | null>(null);
@@ -475,10 +551,106 @@ function POSUserPageInner() {
     null,
   );
 
+  const productNameById = React.useMemo(() => {
+    const out: Record<string, string> = {};
+    for (const p of catalogProducts) out[p.id] = p.name;
+    return out;
+  }, [catalogProducts]);
+
+  React.useEffect(() => {
+    if (!heldSheetOpen) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setHeldSheetOpen(false);
+    };
+    window.addEventListener("keydown", onKey);
+    const prevOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => {
+      window.removeEventListener("keydown", onKey);
+      document.body.style.overflow = prevOverflow;
+    };
+  }, [heldSheetOpen]);
+
   React.useEffect(() => {
     syncReceiptSeqFromTransactions();
     setTransactions(loadPosTransactions());
   }, []);
+
+  React.useEffect(() => {
+    if (!tenantSlug) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        const sales = await getSales(tenantSlug);
+        if (cancelled) return;
+        const next = sales
+          .map((sale) => saleToPosTransaction(sale, productNameById))
+          .sort((a, b) => b.createdAt - a.createdAt)
+          .slice(0, 500);
+        setTransactions(next);
+        persistPosTransactions(next);
+        syncReceiptSeqFromTransactions();
+
+        const missingLines = next
+          .filter((tx) => tx.saleId && tx.lines.length === 0)
+          .slice(0, 50);
+        if (missingLines.length === 0 || cancelled) return;
+
+        const hydratedBySaleId = new Map<string, PosTransaction>();
+        await Promise.all(
+          missingLines.map(async (tx) => {
+            try {
+              const sale = await getSaleById(tenantSlug, tx.saleId!);
+              if (!sale) return;
+              const hydrated = saleToPosTransaction(sale, productNameById);
+              hydratedBySaleId.set(tx.saleId!, {
+                ...tx,
+                ...hydrated,
+                paymentMethod: tx.paymentMethod || hydrated.paymentMethod,
+              });
+            } catch {
+              // Ignore per-sale failures and continue hydrating others.
+            }
+          }),
+        );
+        if (cancelled || hydratedBySaleId.size === 0) return;
+
+        setTransactions((prev) => {
+          const patched = prev.map((tx) => {
+            if (!tx.saleId) return tx;
+            return hydratedBySaleId.get(tx.saleId) ?? tx;
+          });
+          persistPosTransactions(patched);
+          return patched;
+        });
+      } catch {
+        // Keep local cache if server history cannot be loaded.
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [tenantSlug, productNameById]);
+
+  React.useEffect(() => {
+    if (catalogProducts.length === 0) return;
+    setTransactions((prev) => {
+      let changed = false;
+      const next = prev.map((tx) => {
+        let txChanged = false;
+        const lines = tx.lines.map((line) => {
+          const resolved = productNameById[line.productId];
+          if (!resolved || line.name === resolved) return line;
+          changed = true;
+          txChanged = true;
+          return { ...line, name: resolved };
+        });
+        return txChanged ? { ...tx, lines } : tx;
+      });
+      if (changed) persistPosTransactions(next);
+      return changed ? next : prev;
+    });
+  }, [catalogProducts, productNameById]);
 
   React.useEffect(() => {
     if (!tenantSlug) {
@@ -782,16 +954,18 @@ function POSUserPageInner() {
 
   const holdOrder = () => {
     if (cart.length === 0) return;
-    const label = `Hold ${heldOrders.length + 1}`;
-    setHeldOrders((prev) => [
-      ...prev,
-      {
-        id: crypto.randomUUID(),
-        label,
-        createdAt: Date.now(),
-        lines: cloneLines(cart),
-      },
-    ]);
+    setHeldOrders((prev) => {
+      const label = `Hold ${prev.length + 1}`;
+      return [
+        ...prev,
+        {
+          id: crypto.randomUUID(),
+          label,
+          createdAt: Date.now(),
+          lines: cloneLines(cart),
+        },
+      ];
+    });
     setCart([]);
     setCheckoutStep("cart");
   };
@@ -899,6 +1073,34 @@ function POSUserPageInner() {
     );
   };
 
+  const openTransactionReceipt = React.useCallback(
+    async (tx: PosTransaction) => {
+      setSelectedReceipt(tx);
+      if (!tenantSlug || !tx.saleId || tx.lines.length > 0) return;
+      try {
+        const sale = await getSaleById(tenantSlug, tx.saleId);
+        if (!sale) return;
+        const hydrated = saleToPosTransaction(sale, productNameById);
+        const merged: PosTransaction = {
+          ...tx,
+          ...hydrated,
+          paymentMethod: tx.paymentMethod || hydrated.paymentMethod,
+        };
+        setTransactions((prev) => {
+          const next = prev.map((row) =>
+            row.saleId === tx.saleId ? merged : row,
+          );
+          persistPosTransactions(next);
+          return next;
+        });
+        setSelectedReceipt(merged);
+      } catch {
+        // Keep the existing transaction if hydration fails.
+      }
+    },
+    [tenantSlug, productNameById],
+  );
+
   const formattedFooter = new Intl.DateTimeFormat("en-US", {
     month: "short",
     day: "numeric",
@@ -929,7 +1131,7 @@ function POSUserPageInner() {
               type="button"
               variant={mainTab === "register" ? "default" : "ghost"}
               size="sm"
-              onClick={() => setMainTab("register")}
+              onClick={() => selectMainTab("register")}
               className={cn(
                 "flex-1 gap-2 rounded-lg font-semibold",
                 mainTab === "register" &&
@@ -948,7 +1150,7 @@ function POSUserPageInner() {
               type="button"
               variant={mainTab === "transactions" ? "default" : "ghost"}
               size="sm"
-              onClick={() => setMainTab("transactions")}
+              onClick={() => selectMainTab("transactions")}
               className={cn(
                 "flex-1 gap-2 rounded-lg font-semibold",
                 mainTab === "transactions" &&
@@ -977,7 +1179,7 @@ function POSUserPageInner() {
               type="button"
               variant={mainTab === "returns" ? "default" : "ghost"}
               size="sm"
-              onClick={() => setMainTab("returns")}
+              onClick={() => selectMainTab("returns")}
               className={cn(
                 "flex-1 gap-2 rounded-lg font-semibold",
                 mainTab === "returns" &&
@@ -1018,7 +1220,9 @@ function POSUserPageInner() {
                       <li key={`${tx.saleId ?? tx.receiptId}-${tx.createdAt}`}>
                         <button
                           type="button"
-                          onClick={() => setSelectedReceipt(tx)}
+                          onClick={() => {
+                            void openTransactionReceipt(tx);
+                          }}
                           className="flex w-full items-center justify-between gap-3 rounded-xl border border-[color:var(--pos-brand)]/15 bg-[color:var(--pos-brand)]/[0.04] px-4 py-3 text-left transition-colors hover:bg-[color:var(--pos-brand)]/10"
                         >
                           <div className="min-w-0">
@@ -1216,18 +1420,7 @@ function POSUserPageInner() {
                   >
                     Clear all
                   </Button>
-                ) : (
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="sm"
-                    className="gap-1 text-xs font-semibold text-[color:var(--pos-brand)]"
-                    onClick={() => setCheckoutStep("cart")}
-                  >
-                    <Undo2 className="size-3.5" />
-                    Back to cart
-                  </Button>
-                )}
+                ) : null}
               </div>
               {checkoutStep === "cart" && (
                 <div className="flex flex-wrap gap-2">
@@ -1242,85 +1435,18 @@ function POSUserPageInner() {
                     <PauseCircle className="size-4" />
                     Hold / suspend
                   </Button>
-                  <Sheet open={heldSheetOpen} onOpenChange={setHeldSheetOpen}>
-                    <SheetTrigger asChild>
-                      <Button
-                        type="button"
-                        variant="secondary"
-                        size="sm"
-                        disabled={heldOrders.length === 0}
-                        className="font-semibold"
-                      >
-                        Held orders ({heldOrders.length})
-                      </Button>
-                    </SheetTrigger>
-                    <SheetContent className="flex w-full flex-col gap-0 sm:max-w-md">
-                      <SheetHeader>
-                        <SheetTitle>Held &amp; suspended</SheetTitle>
-                        <SheetDescription>
-                          Recall a sale when the customer returns to pay. Your
-                          current register cart is replaced when you recall.
-                        </SheetDescription>
-                      </SheetHeader>
-                      <div className="flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto py-4">
-                        {heldOrders.length === 0 ? (
-                          <p className="text-sm text-muted-foreground">
-                            No held orders.
-                          </p>
-                        ) : (
-                          heldOrders.map((h) => (
-                            <Card
-                              key={h.id}
-                              className="gap-2 border-[color:var(--pos-brand)]/15 py-3"
-                            >
-                              <CardContent className="flex flex-col gap-3 px-3 py-0">
-                                <div className="flex items-start justify-between gap-2">
-                                  <div>
-                                    <p className="font-semibold">{h.label}</p>
-                                    <p className="text-xs text-muted-foreground">
-                                      {h.lines.length} line(s) ·{" "}
-                                      {formatMoney(
-                                        cartTotals(h.lines, 0).subtotal,
-                                      )}{" "}
-                                      subtotal
-                                    </p>
-                                  </div>
-                                  <div className="flex shrink-0 gap-1">
-                                    <Button
-                                      type="button"
-                                      size="sm"
-                                      style={{ backgroundColor: brand }}
-                                      className="text-primary-foreground"
-                                      onClick={() => recallHeld(h)}
-                                    >
-                                      Recall
-                                    </Button>
-                                    <Button
-                                      type="button"
-                                      variant="ghost"
-                                      size="sm"
-                                      className="text-destructive hover:text-destructive"
-                                      onClick={() => removeHeld(h.id)}
-                                    >
-                                      Drop
-                                    </Button>
-                                  </div>
-                                </div>
-                                <ul className="text-xs text-muted-foreground">
-                                  {h.lines.slice(0, 4).map((l) => (
-                                    <li key={l.lineId}>
-                                      {l.name} × {l.qty}
-                                    </li>
-                                  ))}
-                                  {h.lines.length > 4 ? <li>…</li> : null}
-                                </ul>
-                              </CardContent>
-                            </Card>
-                          ))
-                        )}
-                      </div>
-                    </SheetContent>
-                  </Sheet>
+                  <Button
+                    type="button"
+                    variant="secondary"
+                    size="sm"
+                    disabled={heldOrders.length === 0}
+                    className="font-semibold"
+                    aria-haspopup="dialog"
+                    aria-expanded={heldSheetOpen}
+                    onClick={() => setHeldSheetOpen(true)}
+                  >
+                    Held orders ({heldOrders.length})
+                  </Button>
                 </div>
               )}
             </CardHeader>
@@ -1570,6 +1696,15 @@ function POSUserPageInner() {
                     );
                   })}
                 </div>
+                <Button
+                  type="button"
+                  variant="outline"
+                  className="h-12 w-full gap-2 rounded-xl border-0 bg-white text-base font-bold text-[color:var(--pos-brand)] shadow-sm hover:bg-[color:var(--pos-brand)]/12 dark:bg-slate-800/90"
+                  onClick={() => setCheckoutStep("cart")}
+                >
+                  <Undo2 className="size-4" />
+                  Back to cart
+                </Button>
               </CardFooter>
             )}
           </Card>
@@ -1610,6 +1745,107 @@ function POSUserPageInner() {
           ? createPortal(
               <div className="receipt-print-mount">
                 <PosTransactionReceipt transaction={receiptToPrint} />
+              </div>,
+              document.body,
+            )
+          : null}
+
+        {heldSheetOpen && typeof document !== "undefined"
+          ? createPortal(
+              <div
+                className="fixed inset-0 z-[220] flex justify-end"
+                role="presentation"
+              >
+                <button
+                  type="button"
+                  className="absolute inset-0 bg-slate-900/50 dark:bg-black/60"
+                  aria-label="Close held orders"
+                  onClick={() => setHeldSheetOpen(false)}
+                />
+                <aside
+                  role="dialog"
+                  aria-modal="true"
+                  aria-labelledby="pos-held-orders-title"
+                  className="relative z-10 flex h-full w-full max-w-md flex-col border-l border-border bg-popover text-popover-foreground shadow-2xl"
+                >
+                  <div className="flex shrink-0 items-center justify-between gap-3 border-b px-4 py-3">
+                    <h2
+                      id="pos-held-orders-title"
+                      className="text-base font-semibold text-foreground"
+                    >
+                      Held &amp; suspended
+                    </h2>
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="icon-sm"
+                      className="shrink-0"
+                      aria-label="Close"
+                      onClick={() => setHeldSheetOpen(false)}
+                    >
+                      <X className="size-4" />
+                    </Button>
+                  </div>
+                  <p className="shrink-0 px-4 py-2 text-sm text-muted-foreground">
+                    Recall a sale when the customer returns to pay. Your current
+                    register cart is replaced when you recall.
+                  </p>
+                  <div className="flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto px-4 pb-6">
+                    {heldOrders.length === 0 ? (
+                      <p className="text-sm text-muted-foreground">
+                        No held orders.
+                      </p>
+                    ) : (
+                      heldOrders.map((h) => (
+                        <Card
+                          key={h.id}
+                          className="gap-2 bg-slate-50 py-3 shadow-sm ring-0 dark:bg-slate-800/50"
+                        >
+                          <CardContent className="flex flex-col gap-3 px-3 py-0">
+                            <div className="flex items-start justify-between gap-2">
+                              <div>
+                                <p className="font-semibold">{h.label}</p>
+                                <p className="text-xs text-muted-foreground">
+                                  {h.lines.length} line(s) ·{" "}
+                                  {formatMoney(cartTotals(h.lines, 0).subtotal)}{" "}
+                                  subtotal
+                                </p>
+                              </div>
+                              <div className="flex shrink-0 gap-1">
+                                <Button
+                                  type="button"
+                                  size="sm"
+                                  style={{ backgroundColor: brand }}
+                                  className="text-primary-foreground"
+                                  onClick={() => recallHeld(h)}
+                                >
+                                  Recall
+                                </Button>
+                                <Button
+                                  type="button"
+                                  variant="ghost"
+                                  size="sm"
+                                  className="text-destructive hover:text-destructive"
+                                  onClick={() => removeHeld(h.id)}
+                                >
+                                  Drop
+                                </Button>
+                              </div>
+                            </div>
+                            <ul className="text-xs text-muted-foreground">
+                              {h.lines.slice(0, 4).map((l) => (
+                                <li key={l.lineId}>
+                                  {l.name} × {l.qty}
+                                </li>
+                              ))}
+                              {h.lines.length > 4 ? <li>…</li> : null}
+                            </ul>
+                          </CardContent>
+                        </Card>
+                      ))
+                    )}
+                  </div>
+                </aside>
               </div>,
               document.body,
             )

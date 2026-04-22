@@ -2,7 +2,7 @@
 
 import { AlertTriangle } from "lucide-react";
 
-import { Badge } from "@/components/ui/badge";
+import { Badge } from "@repo/ui/badge";
 import { useReportScopeBadge } from "@/hooks/use-branch-for-reports";
 
 export function ReportScopeBadge() {

@@ -16,14 +16,14 @@ import {
   Users2,
 } from "lucide-react";
 
-import { Button } from "@/components/ui/button";
+import { Button } from "@repo/ui/button";
 import {
   Card,
   CardContent,
   CardDescription,
   CardHeader,
   CardTitle,
-} from "@/components/ui/card";
+} from "@repo/ui/card";
 import {
   Dialog,
   DialogContent,
@@ -31,9 +31,9 @@ import {
   DialogFooter,
   DialogHeader,
   DialogTitle,
-} from "@/components/ui/dialog";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
+} from "@repo/ui/dialog";
+import { Input } from "@repo/ui/input";
+import { Label } from "@repo/ui/label";
 import {
   StaffMember,
   SystemUser,

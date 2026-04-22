@@ -13,9 +13,9 @@ import {
 } from "lucide-react";
 
 import { ReportScopeBadge } from "@/components/accounting/report-scope-badge";
-import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Badge } from "@repo/ui/badge";
+import { Button } from "@repo/ui/button";
+import { Card, CardContent, CardHeader, CardTitle } from "@repo/ui/card";
 import {
   Dialog,
   DialogContent,
@@ -24,7 +24,7 @@ import {
   DialogHeader,
   DialogTitle,
   DialogTrigger,
-} from "@/components/ui/dialog";
+} from "@repo/ui/dialog";
 import {
   Table,
   TableBody,
@@ -32,7 +32,7 @@ import {
   TableHead,
   TableHeader,
   TableRow,
-} from "@/components/ui/table";
+} from "@repo/ui/table";
 import { useReportBranchQuery } from "@/hooks/use-branch-for-reports";
 import { money } from "@/lib/accounting-display";
 import { getStoredUser } from "@/lib/auth-client";

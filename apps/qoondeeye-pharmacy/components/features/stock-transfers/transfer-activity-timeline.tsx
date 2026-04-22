@@ -20,7 +20,7 @@ import {
   CardDescription,
   CardHeader,
   CardTitle,
-} from "@/components/ui/card";
+} from "@repo/ui/card";
 import { cn } from "@/lib/utils";
 
 function eventTypeKey(e: TransferEventDto): string {

@@ -26,19 +26,19 @@ import {
   BreadcrumbList,
   BreadcrumbPage,
   BreadcrumbSeparator,
-} from "@/components/ui/breadcrumb";
-import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
+} from "@repo/ui/breadcrumb";
+import { Badge } from "@repo/ui/badge";
+import { Button } from "@repo/ui/button";
 import {
   Card,
   CardContent,
   CardDescription,
   CardHeader,
   CardTitle,
-} from "@/components/ui/card";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Separator } from "@/components/ui/separator";
+} from "@repo/ui/card";
+import { Input } from "@repo/ui/input";
+import { Label } from "@repo/ui/label";
+import { Separator } from "@repo/ui/separator";
 import {
   Sheet,
   SheetContent,
@@ -46,7 +46,7 @@ import {
   SheetFooter,
   SheetHeader,
   SheetTitle,
-} from "@/components/ui/sheet";
+} from "@repo/ui/sheet";
 import {
   Table,
   TableBody,
@@ -54,7 +54,7 @@ import {
   TableHead,
   TableHeader,
   TableRow,
-} from "@/components/ui/table";
+} from "@repo/ui/table";
 
 import { getStoredUser } from "@/lib/auth-client";
 import {

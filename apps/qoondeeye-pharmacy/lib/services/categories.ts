@@ -1,15 +1,8 @@
 import { CATEGORIES_PREFIX } from "./endpoints";
 import { type JsonHeaders, jsonFetch } from "./http";
+import type { Category } from "@repo/types";
 
-export type Category = {
-  id: string;
-  name: string;
-  description?: string | null;
-  slug?: string | null;
-  branchId?: string | null;
-  parentId?: string | null;
-  createdAt?: string;
-};
+export type { Category };
 
 export async function getCategories(tenantSlug: string): Promise<Category[]> {
   return jsonFetch<Category[]>(CATEGORIES_PREFIX, {

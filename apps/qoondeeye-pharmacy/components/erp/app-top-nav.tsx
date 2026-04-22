@@ -8,10 +8,10 @@ import { Bell, Menu } from "lucide-react";
 
 import { useAccountingAlerts } from "@/hooks/use-accounting-alerts";
 import { ROUTES } from "@/lib/routes";
-import { Badge } from "@/components/ui/badge";
+import { Badge } from "@repo/ui/badge";
 import { TeamSwitcher } from "@/components/team-switcher";
 import { NavUser } from "@/components/nav-user";
-import { Button } from "@/components/ui/button";
+import { Button } from "@repo/ui/button";
 import {
   NavigationMenu,
   NavigationMenuContent,
@@ -20,14 +20,14 @@ import {
   NavigationMenuList,
   NavigationMenuTrigger,
   navigationMenuTriggerStyle,
-} from "@/components/ui/navigation-menu";
+} from "@repo/ui/navigation-menu";
 import {
   Sheet,
   SheetContent,
   SheetHeader,
   SheetTitle,
   SheetTrigger,
-} from "@/components/ui/sheet";
+} from "@repo/ui/sheet";
 import { cn } from "@/lib/utils";
 import { clearAuthToken, getResolvedStoredUser } from "@/lib/auth-client";
 import {
@@ -190,9 +190,11 @@ export function AppTopNav() {
         <div className="flex min-w-0 justify-center justify-self-center">
           <NavigationMenu
             viewport={false}
-            className="hidden min-w-0 justify-center lg:flex"
+            delayDuration={220}
+            skipDelayDuration={320}
+            className="hidden min-w-0 justify-center overflow-visible lg:flex"
           >
-            <NavigationMenuList className="flex-wrap justify-center gap-0.5">
+            <NavigationMenuList className="flex-wrap justify-center gap-0.5 rounded-full border border-white/70 bg-background/80 px-1 py-0.5 backdrop-blur-sm">
               {modules.map((mod) => {
                 const active =
                   getActiveErpModule(pathname, modules)?.id === mod.id;
@@ -206,8 +208,8 @@ export function AppTopNav() {
                     >
                       {mod.label}
                     </NavigationMenuTrigger>
-                    <NavigationMenuContent>
-                      <ul className="grid w-[220px] gap-0.5 p-2">
+                    <NavigationMenuContent className="absolute top-full left-0 z-50">
+                      <ul className="grid w-[220px] gap-0.5 p-2 bg-gray-50 rounded-lg">
                         {mod.children.map((child) => (
                           <li key={child.href}>
                             <NavigationMenuLink asChild>
@@ -235,7 +237,12 @@ export function AppTopNav() {
         </div>
         <div className="flex min-w-0 items-center justify-end justify-self-end gap-1.5 sm:gap-2">
           {!isAdmin ? (
-            <Button asChild variant="ghost" size="sm" className="h-8 gap-1.5 px-2">
+            <Button
+              asChild
+              variant="ghost"
+              size="sm"
+              className="h-8 gap-1.5 px-2"
+            >
               <Link href={ROUTES.accounting.controlCenter}>
                 <Bell className="size-4" />
                 <span className="hidden sm:inline">Alerts</span>

@@ -25,8 +25,8 @@ import {
   Alert,
   AlertDescription,
   AlertTitle,
-} from "@/components/ui/alert";
-import { Button } from "@/components/ui/button";
+} from "@repo/ui/alert";
+import { Button } from "@repo/ui/button";
 import {
   Card,
   CardAction,
@@ -34,22 +34,22 @@ import {
   CardDescription,
   CardHeader,
   CardTitle,
-} from "@/components/ui/card";
+} from "@repo/ui/card";
 import {
   Collapsible,
   CollapsibleContent,
   CollapsibleTrigger,
-} from "@/components/ui/collapsible";
+} from "@repo/ui/collapsible";
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Separator } from "@/components/ui/separator";
-import { Skeleton } from "@/components/ui/skeleton";
+} from "@repo/ui/dropdown-menu";
+import { Input } from "@repo/ui/input";
+import { Label } from "@repo/ui/label";
+import { Separator } from "@repo/ui/separator";
+import { Skeleton } from "@repo/ui/skeleton";
 import { useReportBranchQuery } from "@/hooks/use-branch-for-reports";
 import { hasGlobalBranchAccess } from "@/lib/branch-access";
 import { money } from "@/lib/accounting-display";
@@ -67,7 +67,7 @@ import {
 import type { BsLine } from "@/lib/balance-sheet-tree";
 import { inventoryTransferDetailPath, ROUTES } from "@/lib/routes";
 import { cn } from "@/lib/utils";
-import { Badge } from "@/components/ui/badge";
+import { Badge } from "@repo/ui/badge";
 import {
   Table,
   TableBody,
@@ -75,7 +75,7 @@ import {
   TableHead,
   TableHeader,
   TableRow,
-} from "@/components/ui/table";
+} from "@repo/ui/table";
 
 function Bal({ n }: { n: number }) {
   const neg = n < 0;

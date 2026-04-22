@@ -9,13 +9,13 @@ import {
   CardDescription,
   CardHeader,
   CardTitle,
-} from "@/components/ui/card";
+} from "@repo/ui/card";
 import {
   Accordion,
   AccordionContent,
   AccordionItem,
   AccordionTrigger,
-} from "@/components/ui/accordion";
+} from "@repo/ui/accordion";
 import {
   Table,
   TableBody,
@@ -23,7 +23,7 @@ import {
   TableHead,
   TableHeader,
   TableRow,
-} from "@/components/ui/table";
+} from "@repo/ui/table";
 import { getStoredUser } from "@/lib/auth-client";
 import { groupCoaByRoot, sortCoaTree } from "@/lib/accounting-display";
 import { getChartOfAccounts, type ChartOfAccountRow } from "@/lib/api";

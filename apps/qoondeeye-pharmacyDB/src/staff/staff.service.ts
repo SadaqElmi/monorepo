@@ -161,6 +161,7 @@ export class StaffService {
       return this.prisma.queryRawUnsafe(
         `SELECT u.id,
                 u.name,
+                u.cashier_id,
                 u.email,
                 r.name AS role,
                 u.branch_id,
@@ -175,6 +176,7 @@ export class StaffService {
       return this.prisma.queryRawUnsafe(
         `SELECT u.id,
                 u.name,
+                u.cashier_id,
                 u.email,
                 u.role AS role,
                 u.branch_id,
@@ -187,6 +189,7 @@ export class StaffService {
     return this.prisma.queryRawUnsafe(
       `SELECT u.id,
               u.name,
+              u.cashier_id,
               u.email,
               NULL::text AS role,
               u.branch_id,
@@ -216,6 +219,7 @@ export class StaffService {
       [row] = await this.prisma.queryRawUnsafe<any[]>(
         `SELECT u.id,
                 u.name,
+                u.cashier_id,
                 u.email,
                 r.name AS role,
                 u.branch_id,
@@ -229,6 +233,7 @@ export class StaffService {
       [row] = await this.prisma.queryRawUnsafe<any[]>(
         `SELECT u.id,
                 u.name,
+                u.cashier_id,
                 u.email,
                 u.role AS role,
                 u.branch_id,
@@ -241,6 +246,7 @@ export class StaffService {
       [row] = await this.prisma.queryRawUnsafe<any[]>(
         `SELECT u.id,
                 u.name,
+                u.cashier_id,
                 u.email,
                 NULL::text AS role,
                 u.branch_id,
@@ -257,6 +263,7 @@ export class StaffService {
     schemaName: string,
     dto: {
       name?: string;
+      cashierId?: string;
       email?: string;
       password?: string;
       role?: string;
@@ -289,6 +296,7 @@ export class StaffService {
 
     const roleName = dto.role?.trim() ? dto.role.trim() : null;
     const roleLower = normalizeRole(roleName);
+    const cashierId = dto.cashierId?.trim() || null;
     const actorRoleLower = normalizeRole(actorRole);
     const actorHasGlobalAccess = hasGlobalBranchAccess(actorRoleLower);
     const pinPlain = dto.pin?.trim() ?? '';
@@ -314,6 +322,11 @@ export class StaffService {
     if (!targetBranchId && requiresAssignedBranch(roleLower)) {
       throw new BadRequestException(
         `Role "${roleName ?? 'staff'}" requires a branch assignment`,
+      );
+    }
+    if (roleLower === 'cashier' && !cashierId) {
+      throw new BadRequestException(
+        'Cashier ID is required for cashier accounts',
       );
     }
     if (
@@ -343,10 +356,11 @@ export class StaffService {
 
       if (meta.hasPinHash) {
         [inserted] = await this.prisma.queryRawUnsafe<any[]>(
-          `INSERT INTO ${userTable} (name, email, password, role_id, pin_hash, branch_id)
-           VALUES ($1, $2, $3, $4::uuid, $5, $6::uuid)
+          `INSERT INTO ${userTable} (name, cashier_id, email, password, role_id, pin_hash, branch_id)
+           VALUES ($1, $2, $3, $4, $5::uuid, $6, $7::uuid)
            RETURNING id`,
           dto.name ?? null,
+          cashierId,
           dto.email ?? null,
           hashed,
           roleId,
@@ -355,10 +369,11 @@ export class StaffService {
         );
       } else {
         [inserted] = await this.prisma.queryRawUnsafe<any[]>(
-          `INSERT INTO ${userTable} (name, email, password, role_id, branch_id)
-           VALUES ($1, $2, $3, $4::uuid, $5::uuid)
+          `INSERT INTO ${userTable} (name, cashier_id, email, password, role_id, branch_id)
+           VALUES ($1, $2, $3, $4, $5::uuid, $6::uuid)
            RETURNING id`,
           dto.name ?? null,
+          cashierId,
           dto.email ?? null,
           hashed,
           roleId,
@@ -368,10 +383,11 @@ export class StaffService {
     } else if (meta.hasRoleText) {
       if (meta.hasPinHash) {
         [inserted] = await this.prisma.queryRawUnsafe<any[]>(
-          `INSERT INTO ${userTable} (name, email, password, role, pin_hash, branch_id)
-           VALUES ($1, $2, $3, $4, $5, $6::uuid)
+          `INSERT INTO ${userTable} (name, cashier_id, email, password, role, pin_hash, branch_id)
+           VALUES ($1, $2, $3, $4, $5, $6, $7::uuid)
            RETURNING id`,
           dto.name ?? null,
+          cashierId,
           dto.email ?? null,
           hashed,
           roleName,
@@ -380,10 +396,11 @@ export class StaffService {
         );
       } else {
         [inserted] = await this.prisma.queryRawUnsafe<any[]>(
-          `INSERT INTO ${userTable} (name, email, password, role, branch_id)
-           VALUES ($1, $2, $3, $4, $5::uuid)
+          `INSERT INTO ${userTable} (name, cashier_id, email, password, role, branch_id)
+           VALUES ($1, $2, $3, $4, $5, $6::uuid)
            RETURNING id`,
           dto.name ?? null,
+          cashierId,
           dto.email ?? null,
           hashed,
           roleName,
@@ -393,10 +410,11 @@ export class StaffService {
     } else {
       if (meta.hasPinHash) {
         [inserted] = await this.prisma.queryRawUnsafe<any[]>(
-          `INSERT INTO ${userTable} (name, email, password, pin_hash, branch_id)
-           VALUES ($1, $2, $3, $4, $5::uuid)
+          `INSERT INTO ${userTable} (name, cashier_id, email, password, pin_hash, branch_id)
+           VALUES ($1, $2, $3, $4, $5, $6::uuid)
            RETURNING id`,
           dto.name ?? null,
+          cashierId,
           dto.email ?? null,
           hashed,
           pinHash,
@@ -404,10 +422,11 @@ export class StaffService {
         );
       } else {
         [inserted] = await this.prisma.queryRawUnsafe<any[]>(
-          `INSERT INTO ${userTable} (name, email, password, branch_id)
-           VALUES ($1, $2, $3, $4::uuid)
+          `INSERT INTO ${userTable} (name, cashier_id, email, password, branch_id)
+           VALUES ($1, $2, $3, $4, $5::uuid)
            RETURNING id`,
           dto.name ?? null,
+          cashierId,
           dto.email ?? null,
           hashed,
           targetBranchId,
@@ -427,6 +446,7 @@ export class StaffService {
     id: string,
     dto: {
       name?: string;
+      cashierId?: string;
       email?: string;
       password?: string;
       role?: string;
@@ -453,6 +473,7 @@ export class StaffService {
         : `"${schemaName}".${meta.roleTable}`);
 
     const roleName = dto.role?.trim() ? dto.role.trim() : null;
+    const cashierId = dto.cashierId?.trim() || null;
     const actorRoleLower = normalizeRole(actorRole);
     const actorHasGlobalAccess = hasGlobalBranchAccess(actorRoleLower);
     const password =
@@ -509,6 +530,15 @@ export class StaffService {
         `Role "${nextRoleName ?? 'staff'}" requires a branch assignment`,
       );
     }
+    if (
+      nextRoleLower === 'cashier' &&
+      dto.cashierId !== undefined &&
+      !cashierId
+    ) {
+      throw new BadRequestException(
+        'Cashier ID is required for cashier accounts',
+      );
+    }
 
     let updated: any = null;
     if (meta.hasRoleId && roleTable) {
@@ -534,21 +564,23 @@ export class StaffService {
       [updated] = await this.prisma.queryRawUnsafe<any[]>(
         `UPDATE ${userTable}
          SET name = COALESCE($2, name),
-             email = COALESCE($3, email),
-             password = COALESCE($4, password),
+             cashier_id = COALESCE($3, cashier_id),
+             email = COALESCE($4, email),
+             password = COALESCE($5, password),
              role_id = CASE
-               WHEN $5::text = '__KEEP__' THEN role_id
-               WHEN $5::text = '__CLEAR__' THEN NULL
-               ELSE $6::uuid
+               WHEN $6::text = '__KEEP__' THEN role_id
+               WHEN $6::text = '__CLEAR__' THEN NULL
+               ELSE $7::uuid
              END,
              branch_id = CASE
-               WHEN $7::text = '__KEEP__' THEN branch_id
-               ELSE $8::uuid
+               WHEN $8::text = '__KEEP__' THEN branch_id
+               ELSE $9::uuid
              END
          WHERE id = $1
          RETURNING id`,
         id,
         dto.name ?? null,
+        cashierId,
         dto.email ?? null,
         password,
         dto.role === undefined
@@ -564,17 +596,19 @@ export class StaffService {
       [updated] = await this.prisma.queryRawUnsafe<any[]>(
         `UPDATE ${userTable}
          SET name = COALESCE($2, name),
-             email = COALESCE($3, email),
-             password = COALESCE($4, password),
-             role = COALESCE($5, role),
+             cashier_id = COALESCE($3, cashier_id),
+             email = COALESCE($4, email),
+             password = COALESCE($5, password),
+             role = COALESCE($6, role),
              branch_id = CASE
-               WHEN $6::text = '__KEEP__' THEN branch_id
-               ELSE $7::uuid
+               WHEN $7::text = '__KEEP__' THEN branch_id
+               ELSE $8::uuid
              END
          WHERE id = $1
          RETURNING id`,
         id,
         dto.name ?? null,
+        cashierId,
         dto.email ?? null,
         password,
         roleName,
@@ -585,16 +619,18 @@ export class StaffService {
       [updated] = await this.prisma.queryRawUnsafe<any[]>(
         `UPDATE ${userTable}
          SET name = COALESCE($2, name),
-             email = COALESCE($3, email),
-             password = COALESCE($4, password),
+             cashier_id = COALESCE($3, cashier_id),
+             email = COALESCE($4, email),
+             password = COALESCE($5, password),
              branch_id = CASE
-               WHEN $5::text = '__KEEP__' THEN branch_id
-               ELSE $6::uuid
+               WHEN $6::text = '__KEEP__' THEN branch_id
+               ELSE $7::uuid
              END
          WHERE id = $1
          RETURNING id`,
         id,
         dto.name ?? null,
+        cashierId,
         dto.email ?? null,
         password,
         dto.branchId === undefined ? '__KEEP__' : '__SET__',

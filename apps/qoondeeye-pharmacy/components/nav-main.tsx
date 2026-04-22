@@ -6,12 +6,12 @@ import { usePathname } from "next/navigation";
 import { ChevronRight, type LucideIcon } from "lucide-react";
 
 import { cn } from "@/lib/utils";
-import { Button } from "@/components/ui/button";
+import { Button } from "@repo/ui/button";
 import {
   Collapsible,
   CollapsibleContent,
   CollapsibleTrigger,
-} from "@/components/ui/collapsible";
+} from "@repo/ui/collapsible";
 
 export type NavMainItem = {
   title: string;

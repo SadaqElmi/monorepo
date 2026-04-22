@@ -9,7 +9,7 @@ import {
   CardDescription,
   CardHeader,
   CardTitle,
-} from "@/components/ui/card";
+} from "@repo/ui/card";
 import {
   Table,
   TableBody,
@@ -17,7 +17,7 @@ import {
   TableHead,
   TableHeader,
   TableRow,
-} from "@/components/ui/table";
+} from "@repo/ui/table";
 import { useReportBranchQuery } from "@/hooks/use-branch-for-reports";
 import { getStoredUser } from "@/lib/auth-client";
 import { money } from "@/lib/accounting-display";

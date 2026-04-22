@@ -36,6 +36,16 @@ Create a PostgreSQL database and set `DATABASE_URL_STAGING` in `.env`:
 DATABASE_URL_STAGING="postgresql://USER:PASSWORD@localhost:5432/pharmacare?schema=public"
 ```
 
+Device-bound POS rollout flags:
+
+```env
+# legacy | dual | device
+POS_DEVICE_LOGIN_MODE=dual
+
+# Optional comma-separated tenant schema names forced to use device login while global mode stays dual
+POS_DEVICE_ENFORCED_TENANTS=pharmacy1,pharmacy2
+```
+
 ### 3. Run migrations
 
 ```bash

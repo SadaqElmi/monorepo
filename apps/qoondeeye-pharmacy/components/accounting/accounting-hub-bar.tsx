@@ -6,8 +6,8 @@ import { Bell, ChevronDown, Search, Settings } from "lucide-react";
 import { useAccountingAlerts } from "@/hooks/use-accounting-alerts";
 import { ACCOUNTING_HUB_MENUS } from "@/lib/accounting-hub-menus";
 import { ROUTES } from "@/lib/routes";
-import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
+import { Badge } from "@repo/ui/badge";
+import { Button } from "@repo/ui/button";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -15,7 +15,7 @@ import {
   DropdownMenuLabel,
   DropdownMenuSeparator,
   DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
+} from "@repo/ui/dropdown-menu";
 import { cn } from "@/lib/utils";
 
 type AccountingHubBarProps = {

@@ -7,6 +7,7 @@ import { ConfigService } from '@nestjs/config';
 import { JwtService } from '@nestjs/jwt';
 import type { JwtSignOptions } from '@nestjs/jwt';
 import * as bcrypt from 'bcrypt';
+import { createHash, randomBytes, randomUUID, timingSafeEqual } from 'crypto';
 import { PrismaService } from '../prisma/prisma.service';
 import { TenantContextService } from '../tenant/tenant-context.service';
 import { TenantService } from '../tenant/tenant.service';
@@ -48,6 +49,13 @@ export type RegisterResponse = {
 
 @Injectable()
 export class AuthService {
+  private readonly cashierLockState = new Map<
+    string,
+    { failures: number; lockUntil: number; lastFailedAt: number }
+  >();
+  private readonly cashierMaxFailures = 5;
+  private readonly cashierLockWindowMs = 5 * 60 * 1000;
+
   constructor(
     private readonly prisma: PrismaService,
     private readonly jwtService: JwtService,
@@ -220,6 +228,11 @@ export class AuthService {
     branchId?: string;
   }): Promise<LoginResponse> {
     const slug = input.tenant.trim();
+    if (this.isDeviceLoginEnforcedForTenant(slug)) {
+      throw new UnauthorizedException(
+        'Device-bound login is required for this pharmacy. Use cashier ID + PIN.',
+      );
+    }
     const anyTenant = await this.tenantService.findBySchemaNameAny(slug);
     if (!anyTenant || anyTenant.status !== 'active') {
       throw new UnauthorizedException('Invalid credentials');
@@ -309,6 +322,281 @@ export class AuthService {
     });
   }
 
+  async cashierLogin(input: {
+    cashierId: string;
+    pin: string;
+    deviceCredential: string;
+    branchId?: string;
+  }): Promise<LoginResponse> {
+    const identifier = input.cashierId.trim();
+    if (!identifier) {
+      throw new UnauthorizedException('Invalid credentials');
+    }
+    const device = await this.resolvePosDeviceFromCredential(
+      input.deviceCredential,
+    );
+    const lockKey = this.buildCashierLockKey(device.id, identifier);
+    this.assertCashierLoginNotLocked(lockKey);
+
+    await this.tenantService.applyTenantSchemaPatches(device.tenantSchema);
+
+    const matched = await this.prisma.withTenantSchema(
+      device.tenantSchema,
+      async (tx) => {
+        const [row] = await tx.$queryRawUnsafe<
+          {
+            id: string;
+            email: string | null;
+            name: string | null;
+            pin_hash: string;
+            branch_id: string | null;
+          }[]
+        >(
+          `SELECT u.id, u.email, u.name, u.pin_hash, u.branch_id
+           FROM "${device.tenantSchema}"."users" u
+           INNER JOIN "${device.tenantSchema}"."roles" r ON u.role_id = r.id
+           WHERE lower(r.name) = 'cashier'
+             AND u.pin_hash IS NOT NULL
+             AND (
+               lower(COALESCE(u.cashier_id, '')) = lower($1)
+               OR u.id::text = $1
+             )
+           LIMIT 1`,
+          identifier,
+        );
+        return row ?? null;
+      },
+    );
+
+    if (!matched) {
+      this.registerCashierLoginFailure(lockKey);
+      throw new UnauthorizedException('Invalid credentials');
+    }
+
+    const pinMatches = await bcrypt.compare(input.pin, matched.pin_hash);
+    if (!pinMatches) {
+      this.registerCashierLoginFailure(lockKey);
+      throw new UnauthorizedException('Invalid credentials');
+    }
+
+    if (!matched.branch_id) {
+      throw new UnauthorizedException('Cashier branch assignment is required');
+    }
+
+    if (device.branchId && device.branchId !== matched.branch_id) {
+      throw new UnauthorizedException(
+        'This cashier is not assigned to the enrolled device branch',
+      );
+    }
+    if (input.branchId && input.branchId !== matched.branch_id) {
+      throw new UnauthorizedException('Access denied to this branch');
+    }
+
+    this.clearCashierLoginFailures(lockKey);
+    await this.touchPosDevice(device.id);
+
+    const token = await this.signToken(
+      {
+        sub: matched.id,
+        role: 'cashier',
+        type: 'tenant_user',
+        tenantSchema: device.tenantSchema,
+        tenantId: device.tenantId,
+        authMode: 'device_pin',
+        posDeviceId: device.id,
+        canViewAllBranches: false,
+      },
+      this.cashierJwtSignOptions(),
+    );
+
+    return {
+      user: {
+        id: matched.id,
+        email: matched.email ?? '',
+        name: matched.name,
+      },
+      token,
+      userId: matched.id,
+      role: 'cashier',
+      tenantId: device.tenantId,
+      tenantSlug: device.tenantSchema,
+      userType: 'tenant',
+      defaultBranchId: matched.branch_id,
+      assignedBranchId: matched.branch_id,
+      allowedBranchIds: [matched.branch_id],
+      canViewAllBranches: false,
+      permissions: [],
+    };
+  }
+
+  async enrollPosDevice(input: {
+    tenant: string;
+    email: string;
+    password: string;
+    deviceCode?: string;
+    displayName?: string;
+    branchId?: string;
+  }) {
+    const loginRes = await this.login({
+      email: input.email,
+      password: input.password,
+      tenant: input.tenant,
+    });
+    if (loginRes.userType !== 'tenant') {
+      throw new UnauthorizedException(
+        'Only tenant managers can enroll POS devices',
+      );
+    }
+    const role = normalizeRole(loginRes.role);
+    if (!['admin', 'manager'].includes(role)) {
+      throw new UnauthorizedException(
+        'Only admin or manager can enroll POS devices',
+      );
+    }
+    if (!loginRes.tenantId || !loginRes.tenantSlug) {
+      throw new UnauthorizedException('Tenant context is required');
+    }
+
+    const trimmedCode = input.deviceCode?.trim();
+    const deviceCode =
+      trimmedCode && trimmedCode.length > 0
+        ? trimmedCode
+        : `POS-${randomUUID()}`;
+    const secret = randomBytes(32).toString('hex');
+    const secretHash = this.hashDeviceSecret(secret);
+    const displayName = input.displayName?.trim() || null;
+    const branchId = input.branchId ?? null;
+
+    const [existing] = await this.prisma.$queryRawUnsafe<
+      { id: string; tenant_id: string }[]
+    >(
+      `SELECT id, tenant_id
+       FROM "public"."pos_devices"
+       WHERE device_code = $1
+       LIMIT 1`,
+      deviceCode,
+    );
+
+    let deviceId = existing?.id;
+    if (existing) {
+      if (existing.tenant_id !== loginRes.tenantId) {
+        throw new BadRequestException(
+          'Device code is already assigned to another tenant',
+        );
+      }
+      await this.prisma.$executeRawUnsafe(
+        `UPDATE "public"."pos_devices"
+         SET display_name = $1,
+             status = 'active',
+             device_secret_hash = $2,
+             branch_id = $3,
+             bound_at = CURRENT_TIMESTAMP,
+             revoked_at = NULL,
+             updated_at = CURRENT_TIMESTAMP
+         WHERE id = $4`,
+        displayName,
+        secretHash,
+        branchId,
+        existing.id,
+      );
+    } else {
+      const inserted = await this.prisma.$queryRawUnsafe<{ id: string }[]>(
+        `INSERT INTO "public"."pos_devices" (
+            tenant_id,
+            device_code,
+            display_name,
+            status,
+            device_secret_hash,
+            branch_id,
+            bound_at,
+            created_at,
+            updated_at
+          )
+          VALUES ($1, $2, $3, 'active', $4, $5, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+          RETURNING id`,
+        loginRes.tenantId,
+        deviceCode,
+        displayName,
+        secretHash,
+        branchId,
+      );
+      deviceId = inserted[0]?.id;
+    }
+
+    if (!deviceId) {
+      throw new BadRequestException('Failed to enroll device');
+    }
+
+    return {
+      deviceId,
+      deviceCode,
+      displayName,
+      branchId,
+      status: 'active' as const,
+      tenantId: loginRes.tenantId,
+      tenantSlug: loginRes.tenantSlug,
+      enrolledByUserId: loginRes.userId,
+      deviceCredential: this.encodeDeviceCredential(deviceId, secret),
+    };
+  }
+
+  async revokePosDevice(input: {
+    tenant: string;
+    email: string;
+    password: string;
+    deviceCode: string;
+  }) {
+    const loginRes = await this.login({
+      email: input.email,
+      password: input.password,
+      tenant: input.tenant,
+    });
+    if (loginRes.userType !== 'tenant') {
+      throw new UnauthorizedException(
+        'Only tenant managers can revoke devices',
+      );
+    }
+    const role = normalizeRole(loginRes.role);
+    if (!['admin', 'manager'].includes(role)) {
+      throw new UnauthorizedException(
+        'Only admin or manager can revoke POS devices',
+      );
+    }
+    if (!loginRes.tenantId) {
+      throw new UnauthorizedException('Tenant context is required');
+    }
+
+    const code = input.deviceCode.trim();
+    if (!code) {
+      throw new BadRequestException('Device code is required');
+    }
+
+    const updated = await this.prisma.$queryRawUnsafe<
+      Array<{ id: string; status: string }>
+    >(
+      `UPDATE "public"."pos_devices"
+       SET status = 'revoked',
+           revoked_at = CURRENT_TIMESTAMP,
+           updated_at = CURRENT_TIMESTAMP
+       WHERE tenant_id = $1
+         AND device_code = $2
+       RETURNING id, status`,
+      loginRes.tenantId,
+      code,
+    );
+
+    if (!updated[0]) {
+      throw new BadRequestException('Device not found for this tenant');
+    }
+
+    return {
+      deviceId: updated[0].id,
+      deviceCode: code,
+      status: updated[0].status,
+      revoked: true,
+    };
+  }
+
   /** Shorter session for PIN sign-in (seconds). */
   private cashierJwtSignOptions(): JwtSignOptions {
     const raw =
@@ -341,6 +629,149 @@ export class AuthService {
       }
     }
     return null;
+  }
+
+  private async resolvePosDeviceFromCredential(deviceCredential: string) {
+    const parsed = this.decodeDeviceCredential(deviceCredential);
+    if (!parsed) {
+      throw new UnauthorizedException('Invalid device credential');
+    }
+    const [row] = await this.prisma.$queryRawUnsafe<
+      Array<{
+        id: string;
+        tenant_id: string;
+        device_code: string;
+        status: string;
+        device_secret_hash: string;
+        branch_id: string | null;
+        tenant_schema_name: string;
+        tenant_status: string;
+      }>
+    >(
+      `SELECT d.id,
+              d.tenant_id,
+              d.device_code,
+              d.status,
+              d.device_secret_hash,
+              d.branch_id,
+              t.schema_name AS tenant_schema_name,
+              t.status AS tenant_status
+       FROM "public"."pos_devices" d
+       INNER JOIN "public"."tenants" t ON t.id = d.tenant_id
+       WHERE d.id = $1
+       LIMIT 1`,
+      parsed.deviceId,
+    );
+
+    if (!row) {
+      throw new UnauthorizedException('Invalid device credential');
+    }
+    if (row.status !== 'active' || row.tenant_status !== 'active') {
+      throw new UnauthorizedException('Device is not active');
+    }
+
+    const expected = this.hashDeviceSecret(parsed.deviceSecret);
+    const expectedBuffer = Buffer.from(expected, 'utf8');
+    const actualBuffer = Buffer.from(row.device_secret_hash, 'utf8');
+    if (
+      expectedBuffer.length !== actualBuffer.length ||
+      !timingSafeEqual(expectedBuffer, actualBuffer)
+    ) {
+      throw new UnauthorizedException('Invalid device credential');
+    }
+
+    return {
+      id: row.id,
+      tenantId: row.tenant_id,
+      tenantSchema: row.tenant_schema_name,
+      deviceCode: row.device_code,
+      branchId: row.branch_id,
+    };
+  }
+
+  private decodeDeviceCredential(
+    token: string,
+  ): { deviceId: string; deviceSecret: string } | null {
+    const trimmed = token.trim();
+    if (!trimmed) return null;
+    const parts = trimmed.split('.');
+    if (parts.length !== 3 || parts[0] !== 'pdv1') {
+      return null;
+    }
+    if (!parts[1] || !parts[2]) return null;
+    return { deviceId: parts[1], deviceSecret: parts[2] };
+  }
+
+  private encodeDeviceCredential(deviceId: string, secret: string): string {
+    return `pdv1.${deviceId}.${secret}`;
+  }
+
+  private hashDeviceSecret(secret: string): string {
+    return createHash('sha256').update(secret).digest('hex');
+  }
+
+  private async touchPosDevice(deviceId: string): Promise<void> {
+    await this.prisma.$executeRawUnsafe(
+      `UPDATE "public"."pos_devices"
+       SET last_seen_at = CURRENT_TIMESTAMP,
+           updated_at = CURRENT_TIMESTAMP
+       WHERE id = $1`,
+      deviceId,
+    );
+  }
+
+  private buildCashierLockKey(deviceId: string, cashierId: string): string {
+    return `${deviceId}:${cashierId.trim().toLowerCase()}`;
+  }
+
+  private assertCashierLoginNotLocked(lockKey: string): void {
+    const existing = this.cashierLockState.get(lockKey);
+    if (!existing) return;
+    const now = Date.now();
+    if (existing.lockUntil > now) {
+      throw new UnauthorizedException(
+        'Too many failed attempts. Please wait before retrying.',
+      );
+    }
+    if (now - existing.lastFailedAt > this.cashierLockWindowMs) {
+      this.cashierLockState.delete(lockKey);
+    }
+  }
+
+  private registerCashierLoginFailure(lockKey: string): void {
+    const now = Date.now();
+    const existing = this.cashierLockState.get(lockKey);
+    const shouldResetWindow =
+      !existing || now - existing.lastFailedAt > this.cashierLockWindowMs;
+    const failures = shouldResetWindow ? 1 : existing.failures + 1;
+    const lockUntil =
+      failures >= this.cashierMaxFailures ? now + this.cashierLockWindowMs : 0;
+    this.cashierLockState.set(lockKey, {
+      failures,
+      lockUntil,
+      lastFailedAt: now,
+    });
+  }
+
+  private clearCashierLoginFailures(lockKey: string): void {
+    this.cashierLockState.delete(lockKey);
+  }
+
+  private isDeviceLoginEnforcedForTenant(tenantSlug: string): boolean {
+    const mode =
+      this.config.get<string>('POS_DEVICE_LOGIN_MODE')?.trim().toLowerCase() ??
+      'dual';
+    if (mode === 'legacy') return false;
+    if (mode === 'device') return true;
+    const requiredSlugs =
+      this.config.get<string>('POS_DEVICE_ENFORCED_TENANTS') ?? '';
+    const enforced = new Set(
+      requiredSlugs
+        .split(',')
+        .map((value) => value.trim().toLowerCase())
+        .filter(Boolean),
+    );
+    return enforced.has(tenantSlug.trim().toLowerCase());
   }
 
   // ---------- Pharmacy Owner Register ----------

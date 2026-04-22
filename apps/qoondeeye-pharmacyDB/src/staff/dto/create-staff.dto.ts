@@ -14,6 +14,11 @@ export class CreateStaffDto {
 
   @IsOptional()
   @IsString()
+  @MinLength(1)
+  cashierId?: string;
+
+  @IsOptional()
+  @IsString()
   email?: string;
 
   @IsOptional()

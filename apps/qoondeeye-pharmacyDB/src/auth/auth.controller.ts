@@ -1,8 +1,11 @@
 import { Body, Controller, Post } from '@nestjs/common';
 import { AuthService } from './auth.service';
 import {
+  CashierLoginDto,
   LoginDto,
   PinLoginDto,
+  PosDeviceEnrollDto,
+  PosDeviceRevokeDto,
   RegisterDto,
   SuperAdminSignUpDto,
   SuperAdminLoginDto,
@@ -31,6 +34,50 @@ export class AuthController {
       pin: dto.pin,
       tenant: dto.tenant,
       branchId: dto.branchId,
+    });
+  }
+
+  @Post('cashier-login')
+  cashierLogin(@Body() dto: CashierLoginDto) {
+    return this.authService.cashierLogin({
+      cashierId: dto.cashierId,
+      pin: dto.pin,
+      deviceCredential: dto.deviceCredential,
+      branchId: dto.branchId,
+    });
+  }
+
+  @Post('pos/enroll')
+  enrollPosDevice(@Body() dto: PosDeviceEnrollDto) {
+    return this.authService.enrollPosDevice({
+      tenant: dto.tenant,
+      email: dto.email,
+      password: dto.password,
+      deviceCode: dto.deviceCode,
+      displayName: dto.displayName,
+      branchId: dto.branchId,
+    });
+  }
+
+  @Post('pos/rebind')
+  rebindPosDevice(@Body() dto: PosDeviceEnrollDto) {
+    return this.authService.enrollPosDevice({
+      tenant: dto.tenant,
+      email: dto.email,
+      password: dto.password,
+      deviceCode: dto.deviceCode,
+      displayName: dto.displayName,
+      branchId: dto.branchId,
+    });
+  }
+
+  @Post('pos/revoke')
+  revokePosDevice(@Body() dto: PosDeviceRevokeDto) {
+    return this.authService.revokePosDevice({
+      tenant: dto.tenant,
+      email: dto.email,
+      password: dto.password,
+      deviceCode: dto.deviceCode,
     });
   }
 

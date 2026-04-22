@@ -16,15 +16,15 @@ import {
   TrendingUp,
 } from "lucide-react";
 
-import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
+import { Badge } from "@repo/ui/badge";
+import { Button } from "@repo/ui/button";
 import {
   Card,
   CardContent,
   CardDescription,
   CardHeader,
   CardTitle,
-} from "@/components/ui/card";
+} from "@repo/ui/card";
 import {
   Table,
   TableBody,
@@ -32,7 +32,7 @@ import {
   TableHead,
   TableHeader,
   TableRow,
-} from "@/components/ui/table";
+} from "@repo/ui/table";
 import { ReportScopeBadge } from "@/components/accounting/report-scope-badge";
 import { useReportBranchQuery } from "@/hooks/use-branch-for-reports";
 import { money } from "@/lib/accounting-display";

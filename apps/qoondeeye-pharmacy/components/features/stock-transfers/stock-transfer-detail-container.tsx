@@ -9,8 +9,8 @@ import {
   transferDtoToDetail,
 } from "@/components/features/stock-transfers/transfer-mappers";
 import type { StockTransferDetail } from "@/components/features/stock-transfers/types";
-import { Button } from "@/components/ui/button";
-import { Card, CardContent } from "@/components/ui/card";
+import { Button } from "@repo/ui/button";
+import { Card, CardContent } from "@repo/ui/card";
 import { getStoredUser } from "@/lib/auth-client";
 import { getBranches } from "@/lib/services/branches";
 import { getClientBranchId } from "@/lib/services/http";

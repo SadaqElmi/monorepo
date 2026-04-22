@@ -2,8 +2,14 @@
   "extends": "@repo/typescript-config/react-library.json",
   "compilerOptions": {
     "outDir": "dist",
-    "strictNullChecks": true
+    "strictNullChecks": true,
+    "baseUrl": ".",
+    "paths": {
+      "@repo/ui": ["./src"],
+      "@repo/ui/*": ["./src/*"],
+      "@repo/utils": ["../utils/src/index.ts"]
+    }
   },
-  "include": ["src"],
+  "include": ["src", "base-ui-react.d.ts"],
   "exclude": ["node_modules", "dist"]
 }

@@ -21,10 +21,33 @@ model Tenant {
   status     String   @default("active") @db.VarChar(20)
   createdAt  DateTime @default(now()) @map("created_at") @db.Timestamp(6)
 
+  posDevices           PosDevice[]
   domains              Domain[]
   reconciliationRuns   ReconciliationRun[]
   reconciliationLogs ReconciliationLog[]
 
+  @@schema("public")
+}
+
+model PosDevice {
+  id               String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  tenantId         String   @map("tenant_id") @db.Uuid
+  deviceCode       String   @unique @map("device_code") @db.VarChar(128)
+  displayName      String?  @map("display_name") @db.VarChar(255)
+  status           String   @default("active") @db.VarChar(20)
+  deviceSecretHash String   @map("device_secret_hash") @db.VarChar(128)
+  branchId         String?  @map("branch_id") @db.Uuid
+  boundAt          DateTime @default(now()) @map("bound_at") @db.Timestamp(6)
+  lastSeenAt       DateTime? @map("last_seen_at") @db.Timestamp(6)
+  revokedAt        DateTime? @map("revoked_at") @db.Timestamp(6)
+  createdAt        DateTime @default(now()) @map("created_at") @db.Timestamp(6)
+  updatedAt        DateTime @updatedAt @map("updated_at") @db.Timestamp(6)
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId, status])
+  @@index([tenantId, deviceCode])
+  @@map("pos_devices")
   @@schema("public")
 }
 
@@ -98,6 +121,7 @@ model ReconciliationLog {
 model User {
   id        String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
   name      String?  @db.VarChar(200)
+  cashierId String?  @unique @map("cashier_id") @db.VarChar(120)
   email     String?  @unique @db.VarChar(200)
   password  String?  @db.Text
   pinHash   String?  @map("pin_hash") @db.Text

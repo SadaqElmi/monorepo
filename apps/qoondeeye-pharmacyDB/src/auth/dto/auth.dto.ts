@@ -39,6 +39,72 @@ export class PinLoginDto {
   branchId?: string;
 }
 
+/** Device-bound cashier login: cashier identifier + PIN + device credential */
+export class CashierLoginDto {
+  @IsString()
+  @MinLength(1)
+  cashierId: string;
+
+  @IsString()
+  @MinLength(4)
+  @MaxLength(12)
+  @Matches(/^\d+$/, { message: 'PIN must contain digits only' })
+  pin: string;
+
+  @IsString()
+  @MinLength(1)
+  deviceCredential: string;
+
+  @IsOptional()
+  @IsUUID()
+  branchId?: string;
+}
+
+/** Manager enrollment for POS device binding */
+export class PosDeviceEnrollDto {
+  @IsString()
+  @MinLength(1)
+  tenant: string;
+
+  @IsEmail()
+  email: string;
+
+  @IsString()
+  @MinLength(6)
+  password: string;
+
+  @IsOptional()
+  @IsString()
+  @MinLength(1)
+  deviceCode?: string;
+
+  @IsOptional()
+  @IsString()
+  @MinLength(1)
+  displayName?: string;
+
+  @IsOptional()
+  @IsUUID()
+  branchId?: string;
+}
+
+export class PosDeviceRevokeDto {
+  @IsString()
+  @MinLength(1)
+  tenant: string;
+
+  @IsEmail()
+  email: string;
+
+  @IsString()
+  @MinLength(6)
+  password: string;
+
+  @IsString()
+  @MinLength(1)
+  deviceCode: string;
+}
+
 /** Pharmacy owner signup: creates tenant + first user (admin) */
 export class RegisterDto {
   @IsString()

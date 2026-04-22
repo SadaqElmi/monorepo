@@ -22,31 +22,31 @@ import {
   BreadcrumbList,
   BreadcrumbPage,
   BreadcrumbSeparator,
-} from "@/components/ui/breadcrumb";
-import { Button } from "@/components/ui/button";
+} from "@repo/ui/breadcrumb";
+import { Button } from "@repo/ui/button";
 import {
   Card,
   CardContent,
   CardDescription,
   CardHeader,
   CardTitle,
-} from "@/components/ui/card";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Separator } from "@/components/ui/separator";
+} from "@repo/ui/card";
+import { Input } from "@repo/ui/input";
+import { Label } from "@repo/ui/label";
+import { Separator } from "@repo/ui/separator";
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
+} from "@repo/ui/dropdown-menu";
 import {
   Select,
   SelectContent,
   SelectItem,
   SelectTrigger,
   SelectValue,
-} from "@/components/ui/select";
+} from "@repo/ui/select";
 import {
   type StaffMember,
   type Branch,
@@ -63,6 +63,7 @@ type FormMode = "create" | "edit";
 type EditableStaff = {
   id: string;
   name: string;
+  cashierId: string;
   email: string;
   role: string;
   password?: string;
@@ -131,6 +132,7 @@ export default function PharmacyStaffPage() {
     setActiveStaff({
       id: "",
       name: "",
+      cashierId: "",
       email: "",
       role: "",
       password: "",
@@ -147,6 +149,7 @@ export default function PharmacyStaffPage() {
     setActiveStaff({
       id: member.id,
       name: member.name ?? "",
+      cashierId: member.cashier_id ?? "",
       email: member.email ?? "",
       role: member.role ?? "",
       password: "",
@@ -190,7 +193,16 @@ export default function PharmacyStaffPage() {
       }
 
       if (formMode === "create") {
+        if (!activeStaff.password?.trim() || activeStaff.password.length < 6) {
+          setError("Password is required (min 6 characters).");
+          return;
+        }
+
         if (isCashier) {
+          if (!activeStaff.cashierId.trim()) {
+            setError("Cashier ID is required for cashier accounts.");
+            return;
+          }
           const pin = activeStaff.pin?.trim() ?? "";
           if (pin.length < 4) {
             setError(
@@ -198,19 +210,11 @@ export default function PharmacyStaffPage() {
             );
             return;
           }
-        } else {
-          if (!activeStaff.email?.trim()) {
-            setError("Email is required for this role.");
-            return;
-          }
-          if (!activeStaff.password?.trim() || activeStaff.password.length < 6) {
-            setError("Password is required (min 6 characters).");
-            return;
-          }
         }
 
         const created = await createStaff(tenantSlug, {
           name: activeStaff.name.trim() || undefined,
+          cashierId: activeStaff.cashierId.trim() || undefined,
           email: activeStaff.email.trim() || undefined,
           password: activeStaff.password?.trim() || undefined,
           role: roleName || undefined,
@@ -221,6 +225,7 @@ export default function PharmacyStaffPage() {
       } else {
         const payload: Parameters<typeof updateStaff>[2] = {
           name: activeStaff.name.trim() || undefined,
+          cashierId: activeStaff.cashierId.trim() || undefined,
           email: activeStaff.email.trim() || undefined,
           password: activeStaff.password?.trim() || undefined,
           role: roleName || undefined,
@@ -378,6 +383,7 @@ export default function PharmacyStaffPage() {
                     <thead className="border-b border-border/60 bg-muted/40 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
                       <tr>
                         <th className="px-6 py-4">Name</th>
+                        <th className="px-6 py-4">Cashier ID</th>
                         <th className="px-6 py-4">Email</th>
                         <th className="px-6 py-4">Role</th>
                         <th className="px-6 py-4">Branch</th>
@@ -405,6 +411,11 @@ export default function PharmacyStaffPage() {
                                 </p>
                               </div>
                             </div>
+                          </td>
+                          <td className="px-6 py-4">
+                            <span className="font-mono text-xs">
+                              {member.cashier_id || "—"}
+                            </span>
                           </td>
                           <td className="px-6 py-4">
                             <span className="inline-flex items-center gap-1.5 text-muted-foreground">
@@ -510,7 +521,24 @@ export default function PharmacyStaffPage() {
                   </div>
                 </div>
                 <div className="space-y-2">
-                  <Label htmlFor="staff-email">Email</Label>
+                  <Label htmlFor="staff-cashier-id">
+                    Cashier ID
+                  </Label>
+                  <Input
+                    id="staff-cashier-id"
+                    type="text"
+                    value={activeStaff.cashierId}
+                    onChange={(e) => handleChange("cashierId", e.target.value)}
+                    placeholder="e.g. cashier.frontdesk"
+                    required={formRoleIsCashier}
+                    className="h-10 rounded-lg font-mono"
+                  />
+                  <p className="text-xs text-muted-foreground">
+                    Used by POS for cashier sign-in with PIN.
+                  </p>
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="staff-email">Email (optional)</Label>
                   <div className="relative">
                     <Mail className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
                     <Input
@@ -518,16 +546,13 @@ export default function PharmacyStaffPage() {
                       type="email"
                       value={activeStaff.email}
                       onChange={(e) => handleChange("email", e.target.value)}
-                      placeholder="jane@pharmacy.com"
-                      required={!formRoleIsCashier}
+                      placeholder="staff@pharmacy.com"
                       className="h-10 rounded-lg pl-10"
                     />
                   </div>
-                  {formRoleIsCashier && (
-                    <p className="text-xs text-muted-foreground">
-                      Optional for cashiers who only use PIN at the POS.
-                    </p>
-                  )}
+                  <p className="text-xs text-muted-foreground">
+                    Optional contact address; not used as POS cashier ID.
+                  </p>
                 </div>
                 <div className="space-y-2">
                   <Label htmlFor="staff-role">Role</Label>
@@ -599,7 +624,7 @@ export default function PharmacyStaffPage() {
                   <Label htmlFor="staff-password">
                     {formRoleIsCashier
                       ? formMode === "create"
-                        ? "Password (optional; cashiers use PIN at POS)"
+                        ? "Password (min 6 characters)"
                         : "New password (optional; leave blank to keep)"
                       : formMode === "create"
                         ? "Password (min 6 characters)"
@@ -615,10 +640,10 @@ export default function PharmacyStaffPage() {
                         formMode === "create" ? "••••••••" : "Optional"
                       }
                       required={
-                        formMode === "create" && !formRoleIsCashier
+                        formMode === "create"
                       }
                       minLength={
-                        formMode === "create" && !formRoleIsCashier
+                        formMode === "create"
                           ? 6
                           : undefined
                       }

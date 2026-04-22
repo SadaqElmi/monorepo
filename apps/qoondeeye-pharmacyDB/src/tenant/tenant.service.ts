@@ -220,6 +220,7 @@ export class TenantService {
       `CREATE TABLE "${schemaName}"."users" (
         id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
         name VARCHAR(200),
+        cashier_id VARCHAR(120) UNIQUE,
         email VARCHAR(200) UNIQUE,
         password TEXT,
         pin_hash TEXT,
@@ -1621,6 +1622,12 @@ export class TenantService {
                     ADD COLUMN pin_hash TEXT`,
       },
       {
+        table: 'users',
+        column: 'cashier_id',
+        alterSql: `ALTER TABLE "${schemaName}"."users"
+                    ADD COLUMN cashier_id VARCHAR(120)`,
+      },
+      {
         table: 'batches',
         column: 'branch_id',
         alterSql: `ALTER TABLE "${schemaName}"."batches"
@@ -1682,6 +1689,11 @@ export class TenantService {
       }
     }
 
+    await this.prisma.$executeRawUnsafe(
+      `CREATE UNIQUE INDEX IF NOT EXISTS users_cashier_id_unique_not_null
+       ON "${schemaName}"."users"(cashier_id)
+       WHERE cashier_id IS NOT NULL AND BTRIM(cashier_id) <> ''`,
+    );
     await this.prisma.$executeRawUnsafe(
       `CREATE UNIQUE INDEX IF NOT EXISTS sales_branch_receipt_unique ON "${schemaName}"."sales"(branch_id, receipt_number)`,
     );

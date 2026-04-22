@@ -1,25 +1,8 @@
 import { PRODUCTS_PREFIX } from "./endpoints";
 import { type JsonHeaders, jsonFetch } from "./http";
-import { type Category } from "./categories";
+import type { Product } from "@repo/types";
 
-export type Product = {
-  id: string;
-  name: string;
-  genericName?: string | null;
-  sku?: string | null;
-  listPrice?: number | string | null;
-  branchId?: string | null;
-  categoryId?: string | null;
-  /** Set on GET /products/catalog via SQL join (works when category list is branch-filtered). */
-  categoryName?: string | null;
-  category?: Category | null;
-  strength?: string | null;
-  formulation?: string | null;
-  unit?: string | null;
-  description?: string | null;
-  createdAt?: string;
-  availableStock?: number;
-};
+export type { Product };
 
 export async function getProducts(tenantSlug: string): Promise<Product[]> {
   return jsonFetch<Product[]>(PRODUCTS_PREFIX, {

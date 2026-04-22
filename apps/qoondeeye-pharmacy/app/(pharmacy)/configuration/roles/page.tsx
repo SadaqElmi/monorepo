@@ -17,13 +17,13 @@ import {
   BreadcrumbList,
   BreadcrumbPage,
   BreadcrumbSeparator,
-} from "@/components/ui/breadcrumb";
-import { Button } from "@/components/ui/button";
-import { Card, CardContent } from "@/components/ui/card";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Checkbox } from "@/components/ui/checkbox";
-import { Separator } from "@/components/ui/separator";
+} from "@repo/ui/breadcrumb";
+import { Button } from "@repo/ui/button";
+import { Card, CardContent } from "@repo/ui/card";
+import { Input } from "@repo/ui/input";
+import { Label } from "@repo/ui/label";
+import { Checkbox } from "@repo/ui/checkbox";
+import { Separator } from "@repo/ui/separator";
 import { getStoredUser } from "@/lib/auth-client";
 import {
   createRole,

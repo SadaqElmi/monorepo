@@ -16,23 +16,23 @@ import {
 } from "lucide-react";
 
 import { branchesToMap, transferDtoToDetail } from "@/components/features/stock-transfers/transfer-mappers";
-import { Button } from "@/components/ui/button";
+import { Button } from "@repo/ui/button";
 import {
   Card,
   CardContent,
   CardDescription,
   CardHeader,
   CardTitle,
-} from "@/components/ui/card";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
+} from "@repo/ui/card";
+import { Input } from "@repo/ui/input";
+import { Label } from "@repo/ui/label";
 import {
   Select,
   SelectContent,
   SelectItem,
   SelectTrigger,
   SelectValue,
-} from "@/components/ui/select";
+} from "@repo/ui/select";
 import {
   Table,
   TableBody,
@@ -40,7 +40,7 @@ import {
   TableHead,
   TableHeader,
   TableRow,
-} from "@/components/ui/table";
+} from "@repo/ui/table";
 import { getStoredUser } from "@/lib/auth-client";
 import { getEffectiveClientBranchId } from "@/lib/branch-access";
 import { getBranches, type Branch } from "@/lib/services/branches";

@@ -23,16 +23,16 @@ import {
   getInventory,
   getProductsCatalog,
 } from "@/lib/api";
-import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
+import { Badge } from "@repo/ui/badge";
+import { Button } from "@repo/ui/button";
+import { Input } from "@repo/ui/input";
 import {
   Select,
   SelectContent,
   SelectItem,
   SelectTrigger,
   SelectValue,
-} from "@/components/ui/select";
+} from "@repo/ui/select";
 import {
   Table,
   TableBody,
@@ -40,7 +40,7 @@ import {
   TableHead,
   TableHeader,
   TableRow,
-} from "@/components/ui/table";
+} from "@repo/ui/table";
 import {
   ITEMS_TABLE_PAGE_SIZE,
   buildInvLookup,

@@ -3,9 +3,9 @@
 import * as React from "react";
 import { Building2, CreditCard } from "lucide-react";
 
-import { Badge } from "@/components/ui/badge";
-import { Card, CardContent, CardFooter } from "@/components/ui/card";
-import { Separator } from "@/components/ui/separator";
+import { Badge } from "@repo/ui/badge";
+import { Card, CardContent, CardFooter } from "@repo/ui/card";
+import { Separator } from "@repo/ui/separator";
 import {
   Table,
   TableBody,
@@ -13,39 +13,13 @@ import {
   TableHead,
   TableHeader,
   TableRow,
-} from "@/components/ui/table";
-import { cn } from "@/lib/utils";
+} from "@repo/ui/table";
+import type { PosTransaction, PosTransactionLine } from "@repo/types";
+import { cn, formatMoney } from "@repo/utils";
 
-/** Matches cart / saved sale lines on the POS page. */
-export type PosTransactionLine = {
-  lineId: string;
-  productId: string;
-  name: string;
-  unitPrice: number;
-  qty: number;
-  unitType: string;
-};
-
-export type PosTransaction = {
-  receiptId: string;
-  saleId?: string;
-  createdAt: number;
-  paymentMethod: string;
-  lines: PosTransactionLine[];
-  discount: number;
-  subtotal: number;
-  tax: number;
-  total: number;
-};
+export type { PosTransaction, PosTransactionLine };
 
 const BRAND = "#0d968b";
-
-function formatMoney(n: number) {
-  return new Intl.NumberFormat("en-US", {
-    style: "currency",
-    currency: "USD",
-  }).format(n);
-}
 
 type PosTransactionReceiptProps = {
   transaction: PosTransaction;
@@ -80,7 +54,7 @@ export function PosTransactionReceipt({
         className,
       )}
     >
-      <div className="border-b border-neutral-200 px-3 py-4 text-center">
+      <div className="px-3 py-4 text-center">
         <div
           className="mb-2 inline-flex items-center justify-center rounded-lg p-1.5"
           style={{ backgroundColor: `${BRAND}1a`, color: BRAND }}
@@ -122,7 +96,7 @@ export function PosTransactionReceipt({
       <div className="p-0.5">
         <Table>
           <TableHeader>
-            <TableRow className="border-neutral-300 bg-neutral-100 hover:bg-neutral-100">
+            <TableRow className="bg-neutral-100 hover:bg-neutral-100">
               <TableHead className="px-2 py-1.5 text-[10px] font-bold uppercase tracking-wide text-neutral-700">
                 Description
               </TableHead>
@@ -141,7 +115,7 @@ export function PosTransactionReceipt({
             {tx.lines.map((l) => {
               const lineTotal = l.unitPrice * l.qty;
               return (
-                <TableRow key={l.lineId} className="border-neutral-200 hover:bg-neutral-50/80">
+                <TableRow key={l.lineId} className="hover:bg-neutral-50/80">
                   <TableCell className="px-2 py-1.5 align-top">
                     <p className="text-[11px] font-semibold text-neutral-900">{l.name}</p>
                     <p className="receipt-muted text-[10px]">Unit: {l.unitType}</p>
@@ -162,7 +136,7 @@ export function PosTransactionReceipt({
         </Table>
       </div>
 
-      <CardContent className="space-y-2 border-t border-neutral-300 px-3 py-3">
+      <CardContent className="space-y-2 px-3 py-3">
         <div className="mb-1 flex items-center justify-between text-[11px]">
           <span className="receipt-muted uppercase tracking-wide">Payment</span>
           <Badge
@@ -176,7 +150,7 @@ export function PosTransactionReceipt({
         <div className="flex items-center justify-between gap-2">
           <div className="flex items-center gap-2">
             <div
-              className="flex h-6 w-6 items-center justify-center rounded border border-neutral-300 bg-neutral-100"
+              className="flex h-6 w-6 items-center justify-center rounded bg-neutral-100"
               style={{ color: BRAND }}
             >
               <CreditCard className="size-3.5" aria-hidden />
@@ -209,7 +183,7 @@ export function PosTransactionReceipt({
         </div>
       </CardContent>
 
-      <CardFooter className="flex flex-col gap-2 border-t border-neutral-300 bg-white px-3 py-3 text-center">
+      <CardFooter className="flex flex-col gap-2 bg-white px-3 py-3 text-center">
         <div className="space-y-1">
           <p className="text-[11px] font-semibold">Thank you for choosing PharmaCare Pharmacy.</p>
           <p className="receipt-muted text-[10px] uppercase leading-relaxed">

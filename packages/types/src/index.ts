@@ -1,0 +1,171 @@
+/** Domain / catalog models shared across apps */
+export type ProductModel = {
+  id: string;
+  sku?: string | null;
+  name: string;
+  categoryId?: string | null;
+  listPrice?: number | null;
+};
+
+export type InvoiceLineModel = {
+  productId: string;
+  quantity: number;
+  unitPrice: number;
+};
+
+export type InvoiceModel = {
+  id: string;
+  invoiceNumber: string;
+  customerId?: string | null;
+  lines: InvoiceLineModel[];
+  subTotal: number;
+  tax: number;
+  discount: number;
+  total: number;
+};
+
+/** API-aligned types (Nest + JSON) */
+export type Category = {
+  id: string;
+  name: string;
+  description?: string | null;
+  slug?: string | null;
+  branchId?: string | null;
+  parentId?: string | null;
+  createdAt?: string;
+};
+
+export type Product = {
+  id: string;
+  name: string;
+  genericName?: string | null;
+  sku?: string | null;
+  listPrice?: number | string | null;
+  branchId?: string | null;
+  categoryId?: string | null;
+  categoryName?: string | null;
+  category?: Category | null;
+  strength?: string | null;
+  formulation?: string | null;
+  unit?: string | null;
+  description?: string | null;
+  createdAt?: string;
+  availableStock?: number;
+};
+
+export type Batch = {
+  id: string;
+  product_id: string | null;
+  batch_number: string | null;
+  expiry_date: string | null;
+  quantity: number | null;
+  cost_price: number | null;
+  selling_price: number | null;
+  created_at?: string;
+};
+
+export type SaleItem = {
+  id: string;
+  sale_id: string;
+  branch_id: string | null;
+  product_id: string | null;
+  batch_id: string | null;
+  quantity: number | null;
+  price: number | string | null;
+  total: number | string | null;
+};
+
+export type Sale = {
+  id: string;
+  branch_id: string | null;
+  receipt_number?: string | null;
+  total_amount: number | string | null;
+  discount: number | string | null;
+  tax: number | string | null;
+  sale_date: string | null;
+  items?: SaleItem[];
+};
+
+export type CreateSaleInput = {
+  branchId?: string;
+  totalAmount?: number;
+  discount?: number;
+  tax?: number;
+  paymentMethod?: string;
+  items: Array<{
+    productId: string;
+    quantity: number;
+    price?: number;
+  }>;
+};
+
+export type UpdateSaleInput = {
+  branchId?: string;
+  totalAmount?: number;
+  discount?: number;
+  tax?: number;
+};
+
+export type ReturnVoucherCreated = {
+  id: string;
+  branch_id: string;
+  sale_id: string;
+  sale_item_id: string;
+  quantity: number;
+  unit_price: number | string;
+  token: string;
+  status: string;
+  reason: string | null;
+  expires_at: string | null;
+  created_at: string;
+  barcodeValue: string;
+};
+
+export type FinalizeReturnVoucherResult = {
+  saleReturn: {
+    id: string;
+    sale_id: string;
+    branch_id: string | null;
+    reason: string | null;
+    refund_method: string | null;
+    refund_amount: number | string | null;
+    return_date: string;
+  };
+  refundAmount: number;
+  receiptNumber: string | null;
+  originalSaleId: string;
+};
+
+export type ReturnVoucherPreview = {
+  id: string;
+  branchId?: string;
+  saleId?: string;
+  saleItemId?: string;
+  quantity: number;
+  unitPrice?: number | string;
+  token: string;
+  status: string;
+  barcodeValue?: string;
+};
+
+/** POS receipt / local transaction record */
+export type PosTransactionLine = {
+  lineId: string;
+  productId: string;
+  name: string;
+  unitPrice: number;
+  qty: number;
+  unitType: string;
+};
+
+export type PosTransaction = {
+  receiptId: string;
+  saleId?: string;
+  createdAt: number;
+  paymentMethod: string;
+  lines: PosTransactionLine[];
+  discount: number;
+  subtotal: number;
+  tax: number;
+  total: number;
+};
