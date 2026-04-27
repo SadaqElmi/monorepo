@@ -148,6 +148,8 @@ export type ReturnVoucherPreview = {
   barcodeValue?: string;
 };
 
+export type UnitType = "PC" | "Box" | "Ctn" | "router";
+
 /** POS receipt / local transaction record */
 export type PosTransactionLine = {
   lineId: string;
@@ -155,7 +157,7 @@ export type PosTransactionLine = {
   name: string;
   unitPrice: number;
   qty: number;
-  unitType: string;
+  unitType: UnitType;
 };
 
 export type PosTransaction = {
@@ -168,4 +170,28 @@ export type PosTransaction = {
   subtotal: number;
   tax: number;
   total: number;
+};
+export type PosCartLine = {
+  lineId: string;
+  productId: string;
+  name: string;
+  unitPrice: number;
+  listUnitPrice?: number;
+  qty: number;
+  unitType: UnitType;
+  /** Free-form note attached to the line via the Comment action. */
+  comment?: string;
+  /** Per-line discount percent (0..100) applied via the Line Discount % action. */
+  lineDiscountPct?: number;
+};
+
+export type PosHeldOrder = {
+  id: string;
+  /** Local receipt-like ID for held/suspended carts (00001, 00002, …). */
+  receiptId?: string;
+  label: string;
+  createdAt: number;
+  lines: PosCartLine[];
+  /** Whether the synthetic VAT line should be shown when recalling this held order. */
+  showVatLine?: boolean;
 };

@@ -194,9 +194,7 @@ export class InventoryService {
   async consumeBatchesFifo(
     tx: Prisma.TransactionClient,
     input: { branchId: string; productId: string; quantity: number },
-  ): Promise<
-    Array<{ batchId: string; quantity: number; unitCost: number }>
-  > {
+  ): Promise<Array<{ batchId: string; quantity: number; unitCost: number }>> {
     let remaining = input.quantity;
     const allocations: Array<{
       batchId: string;

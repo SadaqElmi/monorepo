@@ -20,33 +20,30 @@ function mockTxForInterbranchMismatches(opts: {
 }): Prisma.TransactionClient {
   let rawCall = 0;
   return {
-    $queryRawUnsafe: jest.fn(
-      async (template: string, ...args: unknown[]) => {
-        if (template.includes('FROM branches WHERE id IN')) {
-          const ids = args as string[];
-          return ids.map((id) => ({
-            id,
-            name: id === BRANCH_A ? 'Branch A' : id === BRANCH_B ? 'Branch B' : id,
-          }));
-        }
-        rawCall += 1;
-        if (rawCall === 1) {
-          expect(template).toContain(
-            'COALESCE(st.is_reversed, false) = false',
-          );
-          return opts.inTransitRows;
-        }
-        if (rawCall === 2) {
-          return [];
-        }
-        if (rawCall === 3) {
-          return [];
-        }
-        throw new Error(
-          `Unexpected $queryRawUnsafe call #${rawCall}: ${template.slice(0, 80)}…`,
-        );
-      },
-    ),
+    $queryRawUnsafe: jest.fn(async (template: string, ...args: unknown[]) => {
+      if (template.includes('FROM branches WHERE id IN')) {
+        const ids = args as string[];
+        return ids.map((id) => ({
+          id,
+          name:
+            id === BRANCH_A ? 'Branch A' : id === BRANCH_B ? 'Branch B' : id,
+        }));
+      }
+      rawCall += 1;
+      if (rawCall === 1) {
+        expect(template).toContain('COALESCE(st.is_reversed, false) = false');
+        return opts.inTransitRows;
+      }
+      if (rawCall === 2) {
+        return [];
+      }
+      if (rawCall === 3) {
+        return [];
+      }
+      throw new Error(
+        `Unexpected $queryRawUnsafe call #${rawCall}: ${template.slice(0, 80)}…`,
+      );
+    }),
   } as unknown as Prisma.TransactionClient;
 }
 
@@ -54,9 +51,9 @@ describe('queryInterbranchMismatches', () => {
   it('excludes reversed transfers from in-transit SQL (no false timing_in_transit)', async () => {
     const tx = mockTxForInterbranchMismatches({ inTransitRows: [] });
     const rows = await queryInterbranchMismatches(tx, [BRANCH_A, BRANCH_B]);
-    expect(rows.filter((r) => r.reasonCode === 'timing_in_transit')).toHaveLength(
-      0,
-    );
+    expect(
+      rows.filter((r) => r.reasonCode === 'timing_in_transit'),
+    ).toHaveLength(0);
   });
 
   it('still surfaces timing_in_transit when DB returns a non-reversed shipped row', async () => {
@@ -67,8 +64,7 @@ describe('queryInterbranchMismatches', () => {
           from_branch_id: BRANCH_A,
           to_branch_id: BRANCH_B,
           status: 'shipped',
-          shipped_journal_entry_id:
-            '44444444-4444-4444-4444-444444444444',
+          shipped_journal_entry_id: '44444444-4444-4444-4444-444444444444',
           receive_journal_entry_id: null,
         },
       ],

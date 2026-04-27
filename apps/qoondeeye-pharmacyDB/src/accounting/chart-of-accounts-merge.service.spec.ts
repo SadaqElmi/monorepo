@@ -125,10 +125,12 @@ describe('ChartOfAccountsMergeService.mergeDuplicatedAccounts', () => {
 
   it('throws when the two accounts are mutual parents', async () => {
     const mockTx = {
-      $queryRawUnsafe: jest.fn().mockResolvedValueOnce([
-        row(sourceId, { parent_id: targetId }),
-        row(targetId, { parent_id: sourceId }),
-      ]),
+      $queryRawUnsafe: jest
+        .fn()
+        .mockResolvedValueOnce([
+          row(sourceId, { parent_id: targetId }),
+          row(targetId, { parent_id: sourceId }),
+        ]),
       $executeRawUnsafe: jest.fn(),
     };
     const prisma = {

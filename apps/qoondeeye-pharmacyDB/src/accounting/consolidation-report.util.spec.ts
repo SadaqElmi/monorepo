@@ -84,7 +84,10 @@ describe('applyBalanceSheetConsolidation', () => {
         },
       ],
     });
-    expect(out.lines.map((l) => l.accountKey)).toEqual(['cash', 'accounts_payable']);
+    expect(out.lines.map((l) => l.accountKey)).toEqual([
+      'cash',
+      'accounts_payable',
+    ]);
     expect(out.totals.assets).toBe(1000);
     expect(out.totals.liabilities).toBe(100);
     expect(out.consolidation?.residual).toBe(0);

@@ -1,11 +1,11 @@
 {
   "$schema": "https://ui.shadcn.com/schema.json",
-  "style": "radix-nova",
+  "style": "new-york",
   "rsc": true,
   "tsx": true,
   "tailwind": {
     "config": "",
-    "css": "../../apps/qoondeeye-pharmacy/app/globals.css",
+    "css": "./src/shadcn-theme.css",
     "baseColor": "neutral",
     "cssVariables": true,
     "prefix": ""

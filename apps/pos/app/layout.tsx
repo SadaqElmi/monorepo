@@ -1,12 +1,10 @@
 import type { Metadata } from "next";
-import { Geist_Mono, Roboto } from "next/font/google";
+import { Geist_Mono, Roboto, Geist } from "next/font/google";
 import "./globals.css";
+import { Footer } from "@/components/footer";
+import { TooltipProvider } from "@repo/ui/tooltip";
 
-const roboto = Roboto({
-  variable: "--font-sans",
-  subsets: ["latin"],
-  weight: ["400", "500", "700"],
-});
+const geist = Geist({subsets:['latin'],variable:'--font-sans'});
 
 const geistMono = Geist_Mono({
   variable: "--font-geist-mono",
@@ -18,15 +16,21 @@ export const metadata: Metadata = {
   description: "PharmaCare point of sale frontend",
 };
 
+import { PosProvider } from "@/components/pos-context";
+import { cn } from "@/lib/utils";
+
 export default function RootLayout({
   children,
 }: Readonly<{
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en">
-      <body className={`${roboto.variable} ${geistMono.variable} min-h-full flex flex-col`}>
-        {children}
+    <html lang="en" className={cn("h-full", "font-sans", geist.variable)}>
+      <body className={`${geist.variable} ${geistMono.variable} h-full flex flex-col overflow-hidden`}>
+        <PosProvider>
+          <TooltipProvider>{children}</TooltipProvider>
+          <Footer />
+        </PosProvider>
       </body>
     </html>
   );

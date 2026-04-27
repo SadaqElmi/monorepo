@@ -53,7 +53,9 @@ export function assertCoaRowsMergeable(
   target: CoaMergeAccountRow,
 ): void {
   if (source.id === target.id) {
-    throw new BadRequestException('sourceAccountId and targetAccountId must differ');
+    throw new BadRequestException(
+      'sourceAccountId and targetAccountId must differ',
+    );
   }
   if (source.branch_id !== branchId || target.branch_id !== branchId) {
     throw new BadRequestException(

@@ -269,7 +269,7 @@ function saleToPosTransaction(
   productNameById?: Record<string, string>,
 ): PosTransaction {
   const rawLines = Array.isArray(sale.items) ? sale.items : [];
-  const lines = rawLines.map((item, index) => {
+  const lines: PosTransaction["lines"] = rawLines.map((item, index) => {
     const qty = Math.max(1, Math.round(toFiniteNumber(item.quantity)));
     const unitPrice = toFiniteNumber(item.price);
     const productId = (item.product_id ?? "").trim() || `item-${index + 1}`;

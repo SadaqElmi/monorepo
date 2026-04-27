@@ -82,8 +82,7 @@ function tenantRequestPath(req: Request): string {
 function isTenantWideReadAllBranchesRoute(fullPath: string): boolean {
   const p = fullPath.replace(/\/+$/, '') || '/';
   return (
-    p === '/api/inventory' ||
-    p === '/api/purchases/line-pricing-by-product'
+    p === '/api/inventory' || p === '/api/purchases/line-pricing-by-product'
   );
 }
 
@@ -467,8 +466,7 @@ export class BranchMiddleware implements NestMiddleware {
       (tenantWantsAllBranchesRead && Boolean(userBranchId));
 
     const viewAllRequested =
-      headerBranchValue?.toLowerCase() === 'all' &&
-      allowedAllBranchesHeader;
+      headerBranchValue?.toLowerCase() === 'all' && allowedAllBranchesHeader;
 
     // Enforce "selected branch" security before queries.
     if (!isBranchSuperUser) {
@@ -554,7 +552,7 @@ export class BranchMiddleware implements NestMiddleware {
     req.branchReadScope = {
       readBranchIds: [...viewAllowedBranchIds],
       readAllBranches: !mutation && viewAllRequested,
-      mutationBranchId: mutationAllowedBranchIds[0]!,
+      mutationBranchId: mutationAllowedBranchIds[0],
     };
     req.userId = userId;
     req.userRole = roleLower;

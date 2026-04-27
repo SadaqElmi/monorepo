@@ -1,4 +1,8 @@
-import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
+import {
+  BadRequestException,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
 import type { Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 
@@ -192,7 +196,10 @@ export class EntityHierarchyService {
       if (branchOwnership[row.branch_id] == null) {
         branchOwnership[row.branch_id] = w;
       } else {
-        branchOwnership[row.branch_id] = Math.min(branchOwnership[row.branch_id], w);
+        branchOwnership[row.branch_id] = Math.min(
+          branchOwnership[row.branch_id],
+          w,
+        );
       }
     }
     const entityOwnership: Record<string, number> = {};

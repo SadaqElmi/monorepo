@@ -131,7 +131,9 @@ export async function writeBalanceSheetPdf(
     }
     if (report.consolidation) {
       doc.moveDown();
-      doc.fontSize(10).text('Consolidation (reporting-only)', { underline: true });
+      doc
+        .fontSize(10)
+        .text('Consolidation (reporting-only)', { underline: true });
       doc.fontSize(9);
       writePdfTable(doc, [
         {

@@ -462,7 +462,8 @@ export async function queryInterbranchMismatches(
       shipAmount: null,
       receiveAmount: null,
       difference: null,
-      message: 'Shipped but not received (in-transit); due_from / due_to may not offset yet.',
+      message:
+        'Shipped but not received (in-transit); due_from / due_to may not offset yet.',
     });
   }
   for (const r of journalMismatch) {

@@ -306,8 +306,7 @@ export class AccountingController {
       branchIds: body.branchIds,
       aggregateAll: Boolean(body.aggregateAll),
     });
-    const asOfDate =
-      body.asOf?.trim() || new Date().toISOString().slice(0, 10);
+    const asOfDate = body.asOf?.trim() || new Date().toISOString().slice(0, 10);
     const schema = this.tenantContext.getSchemaName()!;
     await this.tenantService.applyTenantSchemaPatches(schema);
     const workflow = await this.financialReports.approveAccountingPeriod(
@@ -337,8 +336,7 @@ export class AccountingController {
       branchIds: body.branchIds,
       aggregateAll: Boolean(body.aggregateAll),
     });
-    const asOfDate =
-      body.asOf?.trim() || new Date().toISOString().slice(0, 10);
+    const asOfDate = body.asOf?.trim() || new Date().toISOString().slice(0, 10);
     const schema = this.tenantContext.getSchemaName()!;
     await this.tenantService.applyTenantSchemaPatches(schema);
     const workflow = await this.financialReports.reopenAccountingPeriod(

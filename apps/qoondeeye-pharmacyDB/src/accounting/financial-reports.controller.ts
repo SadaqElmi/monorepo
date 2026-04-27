@@ -383,12 +383,7 @@ export class FinancialReportsController {
     entityId?: string,
   ) {
     this.ensureTenant();
-    let scope = this.reportBranchScope(
-      req,
-      branchId,
-      branchIds,
-      aggregateAll,
-    );
+    let scope = this.reportBranchScope(req, branchId, branchIds, aggregateAll);
     let branches = scope.branchIds;
     if (!from?.trim() || !to?.trim()) {
       throw new BadRequestException(
@@ -430,16 +425,19 @@ export class FinancialReportsController {
     );
     const usePostedConsolidation =
       (consolidationMode?.trim().toLowerCase() ?? '') === 'posted';
-    let postedConsolidation:
-      | { runId: string; postedAt: string; metadata: Record<string, unknown> | null }
-      | null = null;
+    let postedConsolidation: {
+      runId: string;
+      postedAt: string;
+      metadata: Record<string, unknown> | null;
+    } | null = null;
     if (usePostedConsolidation && branches.length > 1) {
-      const adjustments = await this.consolidationEngine.queryConsolidationPnlAdjustments(
-        schema,
-        branches,
-        from.trim(),
-        to.trim(),
-      );
+      const adjustments =
+        await this.consolidationEngine.queryConsolidationPnlAdjustments(
+          schema,
+          branches,
+          from.trim(),
+          to.trim(),
+        );
       if (
         Math.abs(adjustments.revenue) > FinancialReportsController.EPSILON ||
         Math.abs(adjustments.cogs) > FinancialReportsController.EPSILON ||
@@ -452,18 +450,21 @@ export class FinancialReportsController {
         payload.otherExpenses = this.round2(
           payload.otherExpenses - adjustments.expenses,
         );
-        payload.totalExpenses = this.round2(payload.cogs + payload.otherExpenses);
+        payload.totalExpenses = this.round2(
+          payload.cogs + payload.otherExpenses,
+        );
         payload.grossProfit = this.round2(payload.totalRevenue - payload.cogs);
         payload.netIncome = this.round2(
           payload.totalRevenue - payload.totalExpenses,
         );
       }
-      postedConsolidation = await this.consolidationEngine.getLatestPostedSummary({
-        schemaName: schema,
-        scopeHash: entityScopeHash,
-        entityId: resolvedEntityScope?.entityId || undefined,
-        periodKey: `${from.trim()}::${to.trim()}`,
-      });
+      postedConsolidation =
+        await this.consolidationEngine.getLatestPostedSummary({
+          schemaName: schema,
+          scopeHash: entityScopeHash,
+          entityId: resolvedEntityScope?.entityId || undefined,
+          periodKey: `${from.trim()}::${to.trim()}`,
+        });
     }
 
     const pnlDiff = Math.abs(
@@ -807,12 +808,7 @@ export class FinancialReportsController {
     @Query('compareSnapshot') compareSnapshot?: string,
   ) {
     this.ensureTenant();
-    let scope = this.reportBranchScope(
-      req,
-      branchId,
-      branchIds,
-      aggregateAll,
-    );
+    let scope = this.reportBranchScope(req, branchId, branchIds, aggregateAll);
     let branches = scope.branchIds;
     const useConsolidated = this.parseBool(consolidated);
     const usePostedConsolidation =
@@ -878,10 +874,7 @@ export class FinancialReportsController {
       code: string;
       message: string;
     }> = [];
-    if (
-      payload.consolidation &&
-      payload.consolidation.severity !== 'clean'
-    ) {
+    if (payload.consolidation && payload.consolidation.severity !== 'clean') {
       const severity =
         payload.consolidation.severity === 'critical'
           ? ('critical' as const)
@@ -1115,7 +1108,10 @@ export class FinancialReportsController {
     }
     const schema = this.tenantContext.getSchemaName()!;
     await this.tenantService.applyTenantSchemaPatches(schema);
-    const items = await this.reports.listInterbranchMismatches(schema, branches);
+    const items = await this.reports.listInterbranchMismatches(
+      schema,
+      branches,
+    );
     return this.withScopeMeta({ items }, scope);
   }
 
@@ -1172,12 +1168,7 @@ export class FinancialReportsController {
     @Query('entityId') entityId?: string,
   ) {
     this.ensureTenant();
-    let scope = this.reportBranchScope(
-      req,
-      branchId,
-      branchIds,
-      aggregateAll,
-    );
+    let scope = this.reportBranchScope(req, branchId, branchIds, aggregateAll);
     let branches = scope.branchIds;
     if (!asOf?.trim()) {
       throw new BadRequestException(
@@ -1502,9 +1493,12 @@ export class FinancialReportsController {
     archive.append(JSON.stringify({ items: runs }, null, 2), {
       name: 'consolidation-runs.json',
     });
-    archive.append(JSON.stringify({ rows: auditSample.slice(0, 5000) }, null, 2), {
-      name: 'audit-log-sample.json',
-    });
+    archive.append(
+      JSON.stringify({ rows: auditSample.slice(0, 5000) }, null, 2),
+      {
+        name: 'audit-log-sample.json',
+      },
+    );
     await archive.finalize();
   }
 
@@ -1579,9 +1573,7 @@ export class FinancialReportsController {
     await this.tenantService.applyTenantSchemaPatches(schema);
     const rateType = body.rateType ?? 'closing';
     const [row] = await this.prisma.withTenantSchema(schema, (tx) =>
-      tx.$queryRawUnsafe<
-        Array<{ id: string; updated_at: Date; rate: string }>
-      >(
+      tx.$queryRawUnsafe<Array<{ id: string; updated_at: Date; rate: string }>>(
         `INSERT INTO fx_rates (from_currency, to_currency, rate_type, rate, as_of_date, updated_at)
          VALUES ($1, $2, $3, $4, $5::date, CURRENT_TIMESTAMP)
          ON CONFLICT (from_currency, to_currency, rate_type, as_of_date)
@@ -1677,7 +1669,12 @@ export class FinancialReportsController {
       entityId?: string;
       title: string;
       justification?: string;
-      lines: Array<{ accountKey: string; debit: number; credit: number; memo?: string }>;
+      lines: Array<{
+        accountKey: string;
+        debit: number;
+        credit: number;
+        memo?: string;
+      }>;
     },
   ) {
     this.ensureTenant();
@@ -1734,7 +1731,9 @@ export class FinancialReportsController {
     const schema = this.tenantContext.getSchemaName()!;
     await this.tenantService.applyTenantSchemaPatches(schema);
     const [row] = await this.prisma.withTenantSchema(schema, (tx) =>
-      tx.$queryRawUnsafe<Array<{ id: string; status: string; approved_at: Date }>>(
+      tx.$queryRawUnsafe<
+        Array<{ id: string; status: string; approved_at: Date }>
+      >(
         `UPDATE consolidation_adjustments
          SET status = 'approved',
              approved_by = $2::uuid,
@@ -1895,7 +1894,12 @@ export class FinancialReportsController {
     await this.tenantService.applyTenantSchemaPatches(schema);
     const items = await this.reports.getAlerts(schema, scope.branchIds);
     for (const item of items) {
-      this.notifyControlAlertIfNeeded(schema, item.code, item.title, item.message);
+      this.notifyControlAlertIfNeeded(
+        schema,
+        item.code,
+        item.title,
+        item.message,
+      );
     }
     return this.withScopeMeta({ items }, scope);
   }

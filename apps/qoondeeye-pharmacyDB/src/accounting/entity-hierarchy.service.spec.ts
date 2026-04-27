@@ -13,10 +13,7 @@ describe('EntityHierarchyService', () => {
             ownership_percent: '100.00',
           },
         ])
-        .mockResolvedValueOnce([
-          { branch_id: 'b1' },
-          { branch_id: 'b2' },
-        ])
+        .mockResolvedValueOnce([{ branch_id: 'b1' }, { branch_id: 'b2' }])
         .mockResolvedValueOnce([
           { branch_id: 'b1', entity_id: 'root' },
           { branch_id: 'b2', entity_id: 'child' },
@@ -43,8 +40,8 @@ describe('EntityHierarchyService', () => {
         ]),
     };
     const svc = new EntityHierarchyService({} as never);
-    await expect(svc.resolveScopeByEntityInTx(tx as never, 'root')).rejects.toThrow(
-      'Invalid entity ownership percent range',
-    );
+    await expect(
+      svc.resolveScopeByEntityInTx(tx as never, 'root'),
+    ).rejects.toThrow('Invalid entity ownership percent range');
   });
 });

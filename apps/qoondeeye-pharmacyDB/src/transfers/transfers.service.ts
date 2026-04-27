@@ -1910,20 +1910,21 @@ export class TransfersService {
               unitCost: previewUnit,
             });
           }
-          const allocations =
-            await this.inventoryService.consumeBatchesFifo(tx, {
+          const allocations = await this.inventoryService.consumeBatchesFifo(
+            tx,
+            {
               branchId: fromBranch,
               productId,
               quantity: qty,
-            });
+            },
+          );
           const fifoCost = allocations.reduce(
             (s, a) => s + a.quantity * a.unitCost,
             0,
           );
           const weightedUnit =
             qty > 0 ? Number((fifoCost / qty).toFixed(4)) : 0;
-          const unitSnap =
-            weightedUnit > EPSILON ? weightedUnit : previewUnit;
+          const unitSnap = weightedUnit > EPSILON ? weightedUnit : previewUnit;
           const lineCost = Number((unitSnap * qty).toFixed(2));
           await tx.$executeRawUnsafe(
             `UPDATE stock_transfer_items
@@ -2316,9 +2317,7 @@ export class TransfersService {
         throw new BadRequestException('Reversed transfer cannot be closed');
       }
       if (this.asText(row.status) !== 'received') {
-        throw new BadRequestException(
-          'Only received transfers can be closed',
-        );
+        throw new BadRequestException('Only received transfers can be closed');
       }
       await this.assertTransitionUpdated(
         tx,
@@ -2684,7 +2683,9 @@ export class TransfersService {
       };
 
       const needShip =
-        (status === 'shipped' || status === 'received' || status === 'closed') &&
+        (status === 'shipped' ||
+          status === 'received' ||
+          status === 'closed') &&
         !row.shipped_journal_entry_id;
       const needReceive =
         (status === 'received' || status === 'closed') &&
@@ -2958,7 +2959,11 @@ export class TransfersService {
           : null,
       };
 
-      if (status !== 'shipped' && status !== 'received' && status !== 'closed') {
+      if (
+        status !== 'shipped' &&
+        status !== 'received' &&
+        status !== 'closed'
+      ) {
         throw new BadRequestException(
           'Recreate journals only applies to shipped, received, or closed transfers',
         );
@@ -3034,7 +3039,10 @@ export class TransfersService {
         });
       }
 
-      if ((status === 'received' || status === 'closed') && !row.receive_journal_entry_id) {
+      if (
+        (status === 'received' || status === 'closed') &&
+        !row.receive_journal_entry_id
+      ) {
         const [rowNow] = await tx.$queryRawUnsafe<TransferRow[]>(
           `SELECT * FROM stock_transfers WHERE id = $1::uuid`,
           id,

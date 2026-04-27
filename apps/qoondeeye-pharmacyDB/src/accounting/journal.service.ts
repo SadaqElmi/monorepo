@@ -112,7 +112,12 @@ export class JournalService {
       throw new BadRequestException('Journal must have at least one line');
     }
 
-    await this.lockDates.assertEntryDateOpen(tx, branchId, entryDate, sourceType);
+    await this.lockDates.assertEntryDateOpen(
+      tx,
+      branchId,
+      entryDate,
+      sourceType,
+    );
 
     const dateStr =
       entryDate instanceof Date

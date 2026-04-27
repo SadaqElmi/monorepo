@@ -41,7 +41,10 @@ export class ReportsV1Controller {
   @Post('consolidation/run')
   @UseGuards(PermissionGuard)
   @RequirePermissions('run_consolidation')
-  async runConsolidation(@Req() req: Request, @Body() body: CreateConsolidationRunDto) {
+  async runConsolidation(
+    @Req() req: Request,
+    @Body() body: CreateConsolidationRunDto,
+  ) {
     this.ensureTenant();
     const schema = this.tenantContext.getSchemaName()!;
     await this.tenantService.applyTenantSchemaPatches(schema);
@@ -97,7 +100,10 @@ export class ReportsV1Controller {
   @Post('consolidation/runs/:runId/finalize')
   @UseGuards(PermissionGuard)
   @RequirePermissions('finalize_consolidation')
-  async finalizeConsolidation(@Req() req: Request, @Param('runId') runId: string) {
+  async finalizeConsolidation(
+    @Req() req: Request,
+    @Param('runId') runId: string,
+  ) {
     this.ensureTenant();
     if (!/^[0-9a-f-]{36}$/i.test(runId)) {
       throw new BadRequestException('Invalid consolidation run id');

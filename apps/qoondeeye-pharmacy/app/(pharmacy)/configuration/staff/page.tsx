@@ -34,6 +34,7 @@ import {
 import { Input } from "@repo/ui/input";
 import { Label } from "@repo/ui/label";
 import { Separator } from "@repo/ui/separator";
+import { Checkbox } from "@repo/ui/checkbox";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -649,10 +650,12 @@ export default function PharmacyStaffPage() {
                       }
                       className="h-10 rounded-lg pr-10"
                     />
-                    <button
+                    <Button
                       type="button"
+                      variant="ghost"
+                      size="icon-sm"
                       onClick={() => setShowPassword((p) => !p)}
-                      className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                      className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
                       aria-label="Toggle password visibility"
                     >
                       {showPassword ? (
@@ -660,7 +663,7 @@ export default function PharmacyStaffPage() {
                       ) : (
                         <Eye className="h-4 w-4" />
                       )}
-                    </button>
+                    </Button>
                   </div>
                 </div>
                 {formRoleIsCashier && (
@@ -691,18 +694,23 @@ export default function PharmacyStaffPage() {
                         : "Leave blank to keep the current PIN."}
                     </p>
                     {formMode === "edit" && (
-                      <label className="flex cursor-pointer items-center gap-2 text-xs text-muted-foreground">
-                        <input
-                          type="checkbox"
-                          className="rounded border-input"
+                      <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                        <Checkbox
+                          id="staff-remove-pin"
                           checked={removePin}
-                          onChange={(e) => {
-                            setRemovePin(e.target.checked);
-                            if (e.target.checked) handleChange("pin", "");
+                          onCheckedChange={(checked) => {
+                            const next = checked === true;
+                            setRemovePin(next);
+                            if (next) handleChange("pin", "");
                           }}
                         />
-                        Remove PIN (cashier cannot use POS until a new PIN is set)
-                      </label>
+                        <Label
+                          htmlFor="staff-remove-pin"
+                          className="cursor-pointer text-xs text-muted-foreground"
+                        >
+                          Remove PIN (cashier cannot use POS until a new PIN is set)
+                        </Label>
+                      </div>
                     )}
                   </div>
                 )}

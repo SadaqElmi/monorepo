@@ -27,6 +27,7 @@ import {
 } from "@repo/ui/card";
 import { Input } from "@repo/ui/input";
 import { Label } from "@repo/ui/label";
+import { ToggleGroup, ToggleGroupItem } from "@repo/ui/toggle-group";
 import {
   Table,
   TableBody,
@@ -514,31 +515,31 @@ export default function ProductsPage() {
                 <>
                   <div className="flex flex-wrap items-center justify-between gap-3 border-b bg-background px-4 py-3">
                     <div className="flex items-center gap-2 overflow-x-auto">
-                      <button
-                        type="button"
-                        onClick={() => setCategoryTab("__all__")}
-                        className={`whitespace-nowrap rounded-xl px-4 py-2 text-sm font-semibold ${
-                          categoryTab === "__all__"
-                            ? "bg-primary/10 text-primary"
-                            : "bg-muted/40 text-muted-foreground hover:bg-muted"
-                        }`}
+                      <ToggleGroup
+                        type="single"
+                        value={categoryTab}
+                        onValueChange={(value) => {
+                          if (value) setCategoryTab(value);
+                        }}
+                        spacing={8}
+                        className="gap-2 rounded-none bg-transparent"
                       >
-                        All Categories
-                      </button>
-                      {categories.slice(0, 8).map((c) => (
-                        <button
-                          key={c.id}
-                          type="button"
-                          onClick={() => setCategoryTab(c.id)}
-                          className={`whitespace-nowrap rounded-xl px-4 py-2 text-sm font-medium ${
-                            categoryTab === c.id
-                              ? "bg-primary/10 text-primary"
-                              : "bg-muted/40 text-muted-foreground hover:bg-muted"
-                          }`}
+                        <ToggleGroupItem
+                          value="__all__"
+                          className="whitespace-nowrap rounded-xl bg-muted/40 px-4 py-2 text-sm font-semibold text-muted-foreground data-[state=on]:bg-primary/10 data-[state=on]:text-primary hover:bg-muted"
                         >
-                          {c.name}
-                        </button>
-                      ))}
+                          All Categories
+                        </ToggleGroupItem>
+                        {categories.slice(0, 8).map((c) => (
+                          <ToggleGroupItem
+                            key={c.id}
+                            value={c.id}
+                            className="whitespace-nowrap rounded-xl bg-muted/40 px-4 py-2 text-sm font-medium text-muted-foreground data-[state=on]:bg-primary/10 data-[state=on]:text-primary hover:bg-muted"
+                          >
+                            {c.name}
+                          </ToggleGroupItem>
+                        ))}
+                      </ToggleGroup>
                     </div>
                   </div>
 

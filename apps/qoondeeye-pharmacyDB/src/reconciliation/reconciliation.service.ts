@@ -368,9 +368,15 @@ END $f$`);
       ),
     ]);
 
-    const invCritical = invSync.filter((row) => row.severity === 'critical').length;
-    const invWarning = invSync.filter((row) => row.severity === 'warning').length;
-    const mismatchCritical = mismatches.filter((m) => m.kind !== 'in_transit').length;
+    const invCritical = invSync.filter(
+      (row) => row.severity === 'critical',
+    ).length;
+    const invWarning = invSync.filter(
+      (row) => row.severity === 'warning',
+    ).length;
+    const mismatchCritical = mismatches.filter(
+      (m) => m.kind !== 'in_transit',
+    ).length;
     const payloads: Array<{
       checkKey: string;
       status: string;
@@ -404,7 +410,8 @@ END $f$`);
       },
       {
         checkKey: 'inventory_gl_sync',
-        status: invCritical > 0 ? 'critical' : invWarning > 0 ? 'warning' : 'clean',
+        status:
+          invCritical > 0 ? 'critical' : invWarning > 0 ? 'warning' : 'clean',
         summary: {
           branchCount: invSync.length,
           critical: invCritical,
@@ -414,7 +421,12 @@ END $f$`);
       },
       {
         checkKey: 'interbranch_mismatches',
-        status: mismatchCritical > 0 ? 'critical' : mismatches.length > 0 ? 'warning' : 'clean',
+        status:
+          mismatchCritical > 0
+            ? 'critical'
+            : mismatches.length > 0
+              ? 'warning'
+              : 'clean',
         summary: {
           total: mismatches.length,
           critical: mismatchCritical,
@@ -545,7 +557,7 @@ END $f$`);
           finishedAt: new Date(),
           summary: {
             error: err instanceof Error ? err.message : String(err),
-          } as unknown as Prisma.InputJsonValue,
+          },
         },
       });
       this.logger.warn(
@@ -606,7 +618,9 @@ END $f$`);
 
       const baseWhere = `l.tenant_id = $1::uuid ${extraSql} AND ${branchScopeSql}`;
 
-      const items = await this.prisma.$queryRawUnsafe<ReconciliationLogRawRow[]>(
+      const items = await this.prisma.$queryRawUnsafe<
+        ReconciliationLogRawRow[]
+      >(
         `SELECT l.id, l.run_id AS "runId", l.tenant_id AS "tenantId", l.type,
                 l.entity_id AS "entityId", l.severity, l.message, l.metadata, l.created_at AS "createdAt"
          FROM public.reconciliation_logs l
@@ -686,7 +700,7 @@ END $f$`);
     m: Prisma.JsonValue | null,
   ): Record<string, unknown> | null {
     if (m && typeof m === 'object' && !Array.isArray(m)) {
-      return m as Record<string, unknown>;
+      return m;
     }
     return null;
   }
@@ -1063,7 +1077,7 @@ END $f$`);
         data: {
           status: 'completed',
           finishedAt,
-          summary: summary as unknown as Prisma.InputJsonValue,
+          summary: summary,
         },
       });
 
@@ -1079,7 +1093,7 @@ END $f$`);
           finishedAt: new Date(),
           summary: {
             error: err instanceof Error ? err.message : String(err),
-          } as unknown as Prisma.InputJsonValue,
+          },
         },
       });
       throw err;

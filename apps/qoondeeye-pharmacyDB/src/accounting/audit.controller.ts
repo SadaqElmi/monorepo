@@ -102,7 +102,9 @@ export class AuditController {
       limit: 50000,
     });
     if (!rows.length) {
-      lines.push(['', '', '', '', '', '', '', '', '', '', ''].map(escapeCsv).join(','));
+      lines.push(
+        ['', '', '', '', '', '', '', '', '', '', ''].map(escapeCsv).join(','),
+      );
     } else {
       for (const row of rows) {
         lines.push(

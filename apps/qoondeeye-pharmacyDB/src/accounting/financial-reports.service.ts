@@ -903,7 +903,10 @@ export class FinancialReportsService {
     olderThanHours: number,
   ): Promise<StuckTransferRow[]> {
     if (!branchIds.length) return [];
-    const threshold = Math.max(1, Math.min(24 * 90, Math.floor(olderThanHours)));
+    const threshold = Math.max(
+      1,
+      Math.min(24 * 90, Math.floor(olderThanHours)),
+    );
     return this.prisma.withTenantSchema(schemaName, async (tx) => {
       const rows = await tx.$queryRawUnsafe<
         Array<{
@@ -939,7 +942,9 @@ export class FinancialReportsService {
         idSet.add(row.from_branch_id);
         idSet.add(row.to_branch_id);
       }
-      const names = await tx.$queryRawUnsafe<Array<{ id: string; name: string | null }>>(
+      const names = await tx.$queryRawUnsafe<
+        Array<{ id: string; name: string | null }>
+      >(
         `SELECT id::text AS id, name FROM branches WHERE id = ANY($1::uuid[])`,
         [...idSet],
       );
@@ -947,7 +952,8 @@ export class FinancialReportsService {
         names.map((row) => [row.id, (row.name ?? '').trim() || row.id]),
       );
       return rows.map((row) => {
-        const hoursInTransit = Math.round(Number(row.hours_in_transit ?? 0) * 10) / 10;
+        const hoursInTransit =
+          Math.round(Number(row.hours_in_transit ?? 0) * 10) / 10;
         return {
           transferId: row.transfer_id,
           fromBranchId: row.from_branch_id,
@@ -955,7 +961,9 @@ export class FinancialReportsService {
           fromBranchName: nameMap.get(row.from_branch_id) ?? row.from_branch_id,
           toBranchName: nameMap.get(row.to_branch_id) ?? row.to_branch_id,
           status: row.status,
-          shippedAt: row.shipped_at ? new Date(row.shipped_at).toISOString() : null,
+          shippedAt: row.shipped_at
+            ? new Date(row.shipped_at).toISOString()
+            : null,
           hoursInTransit,
           reasonCode: 'stuck_transfer',
           fixSuggestionCode: 'complete_receive',
@@ -1014,7 +1022,9 @@ export class FinancialReportsService {
         });
       }
 
-      const [negativeInventory] = await tx.$queryRawUnsafe<Array<{ c: number }>>(
+      const [negativeInventory] = await tx.$queryRawUnsafe<
+        Array<{ c: number }>
+      >(
         `SELECT COUNT(*)::int AS c
          FROM inventory i
          WHERE i.branch_id = ANY($1::uuid[])
@@ -1063,7 +1073,10 @@ export class FinancialReportsService {
       for (const row of transferRows) {
         const status = (row.status ?? '').toLowerCase();
         if (!row.shipped_journal_entry_id) missingShip += 1;
-        if ((status === 'received' || status === 'closed') && !row.receive_journal_entry_id) {
+        if (
+          (status === 'received' || status === 'closed') &&
+          !row.receive_journal_entry_id
+        ) {
           missingReceive += 1;
         }
         if (
@@ -1079,7 +1092,8 @@ export class FinancialReportsService {
           severity: 'critical',
           blocking: true,
           domain: 'transfer_posting',
-          message: 'Some shipped/received transfers are missing shipment journals.',
+          message:
+            'Some shipped/received transfers are missing shipment journals.',
           metadata: { count: missingShip },
         });
       }
@@ -1089,7 +1103,8 @@ export class FinancialReportsService {
           severity: 'critical',
           blocking: true,
           domain: 'transfer_posting',
-          message: 'Some received/closed transfers are missing receive journals.',
+          message:
+            'Some received/closed transfers are missing receive journals.',
           metadata: { count: missingReceive },
         });
       }
@@ -1129,7 +1144,11 @@ export class FinancialReportsService {
     actorUserId: string | null,
     scopeHash: string,
   ): Promise<PeriodWorkflowRecord> {
-    const readiness = await this.getCloseReadiness(schemaName, branchIds, periodEnd);
+    const readiness = await this.getCloseReadiness(
+      schemaName,
+      branchIds,
+      periodEnd,
+    );
     if (readiness.status === 'CRITICAL') {
       throw new BadRequestException(
         'Cannot approve period while close-readiness is CRITICAL',
@@ -1299,7 +1318,9 @@ export class FinancialReportsService {
       );
       const rows: InventoryGlSyncRow[] = [];
       for (const branch of branches) {
-        const valuation = await this.inventoryValuation(schemaName, [branch.id]);
+        const valuation = await this.inventoryValuation(schemaName, [
+          branch.id,
+        ]);
         const [gl] = await tx.$queryRawUnsafe<Array<{ value: string }>>(
           `SELECT COALESCE(SUM(jl.debit - jl.credit), 0)::numeric(14,2)::text AS value
            FROM journal_lines jl
@@ -1338,9 +1359,17 @@ export class FinancialReportsService {
     branchIds: string[],
   ): Promise<AlertItem[]> {
     const [stuck, mismatches, readiness] = await Promise.all([
-      this.listStuckTransfers(schemaName, branchIds, Number(process.env.TRANSFER_STUCK_HOURS ?? 24)),
+      this.listStuckTransfers(
+        schemaName,
+        branchIds,
+        Number(process.env.TRANSFER_STUCK_HOURS ?? 24),
+      ),
       this.listInterbranchMismatches(schemaName, branchIds),
-      this.getCloseReadiness(schemaName, branchIds, new Date().toISOString().slice(0, 10)),
+      this.getCloseReadiness(
+        schemaName,
+        branchIds,
+        new Date().toISOString().slice(0, 10),
+      ),
     ]);
     const alerts: AlertItem[] = [];
     for (const row of stuck.slice(0, 10)) {
@@ -1349,11 +1378,16 @@ export class FinancialReportsService {
         severity: 'warning',
         title: 'Transfer stuck in shipped state',
         message: row.message,
-        metadata: { transferId: row.transferId, hoursInTransit: row.hoursInTransit },
+        metadata: {
+          transferId: row.transferId,
+          hoursInTransit: row.hoursInTransit,
+        },
         explainRef: `alert:stuck_transfer:${row.transferId}`,
       });
     }
-    const criticalMismatchCount = mismatches.filter((m) => m.kind !== 'in_transit').length;
+    const criticalMismatchCount = mismatches.filter(
+      (m) => m.kind !== 'in_transit',
+    ).length;
     if (criticalMismatchCount > 0) {
       alerts.push({
         code: 'interbranch_critical_mismatch',
@@ -1364,7 +1398,9 @@ export class FinancialReportsService {
         explainRef: 'alert:interbranch_critical_mismatch',
       });
     }
-    const negative = readiness.issues.find((i) => i.code === 'inventory_negative_on_hand');
+    const negative = readiness.issues.find(
+      (i) => i.code === 'inventory_negative_on_hand',
+    );
     if (negative) {
       alerts.push({
         code: 'inventory_negative_on_hand',
@@ -1414,9 +1450,11 @@ export class FinancialReportsService {
         type: row.source_type,
         impact: Number(row.impact),
       }));
-      const change = Math.round(
-        (drivers.reduce((sum, row) => sum + row.impact, 0) + Number.EPSILON) * 100,
-      ) / 100;
+      const change =
+        Math.round(
+          (drivers.reduce((sum, row) => sum + row.impact, 0) + Number.EPSILON) *
+            100,
+        ) / 100;
       return [
         {
           account: accountKey,
@@ -1495,8 +1533,7 @@ export class FinancialReportsService {
       if (line.accountKey === 'due_from_branch') grossDueFrom += line.balance;
       if (line.accountKey === 'due_to_branch') grossDueTo += line.balance;
     }
-    const residual =
-      Math.round((grossDueFrom - grossDueTo + 1e-9) * 100) / 100;
+    const residual = Math.round((grossDueFrom - grossDueTo + 1e-9) * 100) / 100;
     return this.prisma.withTenantSchema(schemaName, async (tx) => {
       const [interbranchBreakdown, transferBreakdown] = await Promise.all([
         queryInterbranchPairBreakdown(tx, branchIds, asOfDate),
@@ -1512,8 +1549,7 @@ export class FinancialReportsService {
                   branchLabel: 'group',
                   debit: residual,
                   credit: 0,
-                  memo:
-                    'Preview only — not posted (Dr due to / Cr due from would offset excess receivable)',
+                  memo: 'Preview only — not posted (Dr due to / Cr due from would offset excess receivable)',
                 },
                 {
                   accountKey: 'due_from_branch',
@@ -1529,8 +1565,7 @@ export class FinancialReportsService {
                   branchLabel: 'group',
                   debit: -residual,
                   credit: 0,
-                  memo:
-                    'Preview only — not posted (Dr due from / Cr due to would offset excess payable)',
+                  memo: 'Preview only — not posted (Dr due from / Cr due to would offset excess payable)',
                 },
                 {
                   accountKey: 'due_to_branch',

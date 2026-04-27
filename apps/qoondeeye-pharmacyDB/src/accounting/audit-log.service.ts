@@ -57,7 +57,7 @@ export class AuditLogService {
       if (Array.isArray(input)) return input.map((v) => normalize(v));
       if (input && typeof input === 'object') {
         const out: Record<string, unknown> = {};
-        for (const key of Object.keys(input as Record<string, unknown>).sort()) {
+        for (const key of Object.keys(input).sort()) {
           out[key] = normalize((input as Record<string, unknown>)[key]);
         }
         return out;
@@ -107,7 +107,9 @@ export class AuditLogService {
       eventTs?: string;
     },
   ): Promise<void> {
-    const [prev] = await tx.$queryRawUnsafe<Array<{ audit_hash: string | null }>>(
+    const [prev] = await tx.$queryRawUnsafe<
+      Array<{ audit_hash: string | null }>
+    >(
       `SELECT audit_hash
        FROM audit_logs
        ORDER BY created_at DESC, id DESC

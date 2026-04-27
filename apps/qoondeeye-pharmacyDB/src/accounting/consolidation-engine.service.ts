@@ -1,4 +1,8 @@
-import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
+import {
+  BadRequestException,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import { branchColumnPredicate } from '../common/branch-scope';
 import { PrismaService } from '../prisma/prisma.service';
@@ -185,9 +189,7 @@ export class ConsolidationEngineService {
     ) {
       return [];
     }
-    const rows = await tx.$queryRawUnsafe<
-      Array<{ journal_entry_id: string }>
-    >(
+    const rows = await tx.$queryRawUnsafe<Array<{ journal_entry_id: string }>>(
       `SELECT DISTINCT journal_entry_id::text
        FROM consolidation_journal_links
        WHERE run_id = $1::uuid
@@ -312,17 +314,15 @@ export class ConsolidationEngineService {
     const asOfDate = params.asOfDate.trim();
     const fromDate = params.fromDate.trim();
     const toDate = params.toDate.trim();
-    let resolvedEntityScope:
-      | {
-          entityId: string;
-          descendantEntityIds: string[];
-          branchIds: string[];
-          branchOwnership: Record<string, number>;
-          entityOwnership: Record<string, number>;
-          descendantCount: number;
-          branchCount: number;
-        }
-      | null = null;
+    let resolvedEntityScope: {
+      entityId: string;
+      descendantEntityIds: string[];
+      branchIds: string[];
+      branchOwnership: Record<string, number>;
+      entityOwnership: Record<string, number>;
+      descendantCount: number;
+      branchCount: number;
+    } | null = null;
     let effectiveBranchIds = [...params.branchIds];
     let parentShareWeight = 1;
     if (params.entityId) {
@@ -337,7 +337,9 @@ export class ConsolidationEngineService {
           'Selected entity has no mapped branches for consolidation',
         );
       }
-      const ownershipValues = Object.values(resolvedEntityScope.branchOwnership);
+      const ownershipValues = Object.values(
+        resolvedEntityScope.branchOwnership,
+      );
       if (ownershipValues.length) {
         parentShareWeight =
           ownershipValues.reduce((sum, v) => sum + Number(v), 0) /
@@ -388,8 +390,8 @@ export class ConsolidationEngineService {
       balanceSheet.lines.find((l) => l.accountKey === 'due_from_branch')
         ?.balance ?? 0;
     const grossDueTo =
-      balanceSheet.lines.find((l) => l.accountKey === 'due_to_branch')?.balance ??
-      0;
+      balanceSheet.lines.find((l) => l.accountKey === 'due_to_branch')
+        ?.balance ?? 0;
     const residual = round2(grossDueFrom - grossDueTo);
     const interRev = round2(incomeStatement.intercompany.revenue);
     const interCogs = round2(incomeStatement.intercompany.cogs);
@@ -455,617 +457,657 @@ export class ConsolidationEngineService {
     }
 
     try {
-      return await this.prisma.withTenantSchema(params.schemaName, async (tx) => {
-        const [workflow] = await tx.$queryRawUnsafe<
-        Array<{ state: string | null }>
-      >(
-        `SELECT state
+      return await this.prisma.withTenantSchema(
+        params.schemaName,
+        async (tx) => {
+          const [workflow] = await tx.$queryRawUnsafe<
+            Array<{ state: string | null }>
+          >(
+            `SELECT state
          FROM accounting_period_workflow
          WHERE scope_hash = $1
            AND period_key = $2
          LIMIT 1`,
-        params.scopeHash,
-        periodKey,
-      );
-      if ((workflow?.state ?? '').toLowerCase() === 'closed') {
-        throw new BadRequestException(
-          'Cannot run consolidation for a closed period. Reopen the period first.',
-        );
-      }
+            params.scopeHash,
+            periodKey,
+          );
+          if ((workflow?.state ?? '').toLowerCase() === 'closed') {
+            throw new BadRequestException(
+              'Cannot run consolidation for a closed period. Reopen the period first.',
+            );
+          }
 
-      const branchId = await this.resolveConsolidationBranchId(tx);
-      const accountIds = await this.coaSeed.ensureAccountsForBranch(tx, branchId);
-      const nciEquityAccountId = await this.enterprise.ensureConsolidationAccount(tx, {
-        branchId,
-        accountKey: 'nci_equity',
-        name: 'Non-controlling interest',
-        accountType: 'equity',
-      });
-      const nciCurrentYearAccountId =
-        await this.enterprise.ensureConsolidationAccount(tx, {
-          branchId,
-          accountKey: 'nci_current_year',
-          name: 'NCI current-year earnings',
-          accountType: 'equity',
-        });
-      const ctaReserveAccountId = await this.enterprise.ensureConsolidationAccount(tx, {
-        branchId,
-        accountKey: 'cta_reserve',
-        name: 'Cumulative translation adjustment',
-        accountType: 'equity',
-      });
+          const branchId = await this.resolveConsolidationBranchId(tx);
+          const accountIds = await this.coaSeed.ensureAccountsForBranch(
+            tx,
+            branchId,
+          );
+          const nciEquityAccountId =
+            await this.enterprise.ensureConsolidationAccount(tx, {
+              branchId,
+              accountKey: 'nci_equity',
+              name: 'Non-controlling interest',
+              accountType: 'equity',
+            });
+          const nciCurrentYearAccountId =
+            await this.enterprise.ensureConsolidationAccount(tx, {
+              branchId,
+              accountKey: 'nci_current_year',
+              name: 'NCI current-year earnings',
+              accountType: 'equity',
+            });
+          const ctaReserveAccountId =
+            await this.enterprise.ensureConsolidationAccount(tx, {
+              branchId,
+              accountKey: 'cta_reserve',
+              name: 'Cumulative translation adjustment',
+              accountType: 'equity',
+            });
 
-      let translatedNetIncome = nciBaseNetIncome;
-      let ctaAmount = 0;
-      let pnlFxRate = 1;
-      let closingFxRate = 1;
-      let equityFxRate = 1;
-      if (groupCurrency && params.entityId) {
-        this.enterprise.assertFxEnabled();
-        const entityCurrency = await this.enterprise.resolveEntityCurrency(
-          tx,
-          params.entityId,
-        );
-        pnlFxRate = await this.enterprise.resolveFxRate(tx, {
-          fromCurrency: entityCurrency,
-          toCurrency: groupCurrency,
-          rateType: fxPolicy.pnl,
-          asOfDate: fxDate,
-        });
-        closingFxRate = await this.enterprise.resolveFxRate(tx, {
-          fromCurrency: entityCurrency,
-          toCurrency: groupCurrency,
-          rateType: fxPolicy.bs,
-          asOfDate: fxDate,
-        });
-        try {
-          equityFxRate = await this.enterprise.resolveFxRate(tx, {
-            fromCurrency: entityCurrency,
-            toCurrency: groupCurrency,
-            rateType: fxPolicy.equity,
-            asOfDate: fxDate,
-          });
-        } catch {
-          equityFxRate = closingFxRate;
-        }
-        translatedNetIncome = round2(nciBaseNetIncome * pnlFxRate);
-        ctaAmount = round2(
-          nciBaseNetIncome * closingFxRate - nciBaseNetIncome * pnlFxRate,
-        );
-      }
+          let translatedNetIncome = nciBaseNetIncome;
+          let ctaAmount = 0;
+          let pnlFxRate = 1;
+          let closingFxRate = 1;
+          let equityFxRate = 1;
+          if (groupCurrency && params.entityId) {
+            this.enterprise.assertFxEnabled();
+            const entityCurrency = await this.enterprise.resolveEntityCurrency(
+              tx,
+              params.entityId,
+            );
+            pnlFxRate = await this.enterprise.resolveFxRate(tx, {
+              fromCurrency: entityCurrency,
+              toCurrency: groupCurrency,
+              rateType: fxPolicy.pnl,
+              asOfDate: fxDate,
+            });
+            closingFxRate = await this.enterprise.resolveFxRate(tx, {
+              fromCurrency: entityCurrency,
+              toCurrency: groupCurrency,
+              rateType: fxPolicy.bs,
+              asOfDate: fxDate,
+            });
+            try {
+              equityFxRate = await this.enterprise.resolveFxRate(tx, {
+                fromCurrency: entityCurrency,
+                toCurrency: groupCurrency,
+                rateType: fxPolicy.equity,
+                asOfDate: fxDate,
+              });
+            } catch {
+              equityFxRate = closingFxRate;
+            }
+            translatedNetIncome = round2(nciBaseNetIncome * pnlFxRate);
+            ctaAmount = round2(
+              nciBaseNetIncome * closingFxRate - nciBaseNetIncome * pnlFxRate,
+            );
+          }
 
-      if (params.replaceDraftRunId?.trim()) {
-        const draftRun = await this.loadRunOrFail(tx, params.replaceDraftRunId.trim());
-        if (draftRun.status !== 'draft') {
-          throw new BadRequestException('replaceDraftRunId must reference a draft run');
-        }
-        if (draftRun.periodKey !== periodKey || draftRun.scopeHash !== params.scopeHash) {
-          throw new BadRequestException('Draft run scope does not match consolidation request');
-        }
-        await tx.$executeRawUnsafe(
-          `DELETE FROM consolidation_runs WHERE id = $1::uuid`,
-          draftRun.id,
-        );
-      }
+          if (params.replaceDraftRunId?.trim()) {
+            const draftRun = await this.loadRunOrFail(
+              tx,
+              params.replaceDraftRunId.trim(),
+            );
+            if (draftRun.status !== 'draft') {
+              throw new BadRequestException(
+                'replaceDraftRunId must reference a draft run',
+              );
+            }
+            if (
+              draftRun.periodKey !== periodKey ||
+              draftRun.scopeHash !== params.scopeHash
+            ) {
+              throw new BadRequestException(
+                'Draft run scope does not match consolidation request',
+              );
+            }
+            await tx.$executeRawUnsafe(
+              `DELETE FROM consolidation_runs WHERE id = $1::uuid`,
+              draftRun.id,
+            );
+          }
 
-      const [existing] = await tx.$queryRawUnsafe<Array<{ id: string }>>(
-        `SELECT id::text
+          const [existing] = await tx.$queryRawUnsafe<Array<{ id: string }>>(
+            `SELECT id::text
          FROM consolidation_runs
          WHERE period_key = $1
            AND scope_hash = $2
            AND reversed_at IS NULL
          ORDER BY created_at DESC
          LIMIT 1`,
-        periodKey,
-        params.scopeHash,
-      );
-
-      let reversedRunId: string | null = null;
-      if (existing?.id) {
-        const prior = await this.loadRunOrFail(tx, existing.id);
-        if (prior.status === 'finalized') {
-          throw new BadRequestException(
-            'A finalized consolidation run exists for this period and scope. Reverse it before posting a new run.',
+            periodKey,
+            params.scopeHash,
           );
-        }
-        if (prior.status === 'posted') {
-          throw new BadRequestException(
-            'Reverse the posted consolidation run before posting a new one.',
-          );
-        }
-        if (prior.status === 'draft') {
-          await tx.$executeRawUnsafe(
-            `DELETE FROM consolidation_runs WHERE id = $1::uuid`,
-            prior.id,
-          );
-        }
-      }
 
-      const runMetadata = {
-        entityScope: resolvedEntityScope,
-        ownership: {
-          parentShareWeight: round2(parentShareWeight),
-          nciShare,
-          nciAmount,
-        },
-        fx: {
-          fxDate,
-          groupCurrency,
-          legacyRatePolicy: legacyRate,
-          fxPolicy,
-          pnlFxRate,
-          closingFxRate,
-          equityFxRate,
-          translatedNetIncome,
-          ctaAmount,
-        },
-        balances: { grossDueFrom, grossDueTo, residual },
-        pnl: { interRev, interCogs, interExp, pnlImbalance },
-      };
-
-      if (params.asDraft === true) {
-        const [draftRow] = await tx.$queryRawUnsafe<Array<{ id: string }>>(
-          `INSERT INTO consolidation_runs (
-            period_key, as_of_date, from_date, to_date, scope_hash, scope_branch_ids, entity_id, status, created_by, metadata
-          )
-          VALUES ($1, $2::date, $3::date, $4::date, $5, $6::jsonb, $7::uuid, 'draft', $8::uuid, $9::jsonb)
-          RETURNING id::text`,
-          periodKey,
-          asOfDate,
-          fromDate,
-          toDate,
-          params.scopeHash,
-          JSON.stringify(effectiveBranchIds),
-          params.entityId ?? null,
-          params.actorUserId,
-          JSON.stringify(runMetadata),
-        );
-        const draftId = draftRow.id;
-        await tx.$executeRawUnsafe(
-          `INSERT INTO consolidation_run_events (run_id, event_type, actor_user_id, payload)
-           VALUES ($1::uuid, 'draft_saved', $2::uuid, $3::jsonb)`,
-          draftId,
-          params.actorUserId,
-          JSON.stringify({ periodKey }),
-        );
-        const run = await this.loadRunOrFail(tx, draftId);
-        return { run, reversedRunId: null };
-      }
-
-      const [created] = await tx.$queryRawUnsafe<Array<{ id: string }>>(
-        `INSERT INTO consolidation_runs (
-          period_key, as_of_date, from_date, to_date, scope_hash, scope_branch_ids, entity_id, status, created_by, metadata
-        )
-        VALUES ($1, $2::date, $3::date, $4::date, $5, $6::jsonb, $7::uuid, 'posted', $8::uuid, $9::jsonb)
-        RETURNING id::text`,
-        periodKey,
-        asOfDate,
-        fromDate,
-        toDate,
-        params.scopeHash,
-        JSON.stringify(effectiveBranchIds),
-        params.entityId ?? null,
-        params.actorUserId,
-        JSON.stringify(runMetadata),
-      );
-
-      const runId = created.id;
-      const createdJournalIds: string[] = [];
-      if (Math.abs(residual) > EPS) {
-        const bsLines: JournalLineInput[] =
-          residual > 0
-            ? [
-                {
-                  accountId: accountIds.due_to_branch,
-                  debit: Math.abs(residual),
-                  credit: 0,
-                },
-                {
-                  accountId: accountIds.due_from_branch,
-                  debit: 0,
-                  credit: Math.abs(residual),
-                },
-              ]
-            : [
-                {
-                  accountId: accountIds.due_from_branch,
-                  debit: Math.abs(residual),
-                  credit: 0,
-                },
-                {
-                  accountId: accountIds.due_to_branch,
-                  debit: 0,
-                  credit: Math.abs(residual),
-                },
-              ];
-        const bsJournal = await this.journals.createBalancedEntry(tx, {
-          branchId,
-          entryDate: asOfDate,
-          description: `Consolidation BS elimination ${periodKey}`,
-          sourceType: 'consolidation_bs',
-          sourceId: runId,
-          lines: bsLines,
-        });
-        if (bsJournal?.id) {
-          createdJournalIds.push(bsJournal.id);
-          for (const line of bsLines) {
-            const direction = line.debit > 0 ? 'debit' : 'credit';
-            const accountKey =
-              line.accountId === accountIds.due_from_branch
-                ? 'due_from_branch'
-                : 'due_to_branch';
-            await tx.$executeRawUnsafe(
-              `INSERT INTO consolidation_journal_links
-               (run_id, journal_entry_id, elimination_type, account_key, direction, amount, source_refs)
-               VALUES ($1::uuid, $2::uuid, 'balance_sheet', $3, $4, $5, $6::jsonb)`,
-              runId,
-              bsJournal.id,
-              accountKey,
-              direction,
-              round2(line.debit || line.credit),
-              JSON.stringify({ residual }),
-            );
-          }
-        }
-      }
-
-      const pnlLines: JournalLineInput[] = [];
-      if (interRev > EPS) {
-        pnlLines.push({
-          accountId: accountIds.sales_revenue,
-          debit: interRev,
-          credit: 0,
-        });
-      }
-      if (interCogs > EPS) {
-        pnlLines.push({
-          accountId: accountIds.cogs,
-          debit: 0,
-          credit: interCogs,
-        });
-      }
-      if (interExp > EPS) {
-        pnlLines.push({
-          accountId: accountIds.operating_expense,
-          debit: 0,
-          credit: interExp,
-        });
-      }
-      const pnlDebit = round2(pnlLines.reduce((s, x) => s + x.debit, 0));
-      const pnlCredit = round2(pnlLines.reduce((s, x) => s + x.credit, 0));
-      const pnlDelta = round2(pnlDebit - pnlCredit);
-      if (Math.abs(pnlDelta) > EPS) {
-        if (pnlDelta > 0) {
-          pnlLines.push({
-            accountId: accountIds.equity_retained,
-            debit: 0,
-            credit: Math.abs(pnlDelta),
-          });
-        } else {
-          pnlLines.push({
-            accountId: accountIds.equity_retained,
-            debit: Math.abs(pnlDelta),
-            credit: 0,
-          });
-        }
-      }
-      if (pnlLines.length >= 2) {
-        const pnlJournal = await this.journals.createBalancedEntry(tx, {
-          branchId,
-          entryDate: toDate,
-          description: `Consolidation P&L elimination ${periodKey}`,
-          sourceType: 'consolidation_pnl',
-          sourceId: runId,
-          lines: pnlLines,
-        });
-        if (pnlJournal?.id) {
-          createdJournalIds.push(pnlJournal.id);
-          for (const line of pnlLines) {
-            const direction = line.debit > 0 ? 'debit' : 'credit';
-            let accountKey = 'equity_retained';
-            if (line.accountId === accountIds.sales_revenue) {
-              accountKey = 'sales_revenue';
-            } else if (line.accountId === accountIds.cogs) {
-              accountKey = 'cogs';
-            } else if (line.accountId === accountIds.operating_expense) {
-              accountKey = 'operating_expense';
+          const reversedRunId: string | null = null;
+          if (existing?.id) {
+            const prior = await this.loadRunOrFail(tx, existing.id);
+            if (prior.status === 'finalized') {
+              throw new BadRequestException(
+                'A finalized consolidation run exists for this period and scope. Reverse it before posting a new run.',
+              );
             }
-            await tx.$executeRawUnsafe(
-              `INSERT INTO consolidation_journal_links
-               (run_id, journal_entry_id, elimination_type, account_key, direction, amount, source_refs)
-               VALUES ($1::uuid, $2::uuid, 'profit_loss', $3, $4, $5, $6::jsonb)`,
-              runId,
-              pnlJournal.id,
-              accountKey,
-              direction,
-              round2(line.debit || line.credit),
-              JSON.stringify({ interRev, interCogs, interExp }),
-            );
+            if (prior.status === 'posted') {
+              throw new BadRequestException(
+                'Reverse the posted consolidation run before posting a new one.',
+              );
+            }
+            if (prior.status === 'draft') {
+              await tx.$executeRawUnsafe(
+                `DELETE FROM consolidation_runs WHERE id = $1::uuid`,
+                prior.id,
+              );
+            }
           }
-        }
-      }
 
-      if (Math.abs(nciAmount) > EPS) {
-        const nciLines: JournalLineInput[] =
-          nciAmount > 0
-            ? [
-                {
-                  accountId: accountIds.equity_retained,
-                  debit: Math.abs(nciAmount),
-                  credit: 0,
-                },
-                {
-                  accountId: nciCurrentYearAccountId,
-                  debit: 0,
-                  credit: Math.abs(nciAmount),
-                },
-              ]
-            : [
-                {
-                  accountId: nciCurrentYearAccountId,
-                  debit: Math.abs(nciAmount),
-                  credit: 0,
-                },
-                {
-                  accountId: accountIds.equity_retained,
-                  debit: 0,
-                  credit: Math.abs(nciAmount),
-                },
-              ];
-        const nciJournal = await this.journals.createBalancedEntry(tx, {
-          branchId,
-          entryDate: toDate,
-          description: `Consolidation NCI allocation ${periodKey}`,
-          sourceType: 'consolidation_pnl',
-          sourceId: runId,
-          lines: nciLines,
-        });
-        if (nciJournal?.id) {
-          createdJournalIds.push(nciJournal.id);
-          await tx.$executeRawUnsafe(
-            `INSERT INTO consolidation_journal_links
-             (run_id, journal_entry_id, elimination_type, account_key, direction, amount, source_refs)
-             VALUES ($1::uuid, $2::uuid, 'nci_allocation', 'nci_current_year', $3, $4, $5::jsonb)`,
-            runId,
-            nciJournal.id,
-            nciAmount > 0 ? 'credit' : 'debit',
-            Math.abs(nciAmount),
-            JSON.stringify({ nciShare, nciBaseNetIncome, parentShareWeight }),
-          );
-        }
-        const nciReclassLines: JournalLineInput[] =
-          nciAmount > 0
-            ? [
-                {
-                  accountId: nciCurrentYearAccountId,
-                  debit: Math.abs(nciAmount),
-                  credit: 0,
-                },
-                {
-                  accountId: nciEquityAccountId,
-                  debit: 0,
-                  credit: Math.abs(nciAmount),
-                },
-              ]
-            : [
-                {
-                  accountId: nciEquityAccountId,
-                  debit: Math.abs(nciAmount),
-                  credit: 0,
-                },
-                {
-                  accountId: nciCurrentYearAccountId,
-                  debit: 0,
-                  credit: Math.abs(nciAmount),
-                },
-              ];
-        const nciEquityJournal = await this.journals.createBalancedEntry(tx, {
-          branchId,
-          entryDate: asOfDate,
-          description: `Consolidation NCI equity reclass ${periodKey}`,
-          sourceType: 'consolidation_bs',
-          sourceId: runId,
-          lines: nciReclassLines,
-        });
-        if (nciEquityJournal?.id) {
-          createdJournalIds.push(nciEquityJournal.id);
-          await tx.$executeRawUnsafe(
-            `INSERT INTO consolidation_journal_links
-             (run_id, journal_entry_id, elimination_type, account_key, direction, amount, source_refs)
-             VALUES ($1::uuid, $2::uuid, 'nci_equity', 'nci_equity', $3, $4, $5::jsonb)`,
-            runId,
-            nciEquityJournal.id,
-            nciAmount > 0 ? 'credit' : 'debit',
-            Math.abs(nciAmount),
-            JSON.stringify({ nciShare }),
-          );
-        }
-      }
-
-      if (Math.abs(ctaAmount) > EPS) {
-        const ctaLines: JournalLineInput[] =
-          ctaAmount > 0
-            ? [
-                {
-                  accountId: accountIds.equity_retained,
-                  debit: Math.abs(ctaAmount),
-                  credit: 0,
-                },
-                {
-                  accountId: ctaReserveAccountId,
-                  debit: 0,
-                  credit: Math.abs(ctaAmount),
-                },
-              ]
-            : [
-                {
-                  accountId: ctaReserveAccountId,
-                  debit: Math.abs(ctaAmount),
-                  credit: 0,
-                },
-                {
-                  accountId: accountIds.equity_retained,
-                  debit: 0,
-                  credit: Math.abs(ctaAmount),
-                },
-              ];
-        const ctaJournal = await this.journals.createBalancedEntry(tx, {
-          branchId,
-          entryDate: fxDate,
-          description: `Consolidation CTA posting ${periodKey}`,
-          sourceType: 'consolidation_bs',
-          sourceId: runId,
-          lines: ctaLines,
-        });
-        if (ctaJournal?.id) {
-          createdJournalIds.push(ctaJournal.id);
-          await tx.$executeRawUnsafe(
-            `INSERT INTO consolidation_journal_links
-             (run_id, journal_entry_id, elimination_type, account_key, direction, amount, source_refs)
-             VALUES ($1::uuid, $2::uuid, 'cta_translation', 'cta_reserve', $3, $4, $5::jsonb)`,
-            runId,
-            ctaJournal.id,
-            ctaAmount > 0 ? 'credit' : 'debit',
-            Math.abs(ctaAmount),
-            JSON.stringify({
+          const runMetadata = {
+            entityScope: resolvedEntityScope,
+            ownership: {
+              parentShareWeight: round2(parentShareWeight),
+              nciShare,
+              nciAmount,
+            },
+            fx: {
               fxDate,
               groupCurrency,
               legacyRatePolicy: legacyRate,
               fxPolicy,
               pnlFxRate,
               closingFxRate,
+              equityFxRate,
               translatedNetIncome,
-            }),
-          );
-        }
-      }
+              ctaAmount,
+            },
+            balances: { grossDueFrom, grossDueTo, residual },
+            pnl: { interRev, interCogs, interExp, pnlImbalance },
+          };
 
-      if (params.includeAdjustments !== false) {
-        let adjustmentsApplied = 0;
-        try {
-          const adjustments = await this.enterprise.listApprovedAdjustmentsInTx(tx, {
+          if (params.asDraft === true) {
+            const [draftRow] = await tx.$queryRawUnsafe<Array<{ id: string }>>(
+              `INSERT INTO consolidation_runs (
+            period_key, as_of_date, from_date, to_date, scope_hash, scope_branch_ids, entity_id, status, created_by, metadata
+          )
+          VALUES ($1, $2::date, $3::date, $4::date, $5, $6::jsonb, $7::uuid, 'draft', $8::uuid, $9::jsonb)
+          RETURNING id::text`,
+              periodKey,
+              asOfDate,
+              fromDate,
+              toDate,
+              params.scopeHash,
+              JSON.stringify(effectiveBranchIds),
+              params.entityId ?? null,
+              params.actorUserId,
+              JSON.stringify(runMetadata),
+            );
+            const draftId = draftRow.id;
+            await tx.$executeRawUnsafe(
+              `INSERT INTO consolidation_run_events (run_id, event_type, actor_user_id, payload)
+           VALUES ($1::uuid, 'draft_saved', $2::uuid, $3::jsonb)`,
+              draftId,
+              params.actorUserId,
+              JSON.stringify({ periodKey }),
+            );
+            const run = await this.loadRunOrFail(tx, draftId);
+            return { run, reversedRunId: null };
+          }
+
+          const [created] = await tx.$queryRawUnsafe<Array<{ id: string }>>(
+            `INSERT INTO consolidation_runs (
+          period_key, as_of_date, from_date, to_date, scope_hash, scope_branch_ids, entity_id, status, created_by, metadata
+        )
+        VALUES ($1, $2::date, $3::date, $4::date, $5, $6::jsonb, $7::uuid, 'posted', $8::uuid, $9::jsonb)
+        RETURNING id::text`,
             periodKey,
-            scopeHash: params.scopeHash,
-            entityId: params.entityId,
-          });
-          for (const adjustment of adjustments) {
-            const lines: JournalLineInput[] = [];
-            for (const rawLine of adjustment.lines) {
-              const accountId = await this.enterprise.ensureConsolidationAccount(tx, {
-                branchId,
-                accountKey: rawLine.accountKey,
-                name: rawLine.accountKey.replace(/_/g, ' '),
-                accountType:
-                  rawLine.accountKey.includes('revenue') ? 'income' : 'equity',
-              });
-              lines.push({
-                accountId,
-                debit: round2(Number(rawLine.debit ?? 0)),
-                credit: round2(Number(rawLine.credit ?? 0)),
-              });
-            }
-            if (lines.length < 2) continue;
-            const adjJournal = await this.journals.createBalancedEntry(tx, {
+            asOfDate,
+            fromDate,
+            toDate,
+            params.scopeHash,
+            JSON.stringify(effectiveBranchIds),
+            params.entityId ?? null,
+            params.actorUserId,
+            JSON.stringify(runMetadata),
+          );
+
+          const runId = created.id;
+          const createdJournalIds: string[] = [];
+          if (Math.abs(residual) > EPS) {
+            const bsLines: JournalLineInput[] =
+              residual > 0
+                ? [
+                    {
+                      accountId: accountIds.due_to_branch,
+                      debit: Math.abs(residual),
+                      credit: 0,
+                    },
+                    {
+                      accountId: accountIds.due_from_branch,
+                      debit: 0,
+                      credit: Math.abs(residual),
+                    },
+                  ]
+                : [
+                    {
+                      accountId: accountIds.due_from_branch,
+                      debit: Math.abs(residual),
+                      credit: 0,
+                    },
+                    {
+                      accountId: accountIds.due_to_branch,
+                      debit: 0,
+                      credit: Math.abs(residual),
+                    },
+                  ];
+            const bsJournal = await this.journals.createBalancedEntry(tx, {
               branchId,
-              entryDate: toDate,
-              description: `Manual consolidation adjustment ${adjustment.title}`,
+              entryDate: asOfDate,
+              description: `Consolidation BS elimination ${periodKey}`,
               sourceType: 'consolidation_bs',
               sourceId: runId,
-              lines,
+              lines: bsLines,
             });
-            if (!adjJournal?.id) continue;
-            createdJournalIds.push(adjJournal.id);
-            adjustmentsApplied += 1;
-            await tx.$executeRawUnsafe(
-              `UPDATE consolidation_adjustments
+            if (bsJournal?.id) {
+              createdJournalIds.push(bsJournal.id);
+              for (const line of bsLines) {
+                const direction = line.debit > 0 ? 'debit' : 'credit';
+                const accountKey =
+                  line.accountId === accountIds.due_from_branch
+                    ? 'due_from_branch'
+                    : 'due_to_branch';
+                await tx.$executeRawUnsafe(
+                  `INSERT INTO consolidation_journal_links
+               (run_id, journal_entry_id, elimination_type, account_key, direction, amount, source_refs)
+               VALUES ($1::uuid, $2::uuid, 'balance_sheet', $3, $4, $5, $6::jsonb)`,
+                  runId,
+                  bsJournal.id,
+                  accountKey,
+                  direction,
+                  round2(line.debit || line.credit),
+                  JSON.stringify({ residual }),
+                );
+              }
+            }
+          }
+
+          const pnlLines: JournalLineInput[] = [];
+          if (interRev > EPS) {
+            pnlLines.push({
+              accountId: accountIds.sales_revenue,
+              debit: interRev,
+              credit: 0,
+            });
+          }
+          if (interCogs > EPS) {
+            pnlLines.push({
+              accountId: accountIds.cogs,
+              debit: 0,
+              credit: interCogs,
+            });
+          }
+          if (interExp > EPS) {
+            pnlLines.push({
+              accountId: accountIds.operating_expense,
+              debit: 0,
+              credit: interExp,
+            });
+          }
+          const pnlDebit = round2(pnlLines.reduce((s, x) => s + x.debit, 0));
+          const pnlCredit = round2(pnlLines.reduce((s, x) => s + x.credit, 0));
+          const pnlDelta = round2(pnlDebit - pnlCredit);
+          if (Math.abs(pnlDelta) > EPS) {
+            if (pnlDelta > 0) {
+              pnlLines.push({
+                accountId: accountIds.equity_retained,
+                debit: 0,
+                credit: Math.abs(pnlDelta),
+              });
+            } else {
+              pnlLines.push({
+                accountId: accountIds.equity_retained,
+                debit: Math.abs(pnlDelta),
+                credit: 0,
+              });
+            }
+          }
+          if (pnlLines.length >= 2) {
+            const pnlJournal = await this.journals.createBalancedEntry(tx, {
+              branchId,
+              entryDate: toDate,
+              description: `Consolidation P&L elimination ${periodKey}`,
+              sourceType: 'consolidation_pnl',
+              sourceId: runId,
+              lines: pnlLines,
+            });
+            if (pnlJournal?.id) {
+              createdJournalIds.push(pnlJournal.id);
+              for (const line of pnlLines) {
+                const direction = line.debit > 0 ? 'debit' : 'credit';
+                let accountKey = 'equity_retained';
+                if (line.accountId === accountIds.sales_revenue) {
+                  accountKey = 'sales_revenue';
+                } else if (line.accountId === accountIds.cogs) {
+                  accountKey = 'cogs';
+                } else if (line.accountId === accountIds.operating_expense) {
+                  accountKey = 'operating_expense';
+                }
+                await tx.$executeRawUnsafe(
+                  `INSERT INTO consolidation_journal_links
+               (run_id, journal_entry_id, elimination_type, account_key, direction, amount, source_refs)
+               VALUES ($1::uuid, $2::uuid, 'profit_loss', $3, $4, $5, $6::jsonb)`,
+                  runId,
+                  pnlJournal.id,
+                  accountKey,
+                  direction,
+                  round2(line.debit || line.credit),
+                  JSON.stringify({ interRev, interCogs, interExp }),
+                );
+              }
+            }
+          }
+
+          if (Math.abs(nciAmount) > EPS) {
+            const nciLines: JournalLineInput[] =
+              nciAmount > 0
+                ? [
+                    {
+                      accountId: accountIds.equity_retained,
+                      debit: Math.abs(nciAmount),
+                      credit: 0,
+                    },
+                    {
+                      accountId: nciCurrentYearAccountId,
+                      debit: 0,
+                      credit: Math.abs(nciAmount),
+                    },
+                  ]
+                : [
+                    {
+                      accountId: nciCurrentYearAccountId,
+                      debit: Math.abs(nciAmount),
+                      credit: 0,
+                    },
+                    {
+                      accountId: accountIds.equity_retained,
+                      debit: 0,
+                      credit: Math.abs(nciAmount),
+                    },
+                  ];
+            const nciJournal = await this.journals.createBalancedEntry(tx, {
+              branchId,
+              entryDate: toDate,
+              description: `Consolidation NCI allocation ${periodKey}`,
+              sourceType: 'consolidation_pnl',
+              sourceId: runId,
+              lines: nciLines,
+            });
+            if (nciJournal?.id) {
+              createdJournalIds.push(nciJournal.id);
+              await tx.$executeRawUnsafe(
+                `INSERT INTO consolidation_journal_links
+             (run_id, journal_entry_id, elimination_type, account_key, direction, amount, source_refs)
+             VALUES ($1::uuid, $2::uuid, 'nci_allocation', 'nci_current_year', $3, $4, $5::jsonb)`,
+                runId,
+                nciJournal.id,
+                nciAmount > 0 ? 'credit' : 'debit',
+                Math.abs(nciAmount),
+                JSON.stringify({
+                  nciShare,
+                  nciBaseNetIncome,
+                  parentShareWeight,
+                }),
+              );
+            }
+            const nciReclassLines: JournalLineInput[] =
+              nciAmount > 0
+                ? [
+                    {
+                      accountId: nciCurrentYearAccountId,
+                      debit: Math.abs(nciAmount),
+                      credit: 0,
+                    },
+                    {
+                      accountId: nciEquityAccountId,
+                      debit: 0,
+                      credit: Math.abs(nciAmount),
+                    },
+                  ]
+                : [
+                    {
+                      accountId: nciEquityAccountId,
+                      debit: Math.abs(nciAmount),
+                      credit: 0,
+                    },
+                    {
+                      accountId: nciCurrentYearAccountId,
+                      debit: 0,
+                      credit: Math.abs(nciAmount),
+                    },
+                  ];
+            const nciEquityJournal = await this.journals.createBalancedEntry(
+              tx,
+              {
+                branchId,
+                entryDate: asOfDate,
+                description: `Consolidation NCI equity reclass ${periodKey}`,
+                sourceType: 'consolidation_bs',
+                sourceId: runId,
+                lines: nciReclassLines,
+              },
+            );
+            if (nciEquityJournal?.id) {
+              createdJournalIds.push(nciEquityJournal.id);
+              await tx.$executeRawUnsafe(
+                `INSERT INTO consolidation_journal_links
+             (run_id, journal_entry_id, elimination_type, account_key, direction, amount, source_refs)
+             VALUES ($1::uuid, $2::uuid, 'nci_equity', 'nci_equity', $3, $4, $5::jsonb)`,
+                runId,
+                nciEquityJournal.id,
+                nciAmount > 0 ? 'credit' : 'debit',
+                Math.abs(nciAmount),
+                JSON.stringify({ nciShare }),
+              );
+            }
+          }
+
+          if (Math.abs(ctaAmount) > EPS) {
+            const ctaLines: JournalLineInput[] =
+              ctaAmount > 0
+                ? [
+                    {
+                      accountId: accountIds.equity_retained,
+                      debit: Math.abs(ctaAmount),
+                      credit: 0,
+                    },
+                    {
+                      accountId: ctaReserveAccountId,
+                      debit: 0,
+                      credit: Math.abs(ctaAmount),
+                    },
+                  ]
+                : [
+                    {
+                      accountId: ctaReserveAccountId,
+                      debit: Math.abs(ctaAmount),
+                      credit: 0,
+                    },
+                    {
+                      accountId: accountIds.equity_retained,
+                      debit: 0,
+                      credit: Math.abs(ctaAmount),
+                    },
+                  ];
+            const ctaJournal = await this.journals.createBalancedEntry(tx, {
+              branchId,
+              entryDate: fxDate,
+              description: `Consolidation CTA posting ${periodKey}`,
+              sourceType: 'consolidation_bs',
+              sourceId: runId,
+              lines: ctaLines,
+            });
+            if (ctaJournal?.id) {
+              createdJournalIds.push(ctaJournal.id);
+              await tx.$executeRawUnsafe(
+                `INSERT INTO consolidation_journal_links
+             (run_id, journal_entry_id, elimination_type, account_key, direction, amount, source_refs)
+             VALUES ($1::uuid, $2::uuid, 'cta_translation', 'cta_reserve', $3, $4, $5::jsonb)`,
+                runId,
+                ctaJournal.id,
+                ctaAmount > 0 ? 'credit' : 'debit',
+                Math.abs(ctaAmount),
+                JSON.stringify({
+                  fxDate,
+                  groupCurrency,
+                  legacyRatePolicy: legacyRate,
+                  fxPolicy,
+                  pnlFxRate,
+                  closingFxRate,
+                  translatedNetIncome,
+                }),
+              );
+            }
+          }
+
+          if (params.includeAdjustments !== false) {
+            let adjustmentsApplied = 0;
+            try {
+              const adjustments =
+                await this.enterprise.listApprovedAdjustmentsInTx(tx, {
+                  periodKey,
+                  scopeHash: params.scopeHash,
+                  entityId: params.entityId,
+                });
+              for (const adjustment of adjustments) {
+                const lines: JournalLineInput[] = [];
+                for (const rawLine of adjustment.lines) {
+                  const accountId =
+                    await this.enterprise.ensureConsolidationAccount(tx, {
+                      branchId,
+                      accountKey: rawLine.accountKey,
+                      name: rawLine.accountKey.replace(/_/g, ' '),
+                      accountType: rawLine.accountKey.includes('revenue')
+                        ? 'income'
+                        : 'equity',
+                    });
+                  lines.push({
+                    accountId,
+                    debit: round2(Number(rawLine.debit ?? 0)),
+                    credit: round2(Number(rawLine.credit ?? 0)),
+                  });
+                }
+                if (lines.length < 2) continue;
+                const adjJournal = await this.journals.createBalancedEntry(tx, {
+                  branchId,
+                  entryDate: toDate,
+                  description: `Manual consolidation adjustment ${adjustment.title}`,
+                  sourceType: 'consolidation_bs',
+                  sourceId: runId,
+                  lines,
+                });
+                if (!adjJournal?.id) continue;
+                createdJournalIds.push(adjJournal.id);
+                adjustmentsApplied += 1;
+                await tx.$executeRawUnsafe(
+                  `UPDATE consolidation_adjustments
                SET status = 'applied',
                    applied_run_id = $2::uuid,
                    updated_at = CURRENT_TIMESTAMP
                WHERE id = $1::uuid`,
-              adjustment.id,
-              runId,
-            );
-            await tx.$executeRawUnsafe(
-              `INSERT INTO consolidation_journal_links
+                  adjustment.id,
+                  runId,
+                );
+                await tx.$executeRawUnsafe(
+                  `INSERT INTO consolidation_journal_links
                (run_id, journal_entry_id, elimination_type, account_key, direction, amount, source_refs)
                VALUES ($1::uuid, $2::uuid, 'manual_adjustment', null, null, 0, $3::jsonb)`,
-              runId,
-              adjJournal.id,
-              JSON.stringify({ adjustmentId: adjustment.id, title: adjustment.title }),
-            );
+                  runId,
+                  adjJournal.id,
+                  JSON.stringify({
+                    adjustmentId: adjustment.id,
+                    title: adjustment.title,
+                  }),
+                );
+              }
+              if (adjustmentsApplied > 0) {
+                await this.bumpMetric(
+                  tx,
+                  'consolidation_adjustments',
+                  'applied',
+                  {
+                    runId,
+                    count: adjustmentsApplied,
+                  },
+                );
+              }
+            } catch (e) {
+              if (
+                (e as Error).message.includes(
+                  'disabled by CONSOLIDATION_ADJUSTMENTS_V1',
+                )
+              ) {
+                /* adjustments intentionally disabled */
+              } else {
+                throw e;
+              }
+            }
           }
-          if (adjustmentsApplied > 0) {
-            await this.bumpMetric(tx, 'consolidation_adjustments', 'applied', {
-              runId,
-              count: adjustmentsApplied,
-            });
-          }
-        } catch (e) {
-          if ((e as Error).message.includes('disabled by CONSOLIDATION_ADJUSTMENTS_V1')) {
-            /* adjustments intentionally disabled */
-          } else {
-            throw e;
-          }
-        }
-      }
 
-      await tx.$executeRawUnsafe(
-        `INSERT INTO consolidation_run_events (run_id, event_type, actor_user_id, payload)
+          await tx.$executeRawUnsafe(
+            `INSERT INTO consolidation_run_events (run_id, event_type, actor_user_id, payload)
          VALUES ($1::uuid, 'posted', $2::uuid, $3::jsonb)`,
-        runId,
-        params.actorUserId,
-        JSON.stringify({
-          periodKey,
-          branchIds: effectiveBranchIds,
-          entityId: params.entityId ?? null,
-          nciAmount,
-          ctaAmount,
-          fxDate,
-          groupCurrency,
-          legacyRatePolicy: legacyRate,
-          fxPolicy,
-          createdJournalIds,
-          reversedRunId,
-        }),
-      );
-      await this.audit.append(tx, {
-        branchId,
-        actorUserId: params.actorUserId,
-        tableName: 'consolidation_runs',
-        recordId: runId,
-        action: 'post',
-        oldPayload: null,
-        newPayload: {
-          periodKey,
-          scopeHash: params.scopeHash,
-          branchIds: effectiveBranchIds,
-          entityId: params.entityId ?? null,
-          nciAmount,
-          ctaAmount,
-          fxDate,
-          groupCurrency,
-          legacyRatePolicy: legacyRate,
-          fxPolicy,
-          createdJournalIds,
-          reversedRunId,
-        },
-        entityType: 'consolidation_run',
-        entityId: runId,
-      });
-      await this.bumpMetric(tx, 'consolidation_run', 'posted', {
-        runId,
-        periodKey,
-        branchCount: effectiveBranchIds.length,
-        entityId: params.entityId ?? null,
-        journalCount: createdJournalIds.length,
-        nciAmount,
-        ctaAmount,
-        reversedRunId,
-      });
+            runId,
+            params.actorUserId,
+            JSON.stringify({
+              periodKey,
+              branchIds: effectiveBranchIds,
+              entityId: params.entityId ?? null,
+              nciAmount,
+              ctaAmount,
+              fxDate,
+              groupCurrency,
+              legacyRatePolicy: legacyRate,
+              fxPolicy,
+              createdJournalIds,
+              reversedRunId,
+            }),
+          );
+          await this.audit.append(tx, {
+            branchId,
+            actorUserId: params.actorUserId,
+            tableName: 'consolidation_runs',
+            recordId: runId,
+            action: 'post',
+            oldPayload: null,
+            newPayload: {
+              periodKey,
+              scopeHash: params.scopeHash,
+              branchIds: effectiveBranchIds,
+              entityId: params.entityId ?? null,
+              nciAmount,
+              ctaAmount,
+              fxDate,
+              groupCurrency,
+              legacyRatePolicy: legacyRate,
+              fxPolicy,
+              createdJournalIds,
+              reversedRunId,
+            },
+            entityType: 'consolidation_run',
+            entityId: runId,
+          });
+          await this.bumpMetric(tx, 'consolidation_run', 'posted', {
+            runId,
+            periodKey,
+            branchCount: effectiveBranchIds.length,
+            entityId: params.entityId ?? null,
+            journalCount: createdJournalIds.length,
+            nciAmount,
+            ctaAmount,
+            reversedRunId,
+          });
 
-        const run = await this.loadRunOrFail(tx, runId);
-        return { run, reversedRunId };
-      });
+          const run = await this.loadRunOrFail(tx, runId);
+          return { run, reversedRunId };
+        },
+      );
     } catch (error) {
       await this.prisma.withTenantSchema(params.schemaName, async (tx) => {
         await this.bumpMetric(tx, 'consolidation_run', 'failed', {
@@ -1089,7 +1131,9 @@ export class ConsolidationEngineService {
     return this.prisma.withTenantSchema(params.schemaName, async (tx) => {
       const run = await this.loadRunOrFail(tx, params.runId);
       if (run.status === 'draft') {
-        throw new BadRequestException('Cannot reverse a draft consolidation run');
+        throw new BadRequestException(
+          'Cannot reverse a draft consolidation run',
+        );
       }
       if (
         (run.status !== 'posted' && run.status !== 'finalized') ||
@@ -1115,13 +1159,17 @@ export class ConsolidationEngineService {
     return this.prisma.withTenantSchema(params.schemaName, async (tx) => {
       const run = await this.loadRunOrFail(tx, params.runId);
       if (run.status === 'draft') {
-        throw new BadRequestException('Finalize is only allowed for posted runs');
+        throw new BadRequestException(
+          'Finalize is only allowed for posted runs',
+        );
       }
       if (run.status === 'finalized') {
         return run;
       }
       if (run.status !== 'posted' || run.reversedAt) {
-        throw new BadRequestException('Only an active posted run can be finalized');
+        throw new BadRequestException(
+          'Only an active posted run can be finalized',
+        );
       }
       await tx.$executeRawUnsafe(
         `UPDATE consolidation_runs
@@ -1240,10 +1288,7 @@ export class ConsolidationEngineService {
     });
   }
 
-  async getRun(params: {
-    schemaName: string;
-    runId: string;
-  }): Promise<
+  async getRun(params: { schemaName: string; runId: string }): Promise<
     ConsolidationRunItem & {
       events: Array<{
         id: string;
@@ -1364,7 +1409,8 @@ export class ConsolidationEngineService {
       scopeHash: params.scopeHash,
       periodKey: params.periodKey,
     });
-    if (!run) return { items: [], message: 'No posted or finalized consolidation run' };
+    if (!run)
+      return { items: [], message: 'No posted or finalized consolidation run' };
     const detail = await this.getRun({
       schemaName: params.schemaName,
       runId: run.runId,
@@ -1376,7 +1422,7 @@ export class ConsolidationEngineService {
       runId: detail.id,
       status: detail.status,
       periodKey: detail.periodKey,
-      ownership: (detail.metadata as { ownership?: unknown } | null)?.ownership,
+      ownership: detail.metadata?.ownership,
       nciLines: nciLinks,
       explain: detail.explain,
     };
@@ -1392,7 +1438,8 @@ export class ConsolidationEngineService {
       scopeHash: params.scopeHash,
       periodKey: params.periodKey,
     });
-    if (!run) return { items: [], message: 'No posted or finalized consolidation run' };
+    if (!run)
+      return { items: [], message: 'No posted or finalized consolidation run' };
     const detail = await this.getRun({
       schemaName: params.schemaName,
       runId: run.runId,
@@ -1402,7 +1449,7 @@ export class ConsolidationEngineService {
     );
     return {
       runId: detail.id,
-      fx: (detail.metadata as { fx?: unknown } | null)?.fx,
+      fx: detail.metadata?.fx,
       ctaLines: fxLinks,
       explain: detail.explain,
     };
@@ -1454,7 +1501,8 @@ export class ConsolidationEngineService {
       scopeHash: params.scopeHash,
       periodKey: params.periodKey,
     });
-    if (!run) return { items: [], message: 'No posted or finalized consolidation run' };
+    if (!run)
+      return { items: [], message: 'No posted or finalized consolidation run' };
     const detail = await this.getRun({
       schemaName: params.schemaName,
       runId: run.runId,
@@ -1464,8 +1512,8 @@ export class ConsolidationEngineService {
     );
     return {
       runId: detail.id,
-      balances: (detail.metadata as { balances?: unknown } | null)?.balances,
-      pnl: (detail.metadata as { pnl?: unknown } | null)?.pnl,
+      balances: detail.metadata?.balances,
+      pnl: detail.metadata?.pnl,
       eliminationLines: ic,
       explain: detail.explain,
     };
@@ -1557,7 +1605,8 @@ export class ConsolidationEngineService {
         const amount = round2(Number(row.amount));
         if (row.account_key === 'sales_revenue') out.revenue += amount;
         else if (row.account_key === 'cogs') out.cogs += amount;
-        else if (row.account_key === 'operating_expense') out.expenses += amount;
+        else if (row.account_key === 'operating_expense')
+          out.expenses += amount;
       }
       return out;
     });

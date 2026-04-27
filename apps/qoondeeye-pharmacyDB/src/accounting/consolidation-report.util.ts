@@ -58,7 +58,9 @@ export function applyBalanceSheetConsolidation(
   raw: BalanceSheetReport,
   extras?: ApplyConsolidationExtras,
 ): BalanceSheetReport {
-  const eliminatedAccountKeys = [...INTERBRANCH_ACCOUNT_KEYS] as unknown as string[];
+  const eliminatedAccountKeys = [
+    ...INTERBRANCH_ACCOUNT_KEYS,
+  ] as unknown as string[];
   let grossDueFrom = 0;
   let grossDueTo = 0;
   for (const line of raw.lines) {
@@ -86,8 +88,7 @@ export function applyBalanceSheetConsolidation(
   }
 
   const filteredLines = raw.lines.filter(
-    (l) =>
-      !eliminatedAccountKeys.includes(l.accountKey),
+    (l) => !eliminatedAccountKeys.includes(l.accountKey),
   );
 
   const assets = round2(raw.totals.assets - grossDueFrom);
