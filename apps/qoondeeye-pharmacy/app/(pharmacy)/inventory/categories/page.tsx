@@ -4,16 +4,16 @@ import { useEffect, useMemo, useState } from "react";
 import { Edit2, FolderTree, Loader2, Plus, Trash2 } from "lucide-react";
 
 import { getStoredUser } from "@/lib/auth-client";
-import { Button } from "@repo/ui/button";
+import { Button } from "@/components/ui/button";
 import {
   Card,
   CardContent,
   CardDescription,
   CardHeader,
   CardTitle,
-} from "@repo/ui/card";
-import { Input } from "@repo/ui/input";
-import { Label } from "@repo/ui/label";
+} from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import {
   Category,
   createCategory,

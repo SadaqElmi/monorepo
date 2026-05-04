@@ -8,8 +8,8 @@ import {
   Alert,
   AlertDescription,
   AlertTitle,
-} from "@repo/ui/alert";
-import { Button } from "@repo/ui/button";
+} from "@/components/ui/alert";
+import { Button } from "@/components/ui/button";
 import {
   Card,
   CardAction,
@@ -17,18 +17,18 @@ import {
   CardDescription,
   CardHeader,
   CardTitle,
-} from "@repo/ui/card";
-import { Input } from "@repo/ui/input";
-import { Label } from "@repo/ui/label";
+} from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import {
   Select,
   SelectContent,
   SelectItem,
   SelectTrigger,
   SelectValue,
-} from "@repo/ui/select";
-import { Separator } from "@repo/ui/separator";
-import { Skeleton } from "@repo/ui/skeleton";
+} from "@/components/ui/select";
+import { Separator } from "@/components/ui/separator";
+import { Skeleton } from "@/components/ui/skeleton";
 import {
   Table,
   TableBody,
@@ -36,7 +36,7 @@ import {
   TableHead,
   TableHeader,
   TableRow,
-} from "@repo/ui/table";
+} from "@/components/ui/table";
 import { useReportBranchQuery } from "@/hooks/use-branch-for-reports";
 import { money } from "@/lib/accounting-display";
 import { getStoredUser } from "@/lib/auth-client";

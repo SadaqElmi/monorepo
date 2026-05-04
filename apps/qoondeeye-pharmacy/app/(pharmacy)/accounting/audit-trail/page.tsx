@@ -3,22 +3,22 @@
 import * as React from "react";
 import { Loader2 } from "lucide-react";
 
-import { Button } from "@repo/ui/button";
+import { Button } from "@/components/ui/button";
 import {
   Card,
   CardContent,
   CardDescription,
   CardHeader,
   CardTitle,
-} from "@repo/ui/card";
-import { Label } from "@repo/ui/label";
+} from "@/components/ui/card";
+import { Label } from "@/components/ui/label";
 import {
   Select,
   SelectContent,
   SelectItem,
   SelectTrigger,
   SelectValue,
-} from "@repo/ui/select";
+} from "@/components/ui/select";
 import {
   Table,
   TableBody,
@@ -26,7 +26,7 @@ import {
   TableHead,
   TableHeader,
   TableRow,
-} from "@repo/ui/table";
+} from "@/components/ui/table";
 import { getStoredUser } from "@/lib/auth-client";
 import { getAuditTrail, type AuditLogRow } from "@/lib/services/accounting";
 

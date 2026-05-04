@@ -15,7 +15,7 @@ export class CreateStaffDto {
   @IsOptional()
   @IsString()
   @MinLength(1)
-  cashierId?: string;
+  staffId?: string;
 
   @IsOptional()
   @IsString()
@@ -30,7 +30,7 @@ export class CreateStaffDto {
   @IsString()
   role?: string;
 
-  /** Digits only; for cashier POS login */
+  /** Digits only; for POS PIN login (cashier role) */
   @IsOptional()
   @IsString()
   @MinLength(4)

@@ -1,11 +1,12 @@
 "use client";
 
 import * as React from "react";
+import JsBarcode from "jsbarcode";
 import { Building2, CreditCard } from "lucide-react";
 
-import { Badge } from "@repo/ui/badge";
-import { Card, CardContent, CardFooter } from "@repo/ui/card";
-import { Separator } from "@repo/ui/separator";
+import { Badge } from "@/components/ui/badge";
+import { Card, CardContent, CardFooter } from "@/components/ui/card";
+import { Separator } from "@/components/ui/separator";
 import {
   Table,
   TableBody,
@@ -13,29 +14,71 @@ import {
   TableHead,
   TableHeader,
   TableRow,
-} from "@repo/ui/table";
+} from "@/components/ui/table";
 import type { PosTransaction, PosTransactionLine } from "@repo/types";
+import { POS_TAX_RATE } from "@repo/types";
 import { cn, formatMoney } from "@repo/utils";
 
 export type { PosTransaction, PosTransactionLine };
 
 const BRAND = "#0d968b";
 
+/** localStorage JSON may deserialize amounts as strings; coerce for display. */
+function readMoney(v: unknown): number | undefined {
+  if (v == null) return undefined;
+  const n = typeof v === "number" ? v : Number(v);
+  return Number.isFinite(n) ? n : undefined;
+}
+
 type PosTransactionReceiptProps = {
   transaction: PosTransaction;
   registerLabel?: string;
+  /** When true, renders the sale/receipt lookup barcode (used on every POS print). */
+  showBarcode?: boolean;
   className?: string;
 };
 
 /**
  * Printable transaction receipt — layout inspired by the Zenith mock,
- * trimmed to real POS data (PharmaCare branding, no fake card / patient / barcode).
+ * trimmed to real POS data (PharmaCare branding). Optional barcode encodes
+ * {@link PosTransaction.saleId} when posted online (best for Returns lookup),
+ * otherwise {@link PosTransaction.receiptId}.
  */
 export function PosTransactionReceipt({
   transaction: tx,
   registerLabel = "Register #01",
+  showBarcode = false,
   className,
 }: PosTransactionReceiptProps) {
+  const barcodeSvgRef = React.useRef<SVGSVGElement | null>(null);
+
+  React.useEffect(() => {
+    if (!showBarcode) return;
+    const el = barcodeSvgRef.current;
+    if (!el) return;
+    const fromServer = tx.saleId?.trim();
+    const payload =
+      (fromServer && fromServer.length > 0
+        ? fromServer
+        : String(tx.receiptId ?? "").replace(/\s+/g, "")) || "0";
+    const textUnder =
+      fromServer && tx.receiptId ? `Receipt ${tx.receiptId}` : payload;
+    try {
+      while (el.firstChild) el.removeChild(el.firstChild);
+      JsBarcode(el, payload, {
+        format: "CODE128",
+        width: fromServer ? 1.1 : 1.25,
+        height: 48,
+        displayValue: true,
+        text: textUnder,
+        fontSize: fromServer ? 9 : 11,
+        textMargin: 4,
+        margin: 6,
+      });
+    } catch {
+      /* invalid payload — leave empty */
+    }
+  }, [showBarcode, tx.receiptId, tx.saleId]);
   const when = new Date(tx.createdAt);
   const dateStr = new Intl.DateTimeFormat("en-US", {
     month: "short",
@@ -47,10 +90,21 @@ export function PosTransactionReceipt({
     minute: "2-digit",
   }).format(when);
 
+  const paid = readMoney(tx.amountTendered);
+  const totalSale = readMoney(tx.total) ?? 0;
+  const changeStored = readMoney(tx.changeDue);
+  const changeAmt =
+    changeStored != null && changeStored > 0
+      ? changeStored
+      : paid != null
+        ? Math.max(0, Math.round((paid - totalSale) * 100) / 100)
+        : 0;
+  const showPaidSection = paid != null || changeAmt >= 0.01;
+
   return (
     <Card
       className={cn(
-        "receipt-thermal mx-auto w-full max-w-[72mm] overflow-hidden border-0 bg-white text-[12px] leading-[14px] text-neutral-900 shadow-none print:rounded-none print:shadow-none dark:bg-white dark:text-neutral-900",
+        "receipt-thermal mx-auto w-full max-w-[72mm] overflow-visible border-0 bg-white text-[12px] leading-[14px] text-neutral-900 shadow-none print:rounded-none print:shadow-none dark:bg-white dark:text-neutral-900",
         className,
       )}
     >
@@ -179,7 +233,7 @@ export function PosTransactionReceipt({
             </span>
           </div>
           <div className="flex justify-between text-[11px]">
-            <span className="receipt-muted">VAT (15%)</span>
+            <span className="receipt-muted">{`VAT (${Math.round(POS_TAX_RATE * 100)}%)`}</span>
             <span className="font-semibold tabular-nums">
               {formatMoney(tx.tax)}
             </span>
@@ -200,10 +254,48 @@ export function PosTransactionReceipt({
               {formatMoney(tx.total)}
             </span>
           </div>
+          {showPaidSection ? (
+            <>
+              <Separator className="my-1 bg-neutral-300" />
+              {paid != null ? (
+                <div className="flex justify-between gap-2 text-[11px]">
+                  <span className="min-w-0 font-semibold">
+                    {tx.paymentMethod}
+                  </span>
+                  <span className="shrink-0 font-semibold tabular-nums">
+                    {formatMoney(paid)}
+                  </span>
+                </div>
+              ) : null}
+              {changeAmt >= 0.01 ? (
+                <div className="flex justify-between gap-2 text-[11px]">
+                  <span className="font-bold uppercase tracking-wide">
+                    Charge
+                  </span>
+                  <span className="font-bold tabular-nums">
+                    {formatMoney(changeAmt)}
+                  </span>
+                </div>
+              ) : null}
+            </>
+          ) : null}
         </div>
       </CardContent>
 
       <CardFooter className="flex flex-col gap-2 bg-white px-3 py-3 text-center">
+        {showBarcode ? (
+          <div className="flex w-full flex-col items-center gap-1 py-1">
+            <svg
+              ref={barcodeSvgRef}
+              className="max-h-[150px] w-full max-w-[260px]"
+              aria-label="Sale lookup barcode for returns"
+            />
+            <p className="receipt-muted max-w-[240px] px-1 text-[9px] leading-snug">
+              Scan this code in POS Returns to open the sale for return vouchers
+              or refunds (same as receipt # or sale ID).
+            </p>
+          </div>
+        ) : null}
         <div className="space-y-1">
           <p className="text-[11px] font-semibold">
             Thank you for choosing PharmaCare Pharmacy.

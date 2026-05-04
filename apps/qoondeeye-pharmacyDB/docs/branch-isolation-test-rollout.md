@@ -39,8 +39,8 @@
 ## Verification Commands
 
 - Backend compile:
-  - `npm run build`
+  - `pnpm run build` (from `apps/qoondeeye-pharmacyDB`)
 - Frontend compile:
-  - `npm run build`
+  - `pnpm run build` (from `apps/qoondeeye-pharmacy` or root `turbo run build`)
 
 Note: lint baselines currently include many pre-existing unrelated errors. Scope verification should focus on compile success and branch-isolation behavior.

@@ -10,7 +10,7 @@ import {
 export class CreateCategoryDto {
   @IsString()
   @MinLength(1)
-  name: string;
+  name!: string;
 
   @IsOptional()
   @IsString()

@@ -8,9 +8,9 @@ import {
   TableHead,
   TableHeader,
   TableRow,
-} from "@repo/ui/table";
-import { Button } from "@repo/ui/button";
-import { ScrollArea } from "@repo/ui/scroll-area";
+} from "@/components/ui/table";
+import { Button } from "@/components/ui/button";
+import { ScrollArea } from "@/components/ui/scroll-area";
 import { cn } from "@repo/utils";
 import { ArrowLeft, Play, ChevronDown, RotateCcw } from "lucide-react";
 import Link from "next/link";

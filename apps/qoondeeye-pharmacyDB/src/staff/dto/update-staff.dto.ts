@@ -14,7 +14,7 @@ export class UpdateStaffDto {
   @IsOptional()
   @IsString()
   @MinLength(1)
-  cashierId?: string;
+  staffId?: string;
 
   @IsOptional()
   @IsString()

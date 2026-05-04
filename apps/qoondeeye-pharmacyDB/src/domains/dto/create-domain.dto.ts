@@ -2,9 +2,9 @@ import { IsString, IsUUID, MinLength } from 'class-validator';
 
 export class CreateDomainDto {
   @IsUUID()
-  tenantId: string;
+  tenantId!: string;
 
   @IsString()
   @MinLength(1)
-  domain: string;
+  domain!: string;
 }

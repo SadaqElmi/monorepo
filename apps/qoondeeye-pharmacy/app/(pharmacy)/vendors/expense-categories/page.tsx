@@ -2,14 +2,14 @@
 
 import { Plus } from "lucide-react";
 
-import { Button } from "@repo/ui/button";
+import { Button } from "@/components/ui/button";
 import {
   Card,
   CardContent,
   CardDescription,
   CardHeader,
   CardTitle,
-} from "@repo/ui/card";
+} from "@/components/ui/card";
 
 export default function ExpenseCategoriesPage() {
   return (

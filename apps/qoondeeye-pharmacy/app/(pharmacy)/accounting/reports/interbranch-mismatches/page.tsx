@@ -9,8 +9,8 @@ import {
   Alert,
   AlertDescription,
   AlertTitle,
-} from "@repo/ui/alert";
-import { Button } from "@repo/ui/button";
+} from "@/components/ui/alert";
+import { Button } from "@/components/ui/button";
 import {
   Dialog,
   DialogContent,
@@ -18,16 +18,16 @@ import {
   DialogFooter,
   DialogHeader,
   DialogTitle,
-} from "@repo/ui/dialog";
+} from "@/components/ui/dialog";
 import {
   Card,
   CardContent,
   CardDescription,
   CardHeader,
   CardTitle,
-} from "@repo/ui/card";
-import { Separator } from "@repo/ui/separator";
-import { Skeleton } from "@repo/ui/skeleton";
+} from "@/components/ui/card";
+import { Separator } from "@/components/ui/separator";
+import { Skeleton } from "@/components/ui/skeleton";
 import {
   Table,
   TableBody,
@@ -35,7 +35,7 @@ import {
   TableHead,
   TableHeader,
   TableRow,
-} from "@repo/ui/table";
+} from "@/components/ui/table";
 import { useReportBranchQuery } from "@/hooks/use-branch-for-reports";
 import { money } from "@/lib/accounting-display";
 import { hasGlobalBranchAccess } from "@/lib/branch-access";

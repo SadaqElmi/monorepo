@@ -30,7 +30,7 @@ import {
   SidebarContent,
   SidebarFooter,
   SidebarRail,
-} from "@repo/ui/sidebar";
+} from "@/components/ui/sidebar";
 import { clearAuthToken, getStoredUser } from "@/lib/auth-client";
 import { ROUTES } from "@/lib/routes";
 

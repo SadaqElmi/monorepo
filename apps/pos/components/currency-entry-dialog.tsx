@@ -3,8 +3,8 @@
 import * as React from "react";
 import { Keyboard } from "lucide-react";
 
-import { Button } from "@repo/ui/button";
-import { Input } from "@repo/ui/input";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
 import {
   Dialog,
@@ -20,6 +20,10 @@ type Props = {
   onValueChange: (next: string) => void;
   onOk: () => void;
   onCancel: () => void;
+  /** Dialog header title (default matches payment-method amount entry). */
+  title?: string;
+  /** When true, focus the amount field as soon as the dialog opens (cashier can type immediately). */
+  autoFocusInput?: boolean;
 };
 
 const KEYS_LEFT: Array<Array<{ label: string; span?: number }>> = [
@@ -37,7 +41,11 @@ export function CurrencyEntryDialog({
   onValueChange,
   onOk,
   onCancel,
+  title = "Amount",
+  autoFocusInput = true,
 }: Props) {
+  const inputRef = React.useRef<HTMLInputElement>(null);
+
   const append = React.useCallback(
     (token: string) => {
       onValueChange(`${value}${token}`);
@@ -58,16 +66,28 @@ export function CurrencyEntryDialog({
       <DialogContent
         showCloseButton={false}
         className="w-[420px] max-w-sm gap-3 overflow-hidden rounded-none border-slate-600 bg-slate-900 p-0 text-white"
+        onOpenAutoFocus={(e) => {
+          if (!autoFocusInput) return;
+          e.preventDefault();
+          requestAnimationFrame(() => {
+            const el = inputRef.current;
+            if (!el) return;
+            el.focus();
+            const len = el.value.length;
+            el.setSelectionRange(len, len);
+          });
+        }}
       >
         <DialogHeader className="bg-emerald-200 px-4 py-3">
           <DialogTitle className="text-lg font-extrabold tracking-tight text-emerald-950">
-            Amount
+            {title}
           </DialogTitle>
         </DialogHeader>
 
         <div className="px-4">
           <div className="flex items-center gap-2 rounded-none border border-slate-700 bg-slate-800 px-3 py-2 shadow-inner">
             <Input
+              ref={inputRef}
               value={value}
               onChange={(e) => onValueChange(e.target.value)}
               inputMode="decimal"

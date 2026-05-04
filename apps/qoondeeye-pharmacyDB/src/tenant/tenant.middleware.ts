@@ -5,6 +5,7 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { Request, Response, NextFunction } from 'express';
+import { expressRequestPathname } from '../common/http/express-request-path';
 import { TenantService } from './tenant.service';
 import { TenantContextService } from './tenant-context.service';
 
@@ -17,12 +18,13 @@ export class TenantMiddleware implements NestMiddleware {
 
   async use(req: Request, res: Response, next: NextFunction) {
     // Skip tenant resolution for public routes (auth, tenants, system users)
+    const path = expressRequestPathname(req);
     const isPublicRoute =
-      req.path.startsWith('/api/auth') ||
-      req.path.startsWith('/api/tenants') ||
-      req.path.startsWith('/api/domains') ||
-      req.path.startsWith('/api/system-users') ||
-      req.path === '/api';
+      path.startsWith('/api/auth') ||
+      path.startsWith('/api/tenants') ||
+      path.startsWith('/api/domains') ||
+      path.startsWith('/api/system-users') ||
+      path === '/api';
     if (isPublicRoute) {
       return next();
     }

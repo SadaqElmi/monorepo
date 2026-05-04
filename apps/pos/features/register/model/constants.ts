@@ -1,5 +1,10 @@
 import type { UnitType } from "@repo/types";
 import {
+  POS_DEFAULT_DISCOUNT,
+  POS_PAYMENT_METHOD_LABELS,
+  POS_TAX_RATE,
+} from "@repo/types";
+import {
   Banknote,
   Gift,
   Landmark,
@@ -11,24 +16,14 @@ import {
 
 export const POS_BRAND_COLOR = "#0d968b";
 
-export const TAX_RATE = 0.05;
-export const DEFAULT_DISCOUNT = 0;
+export const TAX_RATE = POS_TAX_RATE;
+export const DEFAULT_DISCOUNT = POS_DEFAULT_DISCOUNT;
 
 export const ALL_CATEGORIES_LABEL = "All Categories";
 
 export const UNIT_TYPES: UnitType[] = ["PC", "Box", "Ctn", "router"];
 
-export const PAYMENT_METHOD_LABELS: Record<string, string> = {
-  cash: "Cash",
-  evc: "EVC",
-  edahab: "E-Dahab",
-  "merchant-evc": "Merchant EVC",
-  "merchant-edahab": "Merchant E-Dahab",
-  banks: "Banks",
-  "primary-wallet": "Primary Wallet",
-  "member-points": "Member Points",
-  voucher: "Voucher",
-};
+export const PAYMENT_METHOD_LABELS = POS_PAYMENT_METHOD_LABELS;
 
 export type PaymentMethod = {
   id: string;
@@ -37,18 +32,34 @@ export type PaymentMethod = {
 };
 
 export const PAYMENT_METHODS: PaymentMethod[] = [
-  { id: "cash", label: "Cash", icon: Banknote },
-  { id: "evc", label: "EVC", icon: Smartphone },
-  { id: "edahab", label: "E-Dahab", icon: Smartphone },
-  { id: "merchant-evc", label: "Merchant EVC", icon: Smartphone },
-  { id: "merchant-edahab", label: "Merchant E-Dahab", icon: Smartphone },
-  { id: "banks", label: "Banks", icon: Landmark },
-  { id: "primary-wallet", label: "Primary Wallet", icon: Wallet },
-  { id: "member-points", label: "Member Points", icon: Star },
-  { id: "My Cash", label: "My Cash", icon: Gift },
-  { id: "Ebesa", label: "Ebesa", icon: Gift },
-  { id: "My Bank", label: "My Bank", icon: Gift },
-  { id: "T-plus", label: "T-plus", icon: Gift },
-  { id: "Yeel App", label: "Yeel App", icon: Gift },
-  { id: "Refund", label: "Refund", icon: Gift },
+  { id: "cash", label: PAYMENT_METHOD_LABELS.cash, icon: Banknote },
+  { id: "evc", label: PAYMENT_METHOD_LABELS.evc, icon: Smartphone },
+  { id: "edahab", label: PAYMENT_METHOD_LABELS.edahab, icon: Smartphone },
+  {
+    id: "merchant-evc",
+    label: PAYMENT_METHOD_LABELS["merchant-evc"],
+    icon: Smartphone,
+  },
+  {
+    id: "merchant-edahab",
+    label: PAYMENT_METHOD_LABELS["merchant-edahab"],
+    icon: Smartphone,
+  },
+  { id: "banks", label: PAYMENT_METHOD_LABELS.banks, icon: Landmark },
+  {
+    id: "primary-wallet",
+    label: PAYMENT_METHOD_LABELS["primary-wallet"],
+    icon: Wallet,
+  },
+  {
+    id: "member-points",
+    label: PAYMENT_METHOD_LABELS["member-points"],
+    icon: Star,
+  },
+  { id: "My Cash", label: PAYMENT_METHOD_LABELS["My Cash"], icon: Gift },
+  { id: "Ebesa", label: PAYMENT_METHOD_LABELS.Ebesa, icon: Gift },
+  { id: "My Bank", label: PAYMENT_METHOD_LABELS["My Bank"], icon: Gift },
+  { id: "T-plus", label: PAYMENT_METHOD_LABELS["T-plus"], icon: Gift },
+  { id: "Yeel App", label: PAYMENT_METHOD_LABELS["Yeel App"], icon: Gift },
+  { id: "Refund", label: PAYMENT_METHOD_LABELS.Refund, icon: Gift },
 ];

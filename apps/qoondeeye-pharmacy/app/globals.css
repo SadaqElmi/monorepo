@@ -2,7 +2,7 @@
 @import "tw-animate-css";
 @import "shadcn/tailwind.css";
 
-@import "../../../packages/ui/src/shadcn-theme.css";
+@import "../components/ui/shadcn-theme.css";
 
 /* POS receipt: hide the app shell while printing from an off-screen portal.
    Layout width matches 72mm thermal paper; browser print uses same metrics. */

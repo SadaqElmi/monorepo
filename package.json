@@ -19,11 +19,7 @@
   "engines": {
     "node": ">=18"
   },
-  "packageManager": "npm@10.9.2",
-  "workspaces": [
-    "apps/*",
-    "packages/*"
-  ],
+  "packageManager": "pnpm@10.33.2",
   "dependencies": {
     "date-fns": "^4.1.0"
   }

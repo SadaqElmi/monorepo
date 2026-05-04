@@ -37,6 +37,7 @@ import { IdempotencyService } from './common/services/idempotency.service';
 import { IdempotencyInterceptor } from './common/interceptors/idempotency.interceptor';
 import { OpsMonitoringService } from './common/services/ops-monitoring.service';
 import { ReconciliationModule } from './reconciliation/reconciliation.module';
+import { PosSessionsModule } from './pos-sessions/pos-sessions.module';
 
 @Module({
   imports: [
@@ -69,6 +70,7 @@ import { ReconciliationModule } from './reconciliation/reconciliation.module';
     AccountingModule,
     TransfersModule,
     ReconciliationModule,
+    PosSessionsModule,
   ],
   controllers: [AppController],
   providers: [

@@ -11,6 +11,7 @@
     "moduleResolution": "bundler",
     "resolveJsonModule": true,
     "isolatedModules": true,
+    "strictPropertyInitialization": true,
     "jsx": "react-jsx",
     "incremental": true,
     "plugins": [
@@ -23,6 +24,7 @@
     }
   },
   "include": [
+    "base-ui-react.d.ts",
     "next-env.d.ts",
     "**/*.ts",
     "**/*.tsx",

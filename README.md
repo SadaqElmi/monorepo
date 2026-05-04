@@ -1,13 +1,15 @@
-# Turborepo starter
+# Pharmcare (Turborepo)
 
-This Turborepo starter is maintained by the Turborepo core team.
+This monorepo uses [pnpm](https://pnpm.io) (`packageManager` is set in the root `package.json`). Install dependencies with `pnpm install` from the repository root.
+
+The notes below are based on the upstream Turborepo starter (maintained by the Turborepo core team).
 
 ## Using this example
 
 Run the following command:
 
 ```sh
-npx create-turbo@latest
+pnpm dlx create-turbo@latest
 ```
 
 ## What's inside?
@@ -39,17 +41,15 @@ To build all apps and packages, run the following command:
 With [global `turbo`](https://turborepo.dev/docs/getting-started/installation#global-installation) installed (recommended):
 
 ```sh
-cd my-turborepo
+cd pharmcare
 turbo build
 ```
 
-Without global `turbo`, use your package manager:
+Without global `turbo`, from the repository root (after `pnpm install`):
 
 ```sh
-cd my-turborepo
-npx turbo build
-npm dlx turbo build
-npm exec turbo build
+cd pharmcare
+pnpm exec turbo build
 ```
 
 You can build a specific package by using a [filter](https://turborepo.dev/docs/crafting-your-repository/running-tasks#using-filters):
@@ -63,9 +63,7 @@ turbo build --filter=docs
 Without global `turbo`:
 
 ```sh
-npx turbo build --filter=docs
-npm exec turbo build --filter=docs
-npm exec turbo build --filter=docs
+pnpm exec turbo build --filter=docs
 ```
 
 ### Develop
@@ -75,17 +73,15 @@ To develop all apps and packages, run the following command:
 With [global `turbo`](https://turborepo.dev/docs/getting-started/installation#global-installation) installed (recommended):
 
 ```sh
-cd my-turborepo
+cd pharmcare
 turbo dev
 ```
 
-Without global `turbo`, use your package manager:
+Without global `turbo`:
 
 ```sh
-cd my-turborepo
-npx turbo dev
-npm exec turbo dev
-npm exec turbo dev
+cd pharmcare
+pnpm exec turbo dev
 ```
 
 You can develop a specific package by using a [filter](https://turborepo.dev/docs/crafting-your-repository/running-tasks#using-filters):
@@ -99,9 +95,7 @@ turbo dev --filter=web
 Without global `turbo`:
 
 ```sh
-npx turbo dev --filter=web
-npm exec turbo dev --filter=web
-npm exec turbo dev --filter=web
+pnpm exec turbo dev --filter=web
 ```
 
 ### Remote Caching
@@ -116,17 +110,15 @@ By default, Turborepo will cache locally. To enable Remote Caching you will need
 With [global `turbo`](https://turborepo.dev/docs/getting-started/installation#global-installation) installed (recommended):
 
 ```sh
-cd my-turborepo
+cd pharmcare
 turbo login
 ```
 
-Without global `turbo`, use your package manager:
+Without global `turbo`:
 
 ```sh
-cd my-turborepo
-npx turbo login
-npm exec turbo login
-npm exec turbo login
+cd pharmcare
+pnpm exec turbo login
 ```
 
 This will authenticate the Turborepo CLI with your [Vercel account](https://vercel.com/docs/concepts/personal-accounts/overview).
@@ -142,9 +134,7 @@ turbo link
 Without global `turbo`:
 
 ```sh
-npx turbo link
-npm exec turbo link
-npm exec turbo link
+pnpm exec turbo link
 ```
 
 ## Useful Links

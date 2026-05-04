@@ -1,4 +1,5 @@
-import type { UnitType } from "@repo/types";
+import type { PosMiscChargeKind, UnitType } from "@repo/types";
+import { POS_MISC_CHARGE_LINE_LABELS } from "@repo/types";
 import type { PosTransaction } from "@/components/pos/pos-transaction-receipt";
 import type { Sale } from "@/lib/api";
 import { PAYMENT_METHOD_LABELS } from "./constants";
@@ -23,13 +24,27 @@ export function saleToPosTransaction(
   const lines = rawLines.map((item, index) => {
     const qty = Math.max(1, Math.round(toFiniteNumber(item.quantity)));
     const unitPrice = toFiniteNumber(item.price);
-    const productId = (item.product_id ?? "").trim() || `item-${index + 1}`;
+    const miscKindRaw =
+      typeof item.misc_charge_kind === "string"
+        ? item.misc_charge_kind.trim()
+        : "";
+    const miscKind =
+      miscKindRaw &&
+      miscKindRaw in POS_MISC_CHARGE_LINE_LABELS
+        ? (miscKindRaw as PosMiscChargeKind)
+        : null;
+    const productId =
+      (item.product_id ?? "").trim() ||
+      (miscKind ? `misc-${miscKind}` : `item-${index + 1}`);
     const resolvedName =
-      (productNameById && productNameById[productId]) || undefined;
+      miscKind != null
+        ? POS_MISC_CHARGE_LINE_LABELS[miscKind]
+        : (productNameById && productNameById[productId]) || undefined;
     return {
       lineId: (item.id ?? "").trim() || `${sale.id}-${index + 1}`,
       productId,
-      name: resolvedName || (item.product_id ? "Product" : "Item"),
+      name:
+        resolvedName ?? (item.product_id ? "Product" : "Item"),
       unitPrice,
       qty,
       unitType: "PC" as UnitType,
@@ -52,9 +67,7 @@ export function saleToPosTransaction(
   const createdAtParsed = sale.sale_date ? Date.parse(String(sale.sale_date)) : Number.NaN;
   const createdAt = Number.isFinite(createdAtParsed) ? createdAtParsed : Date.now();
   const receiptId = (sale.receipt_number ?? "").trim() || sale.id;
-  const paymentMethod = normalizePaymentMethod(
-    (sale as Sale & { payment_method?: string | null }).payment_method,
-  );
+  const paymentMethod = normalizePaymentMethod(sale.payment_method);
 
   return {
     receiptId,

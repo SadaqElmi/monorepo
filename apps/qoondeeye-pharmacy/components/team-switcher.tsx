@@ -9,7 +9,7 @@ import {
   isRestrictedToAssignedBranch,
 } from "@/lib/branch-access";
 import { getBranches, type Branch } from "@/lib/services/branches";
-import { Button } from "@repo/ui/button";
+import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -17,7 +17,7 @@ import {
   DropdownMenuLabel,
   DropdownMenuSeparator,
   DropdownMenuTrigger,
-} from "@repo/ui/dropdown-menu";
+} from "@/components/ui/dropdown-menu";
 
 function readBranchId(): string {
   const user = getResolvedStoredUser();

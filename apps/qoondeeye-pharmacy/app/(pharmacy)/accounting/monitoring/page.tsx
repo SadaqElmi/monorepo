@@ -12,9 +12,9 @@ import {
   TrendingUp,
 } from "lucide-react";
 
-import { Badge } from "@repo/ui/badge";
-import { Button } from "@repo/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@repo/ui/card";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import {
   Table,
   TableBody,
@@ -22,7 +22,7 @@ import {
   TableHead,
   TableHeader,
   TableRow,
-} from "@repo/ui/table";
+} from "@/components/ui/table";
 import { getStoredUser } from "@/lib/auth-client";
 import { getBranches } from "@/lib/services/branches";
 import {

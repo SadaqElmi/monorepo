@@ -23,6 +23,7 @@
     }
   },
   "include": [
+    "base-ui-react.d.ts",
     "next-env.d.ts",
     "**/*.ts",
     "**/*.tsx",

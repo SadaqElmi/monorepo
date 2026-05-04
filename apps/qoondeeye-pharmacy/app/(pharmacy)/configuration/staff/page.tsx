@@ -7,12 +7,17 @@ import {
   EyeOff,
   Loader2,
   Mail,
-  MoreHorizontal,
+  Search,
   Trash2,
   User,
   UserPlus,
   Users2,
+  Download,
+  ShieldAlert,
 } from "lucide-react";
+import { format } from "date-fns";
+import Link from "next/link";
+import { toast } from "sonner";
 
 import { getStoredUser } from "@/lib/auth-client";
 import {
@@ -22,41 +27,51 @@ import {
   BreadcrumbList,
   BreadcrumbPage,
   BreadcrumbSeparator,
-} from "@repo/ui/breadcrumb";
-import { Button } from "@repo/ui/button";
+} from "@/components/ui/breadcrumb";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import {
   Card,
   CardContent,
   CardDescription,
   CardHeader,
   CardTitle,
-} from "@repo/ui/card";
-import { Input } from "@repo/ui/input";
-import { Label } from "@repo/ui/label";
-import { Separator } from "@repo/ui/separator";
-import { Checkbox } from "@repo/ui/checkbox";
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from "@repo/ui/dropdown-menu";
+} from "@/components/ui/card";
+import { Checkbox } from "@/components/ui/checkbox";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Separator } from "@/components/ui/separator";
 import {
   Select,
   SelectContent,
   SelectItem,
   SelectTrigger,
   SelectValue,
-} from "@repo/ui/select";
+} from "@/components/ui/select";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
+import { cn } from "@/lib/utils";
+import {
+  ALL_PERMISSIONS,
+  PERMISSION_FULL_LABEL,
+  PERMISSION_SHORT_LABEL,
+  type PermissionName,
+} from "@/lib/permissions";
 import {
   type StaffMember,
   type Branch,
+  type Role,
   createStaff,
   deleteStaff,
   getBranches,
   getStaff,
   getRoles,
   updateStaff,
+  updateRole,
 } from "@/lib/api";
 
 type FormMode = "create" | "edit";
@@ -64,20 +79,69 @@ type FormMode = "create" | "edit";
 type EditableStaff = {
   id: string;
   name: string;
-  cashierId: string;
+  staffId: string;
   email: string;
   role: string;
   password?: string;
-  /** New PIN for cashier (create/edit); never shown when editing */
   pin?: string;
   branchId?: string;
 };
+
+function normalizeRoleKey(name: string | null | undefined) {
+  return (name ?? "").trim().toLowerCase();
+}
+
+function findRoleForMember(member: StaffMember, roles: Role[]): Role | undefined {
+  const key = normalizeRoleKey(member.role);
+  if (!key) return undefined;
+  return roles.find((r) => normalizeRoleKey(r.name) === key);
+}
+
+function permissionSetForRole(role: Role | undefined): Set<PermissionName> {
+  const set = new Set<PermissionName>();
+  if (!role?.permissions?.length) return set;
+  for (const p of role.permissions) {
+    if (ALL_PERMISSIONS.includes(p as PermissionName)) {
+      set.add(p as PermissionName);
+    }
+  }
+  return set;
+}
+
+/** Preserve unknown permission strings from the API when PATCHing a role. */
+function nextPermissionsForToggle(
+  role: Role,
+  permission: PermissionName,
+  checked: boolean,
+): string[] {
+  const extras = (role.permissions ?? []).filter(
+    (p) => !ALL_PERMISSIONS.includes(p as PermissionName),
+  );
+  const known = permissionSetForRole(role);
+  if (checked) known.add(permission);
+  else known.delete(permission);
+  return [...extras, ...Array.from(known)];
+}
+
+function getRoleBadgeClass(role: string | null | undefined) {
+  if (!role?.trim()) {
+    return "border-transparent bg-muted text-muted-foreground";
+  }
+  const r = role.toLowerCase();
+  if (r.includes("admin") || r.includes("manager")) {
+    return "border-transparent bg-primary/15 text-primary";
+  }
+  if (r.includes("cashier")) {
+    return "border-transparent bg-amber-500/15 text-amber-800 dark:text-amber-300";
+  }
+  return "border-transparent bg-secondary text-secondary-foreground";
+}
 
 export default function PharmacyStaffPage() {
   const [tenantSlug] = useState(() => getStoredUser()?.tenantSlug ?? "");
   const [staff, setStaff] = useState<StaffMember[]>([]);
   const [branches, setBranches] = useState<Branch[]>([]);
-  const [roles, setRoles] = useState<string[]>([]);
+  const [roleRecords, setRoleRecords] = useState<Role[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -88,6 +152,24 @@ export default function PharmacyStaffPage() {
   const [showPassword, setShowPassword] = useState(false);
   const [removePin, setRemovePin] = useState(false);
   const [deletingId, setDeletingId] = useState<string | null>(null);
+
+  const [searchTerm, setSearchTerm] = useState("");
+  const [roleFilter, setRoleFilter] = useState("all");
+  const [branchFilter, setBranchFilter] = useState("all");
+  const [page, setPage] = useState(1);
+  const [pageLength] = useState(15);
+
+  const [permissionSavingKey, setPermissionSavingKey] = useState<
+    string | null
+  >(null);
+
+  const roleNames = useMemo(
+    () =>
+      [...roleRecords.map((r) => r.name)].sort((a, b) =>
+        a.localeCompare(b, undefined, { sensitivity: "base" }),
+      ),
+    [roleRecords],
+  );
 
   useEffect(() => {
     if (!tenantSlug) return;
@@ -104,9 +186,7 @@ export default function PharmacyStaffPage() {
         ]);
         if (!cancelled) {
           setStaff(data);
-          setRoles(
-            roleRows.map((r) => r.name).sort((a, b) => a.localeCompare(b)),
-          );
+          setRoleRecords(roleRows);
           setBranches(branchRows);
         }
       } catch (err) {
@@ -124,6 +204,95 @@ export default function PharmacyStaffPage() {
     };
   }, [tenantSlug]);
 
+  const sortedStaff = useMemo(
+    () =>
+      [...staff].sort((a, b) =>
+        (a.name ?? "").localeCompare(b.name ?? "", undefined, {
+          sensitivity: "base",
+        }),
+      ),
+    [staff],
+  );
+
+  const filteredStaff = useMemo(() => {
+    const q = searchTerm.trim().toLowerCase();
+    return sortedStaff.filter((member) => {
+      const roleMatch =
+        roleFilter === "all" ||
+        normalizeRoleKey(member.role) === normalizeRoleKey(roleFilter);
+      const branchMatch =
+        branchFilter === "all" ||
+        (branchFilter === "none" && !member.branch_id) ||
+        member.branch_id === branchFilter;
+      const searchMatch =
+        !q ||
+        (member.name ?? "").toLowerCase().includes(q) ||
+        (member.email ?? "").toLowerCase().includes(q) ||
+        (member.staff_id ?? "").toLowerCase().includes(q) ||
+        (member.role ?? "").toLowerCase().includes(q);
+      return roleMatch && branchMatch && searchMatch;
+    });
+  }, [sortedStaff, searchTerm, roleFilter, branchFilter]);
+
+  const totalPages = Math.max(1, Math.ceil(filteredStaff.length / pageLength));
+  const safePage = Math.min(Math.max(1, page), totalPages);
+  const paginatedStaff = useMemo(() => {
+    const start = (safePage - 1) * pageLength;
+    return filteredStaff.slice(start, start + pageLength);
+  }, [filteredStaff, safePage, pageLength]);
+
+  const handleSearch = (value: string) => {
+    setSearchTerm(value);
+    setPage(1);
+  };
+
+  const handlePermissionToggle = async (
+    member: StaffMember,
+    permission: PermissionName,
+    checked: boolean,
+  ) => {
+    if (!tenantSlug) return;
+    const role = findRoleForMember(member, roleRecords);
+    if (!role) {
+      toast.error("Assign a role first", {
+        description:
+          "Permissions apply to a named role. Edit this team member and choose a role.",
+      });
+      return;
+    }
+
+    const key = `${role.id}:${permission}`;
+    try {
+      setPermissionSavingKey(key);
+      setError(null);
+      const permissions = nextPermissionsForToggle(role, permission, checked);
+      const updated = await updateRole(tenantSlug, role.id, { permissions });
+      setRoleRecords((prev) =>
+        prev.map((r) => (r.id === updated.id ? updated : r)),
+      );
+      const affected = staff.filter(
+        (s) => normalizeRoleKey(s.role) === normalizeRoleKey(role.name),
+      ).length;
+      toast.success(
+        checked
+          ? `Granted ${PERMISSION_FULL_LABEL[permission]}`
+          : `Removed ${PERMISSION_FULL_LABEL[permission]}`,
+        {
+          description:
+            affected > 1
+              ? `Role “${role.name}” is shared by ${affected} team members — all of them inherit this change.`
+              : `Updated role “${role.name}”.`,
+        },
+      );
+    } catch (err) {
+      toast.error(
+        err instanceof Error ? err.message : "Could not update permissions",
+      );
+    } finally {
+      setPermissionSavingKey(null);
+    }
+  };
+
   const handleOpenCreate = () => {
     if (!tenantSlug) {
       setError("Unable to determine pharmacy. Please sign in again.");
@@ -133,7 +302,7 @@ export default function PharmacyStaffPage() {
     setActiveStaff({
       id: "",
       name: "",
-      cashierId: "",
+      staffId: "",
       email: "",
       role: "",
       password: "",
@@ -150,7 +319,7 @@ export default function PharmacyStaffPage() {
     setActiveStaff({
       id: member.id,
       name: member.name ?? "",
-      cashierId: member.cashier_id ?? "",
+      staffId: member.staff_id ?? "",
       email: member.email ?? "",
       role: member.role ?? "",
       password: "",
@@ -184,8 +353,8 @@ export default function PharmacyStaffPage() {
       const isCashier = roleName.toLowerCase() === "cashier";
       const roleOk =
         !roleName ||
-        roles.length === 0 ||
-        roles.some((r) => r.toLowerCase() === roleName.toLowerCase());
+        roleNames.length === 0 ||
+        roleNames.some((r) => r.toLowerCase() === roleName.toLowerCase());
       if (!roleOk) {
         setError(
           `Role "${roleName}" does not exist for this pharmacy. Create it in Roles first (or pick an existing role from the list).`,
@@ -200,8 +369,8 @@ export default function PharmacyStaffPage() {
         }
 
         if (isCashier) {
-          if (!activeStaff.cashierId.trim()) {
-            setError("Cashier ID is required for cashier accounts.");
+          if (!activeStaff.staffId.trim()) {
+            setError("Staff ID is required for cashier accounts.");
             return;
           }
           const pin = activeStaff.pin?.trim() ?? "";
@@ -215,7 +384,7 @@ export default function PharmacyStaffPage() {
 
         const created = await createStaff(tenantSlug, {
           name: activeStaff.name.trim() || undefined,
-          cashierId: activeStaff.cashierId.trim() || undefined,
+          staffId: activeStaff.staffId.trim() || undefined,
           email: activeStaff.email.trim() || undefined,
           password: activeStaff.password?.trim() || undefined,
           role: roleName || undefined,
@@ -226,7 +395,7 @@ export default function PharmacyStaffPage() {
       } else {
         const payload: Parameters<typeof updateStaff>[2] = {
           name: activeStaff.name.trim() || undefined,
-          cashierId: activeStaff.cashierId.trim() || undefined,
+          staffId: activeStaff.staffId.trim() || undefined,
           email: activeStaff.email.trim() || undefined,
           password: activeStaff.password?.trim() || undefined,
           role: roleName || undefined,
@@ -267,6 +436,7 @@ export default function PharmacyStaffPage() {
       setError(null);
       await deleteStaff(tenantSlug, id);
       setStaff((prev) => prev.filter((s) => s.id !== id));
+      toast.success("Team member removed");
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to remove staff");
     } finally {
@@ -274,24 +444,76 @@ export default function PharmacyStaffPage() {
     }
   };
 
-  const sortedStaff = useMemo(
-    () =>
-      [...staff].sort((a, b) =>
-        (a.name ?? "").localeCompare(b.name ?? "", undefined, {
-          sensitivity: "base",
-        }),
+  const handleExportStaff = () => {
+    if (!filteredStaff.length) {
+      toast.error("No rows to export");
+      return;
+    }
+    const permHeaders = ALL_PERMISSIONS.map((p) => PERMISSION_FULL_LABEL[p]);
+    const headers = [
+      "Name",
+      "Staff ID",
+      "Email",
+      "Role",
+      "Branch",
+      "Added",
+      ...permHeaders,
+    ];
+    const rows = filteredStaff.map((member) => {
+      const role = findRoleForMember(member, roleRecords);
+      const permSet = permissionSetForRole(role);
+      const branchName =
+        branches.find((b) => b.id === member.branch_id)?.name ?? "";
+      const added = member.created_at
+        ? format(new Date(member.created_at), "yyyy-MM-dd")
+        : "";
+      return [
+        member.name ?? "",
+        member.staff_id ?? "",
+        member.email ?? "",
+        member.role ?? "",
+        branchName,
+        added,
+        ...ALL_PERMISSIONS.map((p) => (permSet.has(p) ? "yes" : "")),
+      ];
+    });
+    const csvRows = [
+      headers.join(","),
+      ...rows.map((cells) =>
+        cells.map((c) => `"${String(c).replace(/"/g, '""')}"`).join(","),
       ),
-    [staff],
-  );
+    ];
+    const blob = new Blob([csvRows.join("\n")], {
+      type: "text/csv;charset=utf-8;",
+    });
+    const link = document.createElement("a");
+    const url = URL.createObjectURL(blob);
+    link.href = url;
+    link.download = `staff_${format(new Date(), "dd-MM-yyyy")}.csv`;
+    link.click();
+    URL.revokeObjectURL(url);
+    toast.success("Exported staff");
+  };
 
   const formRoleIsCashier =
     formOpen && activeStaff
       ? activeStaff.role.trim().toLowerCase() === "cashier"
       : false;
 
+  const uniqueRolesForFilter = useMemo(
+    () =>
+      [
+        ...new Set(
+          staff.map((s) => s.role).filter((r): r is string => Boolean(r?.trim())),
+        ),
+      ].sort((a, b) => a.localeCompare(b, undefined, { sensitivity: "base" })),
+    [staff],
+  );
+
   return (
-    <div className="flex min-h-0 flex-1 flex-col">
-        <header className="flex h-16 shrink-0 items-center gap-2 border-b border-primary/10 bg-background/80 px-4 backdrop-blur-md ">
+    <TooltipProvider delayDuration={200}>
+      <div className="flex min-h-0 flex-1 flex-col">
+        <header className="flex h-16 shrink-0 items-center gap-2 border-b border-primary/10 bg-background/80 px-4 backdrop-blur-md">
           <div className="flex flex-1 items-center gap-2">
             <Separator
               orientation="vertical"
@@ -315,186 +537,397 @@ export default function PharmacyStaffPage() {
             onClick={handleOpenCreate}
           >
             <UserPlus className="h-4 w-4" />
-            Add team member
+            <span className="hidden sm:inline">Add team member</span>
+            <span className="sm:hidden">Add</span>
           </Button>
         </header>
 
-        <main className="space-y-6 p-6 md:p-8">
-          <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
-            <div>
-              <h1 className="text-2xl font-bold tracking-tight">
-                Staff & users
-              </h1>
-              <p className="text-sm text-muted-foreground">
-                Manage your pharmacy team. Add employees, assign roles, and
-                control access.
-              </p>
-            </div>
-            <div className="inline-flex items-center gap-1.5 rounded-full bg-muted/60 px-3 py-1.5 text-xs font-medium text-muted-foreground">
-              <Users2 className="h-3.5 w-3.5" />
-              {staff.length} member{staff.length === 1 ? "" : "s"}
-            </div>
-          </div>
-
-          {error && (
-            <div className="rounded-xl border border-destructive/30 bg-destructive/5 px-4 py-3 text-sm text-destructive">
-              {error}
-            </div>
-          )}
-
-          <Card className="overflow-hidden rounded-2xl border-border/80 shadow-sm">
-            <CardHeader className="border-b border-border/60 bg-muted/30 px-6 py-4">
-              <div className="flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
-                <div>
-                  <CardTitle className="text-base">Team directory</CardTitle>
-                  <CardDescription>
-                    Everyone who can sign in to this pharmacy. Edit roles or
-                    remove access as needed.
-                  </CardDescription>
-                </div>
+        <main className="flex flex-1 flex-col gap-4 p-6 md:p-8">
+          <div className="mx-auto flex w-full max-w-[1600px] flex-col gap-4">
+            <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+              <div>
+                <h1 className="text-2xl font-bold tracking-tight">
+                  Staff & users
+                </h1>
+                <p className="text-sm text-muted-foreground">
+                  Manage accounts, branch assignment, and role permissions in one
+                  matrix.
+                </p>
               </div>
-            </CardHeader>
-            <CardContent className="p-0">
-              {loading ? (
-                <div className="flex items-center justify-center gap-2 py-16 text-sm text-muted-foreground">
-                  <Loader2 className="h-5 w-5 animate-spin" />
-                  Loading team…
-                </div>
-              ) : sortedStaff.length === 0 ? (
-                <div className="flex flex-col items-center justify-center gap-3 py-16 text-center">
-                  <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-primary/10 text-primary">
-                    <Users2 className="h-7 w-7" />
+              <div className="inline-flex items-center gap-1.5 rounded-full bg-muted/60 px-3 py-1.5 text-xs font-medium text-muted-foreground">
+                <Users2 className="h-3.5 w-3.5" />
+                {staff.length} member{staff.length === 1 ? "" : "s"}
+              </div>
+            </div>
+
+            {error && (
+              <div className="rounded-xl border border-destructive/30 bg-destructive/5 px-4 py-3 text-sm text-destructive">
+                {error}
+              </div>
+            )}
+
+            <Card className="overflow-hidden border-0 shadow-md">
+              <CardHeader className="border-b bg-muted/30 px-4 py-4 sm:px-6">
+                <div className="flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
+                  <div>
+                    <CardTitle className="text-base">Team directory</CardTitle>
+                    <CardDescription>
+                      Permission columns update the{" "}
+                      <span className="font-medium text-foreground">role</span>{" "}
+                      assigned to each person — anyone sharing that role inherits
+                      the same access.
+                    </CardDescription>
                   </div>
-                  <p className="text-sm font-medium">No team members yet</p>
-                  <p className="max-w-sm text-xs text-muted-foreground">
-                    Add employees so they can sign in and help run your
-                    pharmacy.
-                  </p>
                   <Button
-                    className="mt-2 gap-2 rounded-xl"
-                    onClick={handleOpenCreate}
+                    variant="outline"
+                    size="sm"
+                    className="mt-2 w-fit gap-1.5 sm:mt-0"
+                    asChild
                   >
-                    <UserPlus className="h-4 w-4" />
-                    Add first team member
+                    <Link href="/configuration/roles">
+                      <ShieldAlert className="h-3.5 w-3.5" />
+                      Manage roles
+                    </Link>
                   </Button>
                 </div>
-              ) : (
-                <div className="overflow-x-auto">
-                  <table className="w-full text-left text-sm">
-                    <thead className="border-b border-border/60 bg-muted/40 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-                      <tr>
-                        <th className="px-6 py-4">Name</th>
-                        <th className="px-6 py-4">Cashier ID</th>
-                        <th className="px-6 py-4">Email</th>
-                        <th className="px-6 py-4">Role</th>
-                        <th className="px-6 py-4">Branch</th>
-                        <th className="px-6 py-4">Added</th>
-                        <th className="px-6 py-4 text-right">Actions</th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-border/60">
-                      {sortedStaff.map((member) => (
-                        <tr
-                          key={member.id}
-                          className="transition-colors hover:bg-muted/30"
-                        >
-                          <td className="px-6 py-4">
-                            <div className="flex items-center gap-3">
-                              <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary">
-                                <User className="h-4 w-4" />
-                              </div>
-                              <div>
-                                <p className="font-medium">
-                                  {member.name || "—"}
-                                </p>
-                                <p className="text-[11px] text-muted-foreground font-mono">
-                                  {member.id.slice(0, 8)}…
-                                </p>
-                              </div>
-                            </div>
-                          </td>
-                          <td className="px-6 py-4">
-                            <span className="font-mono text-xs">
-                              {member.cashier_id || "—"}
-                            </span>
-                          </td>
-                          <td className="px-6 py-4">
-                            <span className="inline-flex items-center gap-1.5 text-muted-foreground">
-                              <Mail className="h-3.5 w-3.5" />
-                              {member.email || "—"}
-                            </span>
-                          </td>
-                          <td className="px-6 py-4">
-                            <span className="inline-flex rounded-full bg-primary/10 px-2.5 py-0.5 text-xs font-medium text-primary">
-                              {member.role || "Unassigned"}
-                            </span>
-                          </td>
-                          <td className="px-6 py-4 text-xs text-muted-foreground">
-                            {branches.find((b) => b.id === member.branch_id)?.name ??
-                              "—"}
-                          </td>
-                          <td className="px-6 py-4 text-xs text-muted-foreground">
-                            {member.created_at
-                              ? new Date(member.created_at).toLocaleDateString(
-                                  undefined,
-                                  {
-                                    month: "short",
-                                    day: "numeric",
-                                    year: "numeric",
-                                  },
+              </CardHeader>
+              <CardContent className="p-4 sm:p-6">
+                <div className="flex flex-col gap-4">
+                  <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+                    <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap">
+                      <Select
+                        value={roleFilter}
+                        onValueChange={(v) => {
+                          setRoleFilter(v);
+                          setPage(1);
+                        }}
+                      >
+                        <SelectTrigger className="w-[180px]">
+                          <SelectValue placeholder="Role" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="all">All roles</SelectItem>
+                          {uniqueRolesForFilter.map((r) => (
+                            <SelectItem key={r} value={r}>
+                              {r}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+
+                      <Select
+                        value={branchFilter}
+                        onValueChange={(v) => {
+                          setBranchFilter(v);
+                          setPage(1);
+                        }}
+                      >
+                        <SelectTrigger className="w-[180px]">
+                          <SelectValue placeholder="Branch" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="all">All branches</SelectItem>
+                          <SelectItem value="none">Unassigned</SelectItem>
+                          {branches.map((b) => (
+                            <SelectItem key={b.id} value={b.id}>
+                              {b.name?.trim() || b.id}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+
+                      <div className="relative min-w-[200px] flex-1 max-w-md">
+                        <Search className="absolute left-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+                        <Input
+                          placeholder="Search name, email, Staff ID…"
+                          value={searchTerm}
+                          onChange={(e) => handleSearch(e.target.value)}
+                          className="pl-9"
+                        />
+                      </div>
+                    </div>
+
+                    <div className="flex flex-wrap gap-2">
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="gap-1.5"
+                        type="button"
+                        onClick={handleExportStaff}
+                      >
+                        <Download className="h-4 w-4" />
+                        Export
+                      </Button>
+                    </div>
+                  </div>
+
+                  {loading ? (
+                    <div className="flex items-center justify-center gap-2 py-16 text-sm text-muted-foreground">
+                      <Loader2 className="h-5 w-5 animate-spin" />
+                      Loading team…
+                    </div>
+                  ) : sortedStaff.length === 0 ? (
+                    <div className="flex flex-col items-center justify-center gap-3 rounded-xl border border-dashed py-16 text-center">
+                      <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-primary/10 text-primary">
+                        <Users2 className="h-7 w-7" />
+                      </div>
+                      <p className="text-sm font-medium">No team members yet</p>
+                      <p className="max-w-sm text-xs text-muted-foreground">
+                        Add employees so they can sign in and help run your
+                        pharmacy.
+                      </p>
+                      <Button
+                        className="mt-2 gap-2 rounded-xl"
+                        onClick={handleOpenCreate}
+                      >
+                        <UserPlus className="h-4 w-4" />
+                        Add first team member
+                      </Button>
+                    </div>
+                  ) : (
+                    <>
+                      <div className="relative overflow-x-auto rounded-xl border border-border/80">
+                        <table className="w-max min-w-full border-collapse text-left text-sm">
+                          <thead>
+                            <tr className="border-b bg-muted/50 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                              <th className="sticky left-0 z-20 min-w-[200px] bg-muted/95 px-4 py-3 backdrop-blur-sm">
+                                Member
+                              </th>
+                              <th className="whitespace-nowrap px-3 py-3">
+                                Staff ID
+                              </th>
+                              <th className="min-w-[140px] px-3 py-3">
+                                Email
+                              </th>
+                              <th className="whitespace-nowrap px-3 py-3">
+                                Role
+                              </th>
+                              <th className="whitespace-nowrap px-3 py-3">
+                                Branch
+                              </th>
+                              {ALL_PERMISSIONS.map((p) => (
+                                <th
+                                  key={p}
+                                  className="w-14 min-w-13 px-1 py-3 text-center"
+                                >
+                                  <Tooltip>
+                                    <TooltipTrigger asChild>
+                                      <span className="cursor-help text-[10px] leading-tight">
+                                        {PERMISSION_SHORT_LABEL[p]}
+                                      </span>
+                                    </TooltipTrigger>
+                                    <TooltipContent side="bottom">
+                                      {PERMISSION_FULL_LABEL[p]}
+                                    </TooltipContent>
+                                  </Tooltip>
+                                </th>
+                              ))}
+                              <th className="whitespace-nowrap px-3 py-3">
+                                Added
+                              </th>
+                              <th className="sticky right-0 z-20 min-w-[96px] bg-muted/95 px-3 py-3 text-right backdrop-blur-sm">
+                                Actions
+                              </th>
+                            </tr>
+                          </thead>
+                          <tbody className="divide-y divide-border/60">
+                            {paginatedStaff.map((member) => {
+                              const role = findRoleForMember(
+                                member,
+                                roleRecords,
+                              );
+                              const permSet = permissionSetForRole(role);
+                              const branchLabel =
+                                branches.find((b) => b.id === member.branch_id)
+                                  ?.name ?? "—";
+
+                              return (
+                                <tr
+                                  key={member.id}
+                                  className="transition-colors hover:bg-muted/40"
+                                >
+                                  <td className="sticky left-0 z-10 bg-background px-4 py-3 shadow-[4px_0_12px_-8px_rgba(0,0,0,0.25)]">
+                                    <div className="flex items-center gap-3">
+                                      <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary">
+                                        <User className="h-4 w-4" />
+                                      </div>
+                                      <div className="min-w-0">
+                                        <p className="truncate font-medium">
+                                          {member.name || "—"}
+                                        </p>
+                                        <p className="truncate font-mono text-[11px] text-muted-foreground">
+                                          {member.id.slice(0, 8)}…
+                                        </p>
+                                      </div>
+                                    </div>
+                                  </td>
+                                  <td className="whitespace-nowrap px-3 py-3 font-mono text-xs">
+                                    {member.staff_id || "—"}
+                                  </td>
+                                  <td className="max-w-[180px] px-3 py-3">
+                                    <span className="flex items-center gap-1.5 truncate text-muted-foreground">
+                                      <Mail className="h-3.5 w-3.5 shrink-0" />
+                                      <span className="truncate">
+                                        {member.email || "—"}
+                                      </span>
+                                    </span>
+                                  </td>
+                                  <td className="whitespace-nowrap px-3 py-3">
+                                    <Badge
+                                      variant="outline"
+                                      className={cn(
+                                        "border-transparent text-xs font-medium",
+                                        getRoleBadgeClass(member.role),
+                                      )}
+                                    >
+                                      {member.role?.trim() || "Unassigned"}
+                                    </Badge>
+                                  </td>
+                                  <td className="whitespace-nowrap px-3 py-3 text-xs text-muted-foreground">
+                                    {branchLabel}
+                                  </td>
+                                  {ALL_PERMISSIONS.map((p) => {
+                                    const busy =
+                                      permissionSavingKey === `${role?.id}:${p}`;
+                                    const disabled = !role;
+                                    return (
+                                      <td
+                                        key={p}
+                                        className="px-1 py-2 text-center align-middle"
+                                      >
+                                        <div className="flex justify-center">
+                                          {busy ? (
+                                            <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
+                                          ) : (
+                                            <Checkbox
+                                              checked={permSet.has(p)}
+                                              disabled={disabled}
+                                              onCheckedChange={(v) =>
+                                                void handlePermissionToggle(
+                                                  member,
+                                                  p,
+                                                  v === true,
+                                                )
+                                              }
+                                              className="border-muted-foreground/40 data-[state=checked]:border-primary data-[state=checked]:bg-primary"
+                                              aria-label={`${PERMISSION_FULL_LABEL[p]} for ${member.name ?? member.id}`}
+                                            />
+                                          )}
+                                        </div>
+                                      </td>
+                                    );
+                                  })}
+                                  <td className="whitespace-nowrap px-3 py-3 text-xs text-muted-foreground">
+                                    {member.created_at
+                                      ? format(
+                                          new Date(member.created_at),
+                                          "MMM d, yyyy",
+                                        )
+                                      : "—"}
+                                  </td>
+                                  <td className="sticky right-0 z-10 bg-background px-3 py-2 text-right shadow-[-4px_0_12px_-8px_rgba(0,0,0,0.25)]">
+                                    <div className="flex justify-end gap-1">
+                                      <Button
+                                        variant="ghost"
+                                        size="icon"
+                                        className="h-8 w-8 rounded-lg text-primary hover:bg-primary/10"
+                                        onClick={() =>
+                                          handleOpenEdit(member)
+                                        }
+                                        title="Edit"
+                                      >
+                                        <Edit2 className="h-4 w-4" />
+                                      </Button>
+                                      <Button
+                                        variant="ghost"
+                                        size="icon"
+                                        className="h-8 w-8 rounded-lg text-destructive hover:bg-destructive/10"
+                                        onClick={() =>
+                                          handleDelete(member.id)
+                                        }
+                                        disabled={deletingId === member.id}
+                                        title="Remove"
+                                      >
+                                        {deletingId === member.id ? (
+                                          <Loader2 className="h-4 w-4 animate-spin" />
+                                        ) : (
+                                          <Trash2 className="h-4 w-4" />
+                                        )}
+                                      </Button>
+                                    </div>
+                                  </td>
+                                </tr>
+                              );
+                            })}
+                          </tbody>
+                        </table>
+                      </div>
+
+                      {filteredStaff.length === 0 && sortedStaff.length > 0 && (
+                        <p className="py-8 text-center text-sm text-muted-foreground">
+                          No team members match your filters.
+                        </p>
+                      )}
+
+                      {totalPages > 1 && (
+                        <div className="flex flex-col gap-2 border-t pt-4 sm:flex-row sm:items-center sm:justify-between">
+                          <p className="text-sm text-muted-foreground">
+                            Showing{" "}
+                            {(safePage - 1) * pageLength + 1}–
+                            {Math.min(
+                              safePage * pageLength,
+                              filteredStaff.length,
+                            )}{" "}
+                            of {filteredStaff.length}
+                          </p>
+                          <div className="flex items-center gap-2">
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              disabled={safePage <= 1}
+                              onClick={() =>
+                                setPage((p) =>
+                                  Math.max(
+                                    1,
+                                    Math.min(p, totalPages) - 1,
+                                  ),
                                 )
-                              : "—"}
-                          </td>
-                          <td className="px-6 py-4">
-                            <div className="flex justify-end">
-                              <DropdownMenu>
-                                <DropdownMenuTrigger asChild>
-                                  <Button
-                                    variant="ghost"
-                                    size="icon"
-                                    className="h-8 w-8 rounded-lg"
-                                    aria-label="Open actions menu"
-                                  >
-                                    <MoreHorizontal className="h-4 w-4" />
-                                  </Button>
-                                </DropdownMenuTrigger>
-                                <DropdownMenuContent align="end">
-                                  <DropdownMenuItem
-                                    onClick={() => handleOpenEdit(member)}
-                                  >
-                                    <Edit2 className="mr-2 h-4 w-4" />
-                                    Edit
-                                  </DropdownMenuItem>
-                                  <DropdownMenuItem
-                                    onClick={() => handleDelete(member.id)}
-                                    disabled={deletingId === member.id}
-                                    className="text-destructive focus:text-destructive"
-                                  >
-                                    {deletingId === member.id ? (
-                                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                                    ) : (
-                                      <Trash2 className="mr-2 h-4 w-4" />
-                                    )}
-                                    Remove
-                                  </DropdownMenuItem>
-                                </DropdownMenuContent>
-                              </DropdownMenu>
-                            </div>
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
+                              }
+                            >
+                              Previous
+                            </Button>
+                            <span className="text-sm tabular-nums text-muted-foreground">
+                              Page {safePage} / {totalPages}
+                            </span>
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              disabled={safePage >= totalPages}
+                              onClick={() =>
+                                setPage((p) =>
+                                  Math.min(
+                                    totalPages,
+                                    Math.min(p, totalPages) + 1,
+                                  ),
+                                )
+                              }
+                            >
+                              Next
+                            </Button>
+                          </div>
+                        </div>
+                      )}
+                    </>
+                  )}
                 </div>
-              )}
-            </CardContent>
-          </Card>
+              </CardContent>
+            </Card>
+          </div>
         </main>
 
-        {/* Add / Edit modal */}
         {formOpen && activeStaff && (
           <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 px-4 backdrop-blur-sm">
-            <div className="w-full max-w-md rounded-2xl border border-border/80 bg-card shadow-xl">
+            <div className="max-h-[90vh] w-full max-w-md overflow-y-auto rounded-2xl border border-border/80 bg-card shadow-xl">
               <div className="border-b border-border/60 px-6 py-4">
                 <h2 className="text-lg font-semibold">
                   {formMode === "create"
@@ -504,7 +937,7 @@ export default function PharmacyStaffPage() {
                 <p className="mt-1 text-xs text-muted-foreground">
                   {formMode === "create"
                     ? "They will be able to sign in with this pharmacy."
-                    : "Update name, email, role, password, or cashier PIN."}
+                    : "Update name, email, role, password, or POS PIN."}
                 </p>
               </div>
               <form onSubmit={handleSubmit} className="space-y-4 px-6 py-5">
@@ -522,20 +955,18 @@ export default function PharmacyStaffPage() {
                   </div>
                 </div>
                 <div className="space-y-2">
-                  <Label htmlFor="staff-cashier-id">
-                    Cashier ID
-                  </Label>
+                  <Label htmlFor="staff-pos-id">Staff ID</Label>
                   <Input
-                    id="staff-cashier-id"
+                    id="staff-pos-id"
                     type="text"
-                    value={activeStaff.cashierId}
-                    onChange={(e) => handleChange("cashierId", e.target.value)}
-                    placeholder="e.g. cashier.frontdesk"
+                    value={activeStaff.staffId}
+                    onChange={(e) => handleChange("staffId", e.target.value)}
+                    placeholder="e.g. frontdesk.main"
                     required={formRoleIsCashier}
                     className="h-10 rounded-lg font-mono"
                   />
                   <p className="text-xs text-muted-foreground">
-                    Used by POS for cashier sign-in with PIN.
+                    Used by the POS for sign-in with PIN (cashier role).
                   </p>
                 </div>
                 <div className="space-y-2">
@@ -552,7 +983,7 @@ export default function PharmacyStaffPage() {
                     />
                   </div>
                   <p className="text-xs text-muted-foreground">
-                    Optional contact address; not used as POS cashier ID.
+                    Optional contact address; not used as the POS Staff ID.
                   </p>
                 </div>
                 <div className="space-y-2">
@@ -585,7 +1016,7 @@ export default function PharmacyStaffPage() {
                     </SelectTrigger>
                     <SelectContent>
                       <SelectItem value="__none__">Unassigned</SelectItem>
-                      {roles.map((name) => (
+                      {roleNames.map((name) => (
                         <SelectItem key={name} value={name}>
                           {name}
                         </SelectItem>
@@ -600,7 +1031,11 @@ export default function PharmacyStaffPage() {
                 <div className="space-y-2">
                   <Label htmlFor="staff-branch">Assigned branch</Label>
                   <Select
-                    value={activeStaff.branchId?.trim() ? activeStaff.branchId : "__none__"}
+                    value={
+                      activeStaff.branchId?.trim()
+                        ? activeStaff.branchId
+                        : "__none__"
+                    }
                     onValueChange={(value) =>
                       handleChange("branchId", value === "__none__" ? "" : value)
                     }
@@ -618,7 +1053,8 @@ export default function PharmacyStaffPage() {
                     </SelectContent>
                   </Select>
                   <p className="text-xs text-muted-foreground">
-                    Cashier, staff, and manager users must be assigned to one branch.
+                    Cashier, staff, and manager users must be assigned to one
+                    branch.
                   </p>
                 </div>
                 <div className="space-y-2">
@@ -640,14 +1076,8 @@ export default function PharmacyStaffPage() {
                       placeholder={
                         formMode === "create" ? "••••••••" : "Optional"
                       }
-                      required={
-                        formMode === "create"
-                      }
-                      minLength={
-                        formMode === "create"
-                          ? 6
-                          : undefined
-                      }
+                      required={formMode === "create"}
+                      minLength={formMode === "create" ? 6 : undefined}
                       className="h-10 rounded-lg pr-10"
                     />
                     <Button
@@ -708,7 +1138,8 @@ export default function PharmacyStaffPage() {
                           htmlFor="staff-remove-pin"
                           className="cursor-pointer text-xs text-muted-foreground"
                         >
-                          Remove PIN (cashier cannot use POS until a new PIN is set)
+                          Remove PIN (cashier cannot use POS until a new PIN is
+                          set)
                         </Label>
                       </div>
                     )}
@@ -740,5 +1171,6 @@ export default function PharmacyStaffPage() {
           </div>
         )}
       </div>
+    </TooltipProvider>
   );
 }

@@ -1,7 +1,7 @@
 /**
  * Full DB workflow (A→B→C→A circular transfers + forced mismatch + close readiness)
  * requires a seeded tenant schema. Run when ready:
- *   INTEGRATION_TENANT_SCHEMA=your_schema npm test -- consolidation-workflow
+ *   INTEGRATION_TENANT_SCHEMA=your_schema pnpm test -- consolidation-workflow
  */
 const SCHEMA = process.env.INTEGRATION_TENANT_SCHEMA?.trim();
 

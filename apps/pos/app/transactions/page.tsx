@@ -9,9 +9,9 @@ import {
   TableHead,
   TableHeader,
   TableRow,
-} from "@repo/ui/table";
-import { Button } from "@repo/ui/button";
-import { ScrollArea } from "@repo/ui/scroll-area";
+} from "@/components/ui/table";
+import { Button } from "@/components/ui/button";
+import { ScrollArea } from "@/components/ui/scroll-area";
 import { cn } from "@repo/utils";
 import { X } from "lucide-react";
 
@@ -21,14 +21,13 @@ import { PosHeader } from "@/shared/ui";
 import { formatMoney } from "@/shared/lib";
 
 export default function TransactionHistoryPage() {
-  const { transactions } = usePos();
+  const { transactions, currentUser } = usePos();
   const [selectedRowIndex, setSelectedRowIndex] = useState<number>(0);
   const [searchQuery, setSearchQuery] = useState("");
   const [showReceipt, setShowReceipt] = useState(false);
 
-
   const filteredTransactions = transactions.filter((t) =>
-    t.receiptId.toLowerCase().includes(searchQuery.toLowerCase())
+    t.receiptId.toLowerCase().includes(searchQuery.toLowerCase()),
   );
 
   const selectedTx = filteredTransactions[selectedRowIndex];
@@ -36,7 +35,9 @@ export default function TransactionHistoryPage() {
   // Keyboard navigation
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === "ArrowDown") {
-      setSelectedRowIndex((prev) => Math.min(prev + 1, filteredTransactions.length - 1));
+      setSelectedRowIndex((prev) =>
+        Math.min(prev + 1, filteredTransactions.length - 1),
+      );
     } else if (e.key === "ArrowUp") {
       setSelectedRowIndex((prev) => Math.max(prev - 1, 0));
     } else if (e.key === "Enter" && selectedTx) {
@@ -68,17 +69,37 @@ export default function TransactionHistoryPage() {
         <section className="flex-1 flex flex-col border-r border-slate-300 overflow-hidden bg-white">
           <ScrollArea className="flex-1">
             <Table className="border-collapse w-full">
-              <TableHeader className="sticky top-0 z-10 bg-[#C6F6D5]"> {/* Light Emerald Green */}
+              <TableHeader className="sticky top-0 z-10 bg-[#C6F6D5]">
+                {" "}
+                {/* Light Emerald Green */}
                 <TableRow className="hover:bg-transparent border-b border-slate-400">
-                  <TableHead className="font-bold text-black py-2 px-4 uppercase text-[11px] border-r border-slate-300/50">Store No</TableHead>
-                  <TableHead className="font-bold text-black py-2 px-4 uppercase text-[11px] border-r border-slate-300/50">POS Term</TableHead>
-                  <TableHead className="font-bold text-black py-2 px-4 uppercase text-[11px] border-r border-slate-300/50">Transaction No</TableHead>
-                  <TableHead className="font-bold text-black py-2 px-4 uppercase text-[11px] border-r border-slate-300/50">Receipt No</TableHead>
-                  <TableHead className="font-bold text-black py-2 px-4 uppercase text-[11px] border-r border-slate-300/50">Tr. Type</TableHead>
-                  <TableHead className="font-bold text-black py-2 px-4 uppercase text-[11px] border-r border-slate-300/50">Date</TableHead>
-                  <TableHead className="font-bold text-black py-2 px-4 uppercase text-[11px] text-right border-r border-slate-300/50">Gross Amount</TableHead>
-                  <TableHead className="font-bold text-black py-2 px-4 uppercase text-[11px] border-r border-slate-300/50">Staff ID</TableHead>
-                  <TableHead className="font-bold text-black py-2 px-4 uppercase text-[11px]">Return</TableHead>
+                  <TableHead className="font-bold text-black py-2 px-4 uppercase text-[11px] border-r border-slate-300/50">
+                    Store No
+                  </TableHead>
+                  <TableHead className="font-bold text-black py-2 px-4 uppercase text-[11px] border-r border-slate-300/50">
+                    POS Term
+                  </TableHead>
+                  <TableHead className="font-bold text-black py-2 px-4 uppercase text-[11px] border-r border-slate-300/50">
+                    Transaction No
+                  </TableHead>
+                  <TableHead className="font-bold text-black py-2 px-4 uppercase text-[11px] border-r border-slate-300/50">
+                    Receipt No
+                  </TableHead>
+                  <TableHead className="font-bold text-black py-2 px-4 uppercase text-[11px] border-r border-slate-300/50">
+                    Tr. Type
+                  </TableHead>
+                  <TableHead className="font-bold text-black py-2 px-4 uppercase text-[11px] border-r border-slate-300/50">
+                    Date
+                  </TableHead>
+                  <TableHead className="font-bold text-black py-2 px-4 uppercase text-[11px] text-right border-r border-slate-300/50">
+                    Gross Amount
+                  </TableHead>
+                  <TableHead className="font-bold text-black py-2 px-4 uppercase text-[11px] border-r border-slate-300/50">
+                    Staff ID
+                  </TableHead>
+                  <TableHead className="font-bold text-black py-2 px-4 uppercase text-[11px]">
+                    Return
+                  </TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -94,16 +115,26 @@ export default function TransactionHistoryPage() {
                       className={cn(
                         "cursor-pointer border-b border-slate-200 transition-none",
                         index % 2 === 0 ? "bg-white" : "bg-slate-50",
-                        selectedRowIndex === index 
+                        selectedRowIndex === index
                           ? "bg-rose-200 hover:bg-rose-200" // Soft red/pink highlight
-                          : "hover:bg-slate-100"
+                          : "hover:bg-slate-100",
                       )}
                     >
-                      <TableCell className="py-2 px-4 font-mono text-xs border-r border-slate-100">HMA</TableCell>
-                      <TableCell className="py-2 px-4 font-mono text-xs border-r border-slate-100">HAT1</TableCell>
-                      <TableCell className="py-2 px-4 font-mono text-xs border-r border-slate-100">{tx.saleId || "N/A"}</TableCell>
-                      <TableCell className="py-2 px-4 font-mono text-xs border-r border-slate-100">{tx.receiptId}</TableCell>
-                      <TableCell className="py-2 px-4 text-xs border-r border-slate-100">Sale</TableCell>
+                      <TableCell className="py-2 px-4 font-mono text-xs border-r border-slate-100">
+                        HMA
+                      </TableCell>
+                      <TableCell className="py-2 px-4 font-mono text-xs border-r border-slate-100">
+                        HAT1
+                      </TableCell>
+                      <TableCell className="py-2 px-4 font-mono text-xs border-r border-slate-100">
+                        {tx.saleId || "N/A"}
+                      </TableCell>
+                      <TableCell className="py-2 px-4 font-mono text-xs border-r border-slate-100">
+                        {tx.receiptId}
+                      </TableCell>
+                      <TableCell className="py-2 px-4 text-xs border-r border-slate-100">
+                        Sale
+                      </TableCell>
                       <TableCell className="py-2 px-4 font-mono text-xs border-r border-slate-100">
                         {new Intl.DateTimeFormat("en-US", {
                           year: "numeric",
@@ -115,21 +146,31 @@ export default function TransactionHistoryPage() {
                           hour12: false,
                         }).format(new Date(tx.createdAt))}
                       </TableCell>
-                      <TableCell className={cn(
-                        "py-2 px-4 font-mono text-xs text-right font-bold border-r border-slate-100",
-                        tx.total < 0 ? "text-red-600" : "text-black"
-                      )}>
+                      <TableCell
+                        className={cn(
+                          "py-2 px-4 font-mono text-xs text-right font-bold border-r border-slate-100",
+                          tx.total < 0 ? "text-red-600" : "text-black",
+                        )}
+                      >
                         {formatMoney(tx.total)}
                       </TableCell>
-                      <TableCell className="py-2 px-4 text-xs border-r border-slate-100">S001</TableCell>
+                      <TableCell className="py-2 px-4 font-mono text-xs border-r border-slate-100">
+                        {(currentUser?.staffId?.trim()
+                          ? currentUser.staffId
+                          : "1002"
+                        ).slice(0, 8)}
+                      </TableCell>
                       <TableCell className="py-2 px-4 text-xs font-bold uppercase text-[10px]">
-                        Success
+                        {tx.receiptId}
                       </TableCell>
                     </TableRow>
                   ))
                 ) : (
                   <TableRow>
-                    <TableCell colSpan={9} className="text-center py-10 text-slate-400">
+                    <TableCell
+                      colSpan={9}
+                      className="text-center py-10 text-slate-400"
+                    >
                       No transactions found
                     </TableCell>
                   </TableRow>
@@ -144,8 +185,14 @@ export default function TransactionHistoryPage() {
           {showReceipt && selectedTx ? (
             <div className="flex flex-col h-full">
               <div className="p-2 bg-slate-300 flex justify-between items-center border-b border-slate-400">
-                <span className="font-bold text-xs uppercase">Receipt Preview</span>
-                <Button size="icon-sm" variant="ghost" onClick={() => setShowReceipt(false)}>
+                <span className="font-bold text-xs uppercase">
+                  Receipt Preview
+                </span>
+                <Button
+                  size="icon-sm"
+                  variant="ghost"
+                  onClick={() => setShowReceipt(false)}
+                >
                   <X className="size-4" />
                 </Button>
               </div>
@@ -186,7 +233,7 @@ export default function TransactionHistoryPage() {
                   className="w-full h-full rounded-none bg-[#E53E3E] hover:bg-[#C53030] text-white font-bold text-xl uppercase shadow-none"
                   variant="ghost"
                 >
-            Cancel
+                  Cancel
                 </Button>
               </Link>
             </div>

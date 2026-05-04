@@ -7,8 +7,9 @@ import React, {
   useEffect,
   useState,
 } from "react";
+import { usePathname } from "next/navigation";
 import type { PosTransaction, PosCartLine, PosHeldOrder } from "@repo/types";
-import { getStoredUser, type StoredUser } from "@/lib/auth-client";
+import { getResolvedStoredUser, type StoredUser } from "@/lib/auth-client";
 import {
   loadPosTransactions,
   loadHeldOrders,
@@ -18,7 +19,20 @@ import {
   newReceiptId,
 } from "@/lib/pos-utils";
 import { createSale } from "@/lib/api";
-import { cartTotals } from "@/features/register/model/totals";
+import {
+  getCurrentPosSession,
+  openPosSession,
+} from "@/lib/services/pos-sessions";
+import { getEffectiveClientBranchId } from "@/lib/branch-access";
+import {
+  billableCartLines,
+  cartTotals,
+} from "@/features/register/model/totals";
+import {
+  isManagerTierRole,
+  maxDiscountPercentForRole,
+} from "@/features/register/model/discount-policy";
+import { posToast } from "@/lib/pos-toast";
 
 type PosContextType = {
   mainTab: "register" | "returns";
@@ -49,6 +63,14 @@ type PosContextType = {
   /** When true, the footer shows Supervisor actions (Back/Z/X reports). */
   supervisorMode: boolean;
   setSupervisorMode: React.Dispatch<React.SetStateAction<boolean>>;
+  /**
+   * Manager/admin can temporarily step down (footer MANAGER: INACTIVE, 1% discount cap).
+   * Cleared on re-login or when the signed-in user changes.
+   */
+  managerPrivilegesSuspended: boolean;
+  setManagerPrivilegesSuspended: React.Dispatch<React.SetStateAction<boolean>>;
+  /** True when signed-in user is manager tier and not stepped down. */
+  managerTierActiveForUi: boolean;
   clearCart: () => void;
   /** Cancel current entry/flow (clear selection & payment state) without clearing the cart. */
   cancelEntry: () => void;
@@ -72,16 +94,25 @@ type PosContextType = {
   completePayment: (
     paymentLabel: string,
     paymentMethodCode?: string,
+    amountTendered?: number,
   ) => Promise<void>;
+  /** Open shift session id for the current branch, or null. */
+  posSessionId: string | null;
+  posSessionLoading: boolean;
+  refreshPosSession: () => Promise<void>;
+  openPosShift: () => Promise<string | null>;
 };
 
 const PosContext = createContext<PosContextType | undefined>(undefined);
 
 export function PosProvider({ children }: { children: React.ReactNode }) {
+  const pathname = usePathname();
   const [mainTab, setMainTab] = useState<"register" | "returns">("register");
   const [checkoutStep, setCheckoutStep] = useState<"cart" | "payment">("cart");
   const [transactions, setTransactions] = useState<PosTransaction[]>([]);
-  const [currentUser, setCurrentUser] = useState<StoredUser | null>(null);
+  const [currentUser, setCurrentUser] = useState<StoredUser | null>(() =>
+    typeof window !== "undefined" ? getResolvedStoredUser() : null,
+  );
   const [cart, setCart] = useState<PosCartLine[]>([]);
   const [discount, setDiscount] = useState(0);
   const [heldOrders, setHeldOrders] = useState<PosHeldOrder[]>([]);
@@ -91,12 +122,112 @@ export function PosProvider({ children }: { children: React.ReactNode }) {
     null,
   );
   const [supervisorMode, setSupervisorMode] = useState(false);
+  const [managerPrivilegesSuspended, setManagerPrivilegesSuspended] =
+    useState(false);
+  const [posSessionId, setPosSessionId] = useState<string | null>(null);
+  const [posSessionLoading, setPosSessionLoading] = useState(false);
+
+  const managerTierActiveForUi =
+    isManagerTierRole(currentUser?.role) && !managerPrivilegesSuspended;
+
+  const roleForDiscountPolicy = React.useMemo(() => {
+    const r = currentUser?.role;
+    if (isManagerTierRole(r) && managerPrivilegesSuspended) return "cashier";
+    return r;
+  }, [currentUser?.role, managerPrivilegesSuspended]);
+
+  const refreshPosSession = useCallback(async () => {
+    const slug = currentUser?.tenantSlug?.trim();
+    const branchId = getEffectiveClientBranchId();
+    if (!slug || currentUser?.userType !== "tenant" || !branchId) {
+      setPosSessionId(null);
+      return;
+    }
+    setPosSessionLoading(true);
+    try {
+      const row = await getCurrentPosSession(slug);
+      setPosSessionId(row?.id ?? null);
+    } catch {
+      setPosSessionId(null);
+    } finally {
+      setPosSessionLoading(false);
+    }
+  }, [currentUser?.tenantSlug, currentUser?.userType]);
+
+  /**
+   * After login / route change: load open shift or POST `/pos/sessions/open` so the cashier
+   * never has to tap “Open shift” when a branch is selected.
+   */
+  const ensurePosSessionWithAutoOpen = useCallback(async () => {
+    const slug = currentUser?.tenantSlug?.trim();
+    const branchId = getEffectiveClientBranchId();
+    if (!slug || currentUser?.userType !== "tenant" || !branchId) {
+      setPosSessionId(null);
+      return;
+    }
+    setPosSessionLoading(true);
+    try {
+      let row = await getCurrentPosSession(slug);
+      if (row?.id) {
+        setPosSessionId(row.id);
+        return;
+      }
+      try {
+        const opened = await openPosSession(slug, {
+          staffUserId: currentUser?.id,
+        });
+        setPosSessionId(opened.id);
+      } catch {
+        row = await getCurrentPosSession(slug);
+        setPosSessionId(row?.id ?? null);
+      }
+    } catch {
+      setPosSessionId(null);
+    } finally {
+      setPosSessionLoading(false);
+    }
+  }, [currentUser?.tenantSlug, currentUser?.userType, currentUser?.id]);
+
+  const openPosShift = useCallback(async (): Promise<string | null> => {
+    const slug = currentUser?.tenantSlug?.trim();
+    const branchId = getEffectiveClientBranchId();
+    if (!slug || currentUser?.userType !== "tenant" || !branchId) {
+      posToast.warning(
+        "Cannot open shift",
+        "Select a single branch (not “All”) and sign in as tenant staff.",
+      );
+      return null;
+    }
+    try {
+      const row = await openPosSession(slug, {
+        staffUserId: currentUser?.id,
+      });
+      setPosSessionId(row.id);
+      posToast.success("Shift opened", "You can ring sales for this session.");
+      return row.id;
+    } catch (e) {
+      posToast.error(
+        "Could not open shift",
+        e instanceof Error ? e.message : "Try again.",
+      );
+      return null;
+    }
+  }, [currentUser?.tenantSlug, currentUser?.userType, currentUser?.id]);
+
+  useEffect(() => {
+    void ensurePosSessionWithAutoOpen();
+  }, [pathname, ensurePosSessionWithAutoOpen]);
 
   useEffect(() => {
     setTransactions(loadPosTransactions());
     setHeldOrders(loadHeldOrders());
-    setCurrentUser(getStoredUser());
   }, []);
+
+  // PosProvider sits in the root layout and survives client navigations (e.g. /staff-login → /).
+  // Re-read session whenever the route changes so login updates tenantSlug for catalog / barcode APIs.
+  useEffect(() => {
+    setCurrentUser(getResolvedStoredUser());
+  }, [pathname]);
 
   // Drop a stale selection if the line disappears from the cart.
   useEffect(() => {
@@ -182,8 +313,15 @@ export function PosProvider({ children }: { children: React.ReactNode }) {
 
   const goToPayment = useCallback(() => {
     if (cart.length === 0) return;
+    if (billableCartLines(cart).length === 0) {
+      posToast.info(
+        "Nothing to charge yet",
+        "Add products or delivery and tailor charges to the cart. Member card lines are not billed until points are enabled.",
+      );
+      return;
+    }
     setCheckoutStep("payment");
-  }, [cart.length]);
+  }, [cart]);
 
   const voidAll = useCallback(() => {
     clearCart();
@@ -197,13 +335,25 @@ export function PosProvider({ children }: { children: React.ReactNode }) {
 
   const triggerTotalAndPay = useCallback(() => {
     if (cart.length === 0) return;
+    if (billableCartLines(cart).length === 0) {
+      posToast.info(
+        "Nothing to charge yet",
+        "Add products or delivery and tailor charges to the cart. Member card lines are not billed until points are enabled.",
+      );
+      return;
+    }
     setShowVatLine(true);
     setCheckoutStep("payment");
-  }, [cart.length]);
+  }, [cart]);
 
   const applyLineDiscountPct = useCallback(
     (pct: number) => {
       if (!selectedLineId) return;
+      const maxPct = maxDiscountPercentForRole(roleForDiscountPolicy);
+      if (pct > maxPct + 1e-9) {
+        posToast.warning(`Maximum discount: ${maxPct}%`);
+        return;
+      }
       const clamped = Math.max(0, Math.min(100, pct));
       setCart((prev) =>
         prev.map((l) =>
@@ -211,16 +361,21 @@ export function PosProvider({ children }: { children: React.ReactNode }) {
         ),
       );
     },
-    [selectedLineId],
+    [selectedLineId, roleForDiscountPolicy],
   );
 
   const applyTotalDiscountPct = useCallback(
     (pct: number) => {
+      const maxPct = maxDiscountPercentForRole(roleForDiscountPolicy);
+      if (pct > maxPct + 1e-9) {
+        posToast.warning(`Maximum discount: ${maxPct}%`);
+        return;
+      }
       const clamped = Math.max(0, Math.min(100, pct));
       const subtotal = cart.reduce((s, l) => s + l.unitPrice * l.qty, 0);
       setDiscount(Number(((subtotal * clamped) / 100).toFixed(2)));
     },
-    [cart],
+    [cart, roleForDiscountPolicy],
   );
 
   const setLineComment = useCallback(
@@ -238,16 +393,63 @@ export function PosProvider({ children }: { children: React.ReactNode }) {
   );
 
   const completePayment = useCallback(
-    async (paymentLabel: string, paymentMethodCode?: string) => {
+    async (
+      paymentLabel: string,
+      paymentMethodCode?: string,
+      amountTendered?: number,
+    ) => {
       if (cart.length === 0) return;
       const tenantSlug = currentUser?.tenantSlug ?? null;
-      const { subtotal: s, tax: t, total: tot } = cartTotals(cart, discount);
+      const billable = billableCartLines(cart);
+      if (billable.length === 0) {
+        posToast.info(
+          "Nothing to sell",
+          "Add billable products or delivery and tailor charges. Member card lines are excluded until points are enabled.",
+        );
+        return;
+      }
+      const {
+        subtotal: s,
+        tax: t,
+        total: tot,
+      } = cartTotals(billable, discount);
+
+      const maxPct = maxDiscountPercentForRole(roleForDiscountPolicy);
+      if (s > 0 && discount > 0 && discount / s > maxPct / 100 + 1e-9) {
+        posToast.warning(
+          "Discount too high for this sale",
+          `This cart exceeds the ${maxPct}% limit for your role. Lower the discount or continue with a manager‑approved session.`,
+        );
+        return;
+      }
+
+      const tendered =
+        amountTendered != null && Number.isFinite(amountTendered)
+          ? amountTendered
+          : tot;
+      if (tendered + 1e-6 < tot) {
+        posToast.error(
+          "Insufficient tender",
+          "The amount entered is less than the balance due. Enter the full payment amount.",
+        );
+        return;
+      }
 
       if (tenantSlug) {
-        const zeroPrice = cart.some((l) => l.unitPrice <= 0);
+        if (!posSessionId) {
+          posToast.warning(
+            "No open shift",
+            "Open a shift before recording sales.",
+          );
+          return;
+        }
+        const zeroPrice = billable.some(
+          (l) => l.miscChargeKind == null && l.unitPrice <= 0,
+        );
         if (zeroPrice) {
-          window.alert(
-            "One or more lines have no price (no batch selling price). Set prices in inventory or batches before completing the sale.",
+          posToast.warning(
+            "Missing selling prices",
+            "One or more items have no batch selling price. Update inventory or batch pricing before completing the sale.",
           );
           return;
         }
@@ -257,26 +459,40 @@ export function PosProvider({ children }: { children: React.ReactNode }) {
             discount,
             tax: t,
             paymentMethod: paymentMethodCode ?? paymentLabel,
-            items: cart.map((l) => ({
-              productId: l.productId,
-              quantity: l.qty,
-              price: l.unitPrice,
-            })),
+            posSessionId,
+            items: billable.map((l) =>
+              l.miscChargeKind === "delivery" || l.miscChargeKind === "tailor"
+                ? {
+                    miscChargeKind: l.miscChargeKind,
+                    quantity: l.qty,
+                    price: l.unitPrice,
+                  }
+                : {
+                    productId: l.productId,
+                    quantity: l.qty,
+                    price: l.unitPrice,
+                  },
+            ),
           });
           const receiptNum =
             (sale.receipt_number as string | null | undefined)?.trim() ||
             newReceiptId();
+          const changeRounded =
+            Math.round(Math.max(0, tendered - tot) * 100) / 100;
           const entry: PosTransaction = {
             receiptId: receiptNum,
             saleId: sale.id,
             createdAt: Date.now(),
             paymentMethod: paymentLabel,
-            lines: cloneLines(cart),
+            lines: cloneLines(billable),
             discount,
             subtotal: s,
             tax: t,
             total: tot,
+            amountTendered: tendered,
+            changeDue: changeRounded,
           };
+          const changeDue = changeRounded;
           setTransactions((prev) => {
             const next = [entry, ...prev].slice(0, 500);
             persistPosTransactions(next);
@@ -284,26 +500,41 @@ export function PosProvider({ children }: { children: React.ReactNode }) {
           });
           clearCart();
           setReceiptToPrint(entry);
-          window.alert(
-            `Sale completed (${paymentLabel}).\nReceipt #: ${entry.receiptId}\nTransaction ID: ${sale.id}`,
+          posToast.success(
+            "Sale recorded",
+            [
+              `Payment: ${paymentLabel}`,
+              `Receipt #${entry.receiptId}`,
+              `Transaction ${sale.id}`,
+              changeDue > 0 ? `Change ${changeDue.toFixed(2)}` : null,
+            ]
+              .filter(Boolean)
+              .join(" · "),
           );
         } catch (e) {
-          window.alert(
-            e instanceof Error ? e.message : "Could not save sale to server.",
+          posToast.error(
+            "Could not save sale",
+            e instanceof Error
+              ? e.message
+              : "Check your connection and try again. The sale was not posted.",
           );
         }
         return;
       }
 
+      const changeRounded = Math.round(Math.max(0, tendered - tot) * 100) / 100;
+      const changeDue = changeRounded;
       const entry: PosTransaction = {
         receiptId: newReceiptId(),
         createdAt: Date.now(),
         paymentMethod: paymentLabel,
-        lines: cloneLines(cart),
+        lines: cloneLines(billable),
         discount,
         subtotal: s,
         tax: t,
         total: tot,
+        amountTendered: tendered,
+        changeDue: changeRounded,
       };
       setTransactions((prev) => {
         const next = [entry, ...prev].slice(0, 500);
@@ -312,11 +543,26 @@ export function PosProvider({ children }: { children: React.ReactNode }) {
       });
       clearCart();
       setReceiptToPrint(entry);
-      window.alert(
-        `Sale completed (${paymentLabel}).\nReceipt #: ${entry.receiptId} (offline — sign in with tenant to sync).`,
+      posToast.success(
+        "Sale saved locally",
+        [
+          `Payment: ${paymentLabel}`,
+          `Receipt #${entry.receiptId}`,
+          "Offline — sync when signed in",
+          changeDue > 0 ? `Change ${changeDue.toFixed(2)}` : null,
+        ]
+          .filter(Boolean)
+          .join(" · "),
       );
     },
-    [cart, currentUser, discount, clearCart],
+    [
+      cart,
+      currentUser,
+      discount,
+      clearCart,
+      roleForDiscountPolicy,
+      posSessionId,
+    ],
   );
 
   return (
@@ -344,6 +590,9 @@ export function PosProvider({ children }: { children: React.ReactNode }) {
         setReceiptToPrint,
         supervisorMode,
         setSupervisorMode,
+        managerPrivilegesSuspended,
+        setManagerPrivilegesSuspended,
+        managerTierActiveForUi,
         clearCart,
         cancelEntry,
         holdOrder,
@@ -357,6 +606,10 @@ export function PosProvider({ children }: { children: React.ReactNode }) {
         applyTotalDiscountPct,
         setLineComment,
         completePayment,
+        posSessionId,
+        posSessionLoading,
+        refreshPosSession,
+        openPosShift,
       }}
     >
       {children}

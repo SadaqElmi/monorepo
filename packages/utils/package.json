@@ -13,7 +13,7 @@
     "tailwind-merge": "^3.5.0"
   },
   "devDependencies": {
-    "@repo/typescript-config": "*",
+    "@repo/typescript-config": "workspace:*",
     "typescript": "5.9.2"
   }
 }

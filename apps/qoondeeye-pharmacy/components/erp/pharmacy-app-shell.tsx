@@ -3,7 +3,7 @@
 import type { ReactNode } from "react";
 
 import { DrawerHostProvider } from "@/components/DrawerHost";
-import { Toaster } from "@repo/ui/sonner";
+import { Toaster } from "@/components/ui/sonner";
 
 import { AppTopNav } from "./app-top-nav";
 

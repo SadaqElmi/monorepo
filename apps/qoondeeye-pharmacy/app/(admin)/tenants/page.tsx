@@ -13,15 +13,15 @@ import {
   Trash2,
 } from "lucide-react";
 
-import { Badge } from "@repo/ui/badge";
-import { Button } from "@repo/ui/button";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import {
   Card,
   CardContent,
   CardDescription,
   CardHeader,
   CardTitle,
-} from "@repo/ui/card";
+} from "@/components/ui/card";
 import {
   Dialog,
   DialogContent,
@@ -29,16 +29,16 @@ import {
   DialogFooter,
   DialogHeader,
   DialogTitle,
-} from "@repo/ui/dialog";
-import { Input } from "@repo/ui/input";
-import { Label } from "@repo/ui/label";
+} from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import {
   Select,
   SelectContent,
   SelectItem,
   SelectTrigger,
   SelectValue,
-} from "@repo/ui/select";
+} from "@/components/ui/select";
 import {
   Table,
   TableBody,
@@ -46,11 +46,11 @@ import {
   TableHead,
   TableHeader,
   TableRow,
-} from "@repo/ui/table";
+} from "@/components/ui/table";
 import {
   Tenant,
   createTenant,
-  deleteTenant,
+  deleteTenantBySchemaName,
   getTenants,
   updateTenant,
 } from "@/lib/api";
@@ -200,12 +200,17 @@ export default function TenantsPage() {
 
   const handleConfirmDelete = async () => {
     if (!pendingDeleteTenant) return;
-    const id = pendingDeleteTenant.id;
+    const schema = pendingDeleteTenant.schemaName?.trim();
+    if (!schema) {
+      setError("Cannot delete: missing schema name. Refresh the page and try again.");
+      return;
+    }
     try {
-      setDeletingId(id);
+      setDeletingId(pendingDeleteTenant.id);
       setError(null);
-      await deleteTenant(id);
-      setTenants((prev) => prev.filter((t) => t.id !== id));
+      await deleteTenantBySchemaName(schema);
+      const data = await getTenants();
+      setTenants(data);
       setDeleteDialogOpen(false);
       setPendingDeleteTenant(null);
     } catch (err) {

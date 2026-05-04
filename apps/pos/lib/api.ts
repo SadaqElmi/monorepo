@@ -6,6 +6,17 @@ export {
   type Sale,
   type SaleItem,
 } from "./services/sales";
+export {
+  getCurrentPosSession,
+  openPosSession,
+  getPosStatement,
+  postSessionStatement,
+  patchPosStatementLine,
+  postPosStatement,
+  getXReport,
+  getZReport,
+  closePosSession,
+} from "./services/pos-sessions";
 export { getBatches, type Batch } from "./services/batches";
 export { getCategories, type Category } from "./services/categories";
 export { getProductByBarcode, getProducts } from "./services/products";

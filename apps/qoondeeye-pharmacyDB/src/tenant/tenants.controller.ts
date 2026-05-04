@@ -44,6 +44,12 @@ export class TenantsController {
     return this.tenantService.update(id, dto);
   }
 
+  /** Registered before `:id` so `schema/foo` is not captured as an id. */
+  @Delete('schema/:schemaName')
+  async removeBySchema(@Param('schemaName') schemaName: string) {
+    return this.tenantService.removeBySchemaName(schemaName);
+  }
+
   @Delete(':id')
   async remove(@Param('id') id: string) {
     return this.tenantService.remove(id);

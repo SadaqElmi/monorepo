@@ -12,8 +12,16 @@ cp .env.example .env.local
 
 2. Start dev server:
 
+From the **repository root**:
+
 ```bash
-npm run dev
+pnpm dev:pos
+```
+
+Or from this app directory:
+
+```bash
+pnpm dev
 ```
 
 POS runs on `http://localhost:3001`.
@@ -23,12 +31,12 @@ POS runs on `http://localhost:3001`.
 `NEXT_PUBLIC_POS_DEVICE_LOGIN_MODE` controls cashier login UI behavior:
 
 - `legacy`: tenant + PIN only (old flow)
-- `dual` (default): prefer device-bound `cashierId + PIN`, allow legacy fallback when device is not bound
-- `device`: require device enrollment, then `cashierId + PIN` only
+- `dual` (default): prefer device-bound `staffId + PIN`, allow legacy fallback when device is not bound
+- `device`: require device enrollment, then `staffId + PIN` only
 
 ## POS rollout checklist (tenant + PIN -> device-bound cashier login)
 
-1. Deploy backend migration and auth endpoints (`/api/auth/pos/enroll`, `/api/auth/cashier-login`, `/api/auth/pos/revoke`).
+1. Deploy backend migration and auth endpoints (`/api/auth/pos/enroll`, `/api/auth/staff-login`, `/api/auth/pos/revoke`).
 2. Keep frontend + backend in `dual` mode.
 3. Pilot enroll a few pharmacy devices using manager credentials.
 4. Validate revoke/rebind flow at least once per pilot tenant.

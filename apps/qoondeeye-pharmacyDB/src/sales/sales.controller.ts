@@ -92,7 +92,10 @@ export class SalesController {
       this.tenantContext.getSchemaName()!,
       req.branchId!,
       dto,
-      { actorUserId: req.userId },
+      {
+        actorUserId: req.userId,
+        requestUserRole: req.userRole ?? null,
+      },
     );
   }
 

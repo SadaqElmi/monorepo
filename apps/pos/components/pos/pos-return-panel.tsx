@@ -4,24 +4,24 @@ import * as React from "react";
 import { Loader2, Search } from "lucide-react";
 
 import { ReturnVoucherPrint } from "@/components/pos/return-voucher-print";
-import { Badge } from "@repo/ui/badge";
-import { Button } from "@repo/ui/button";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import {
   Card,
   CardContent,
   CardDescription,
   CardHeader,
   CardTitle,
-} from "@repo/ui/card";
-import { Input } from "@repo/ui/input";
-import { Label } from "@repo/ui/label";
+} from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import {
   Select,
   SelectContent,
   SelectItem,
   SelectTrigger,
   SelectValue,
-} from "@repo/ui/select";
+} from "@/components/ui/select";
 import {
   Table,
   TableBody,
@@ -29,7 +29,7 @@ import {
   TableHead,
   TableHeader,
   TableRow,
-} from "@repo/ui/table";
+} from "@/components/ui/table";
 import {
   createReturnVoucher,
   finalizeReturnVoucher,
@@ -315,18 +315,27 @@ export function PosReturnPanel({
         <CardHeader>
           <CardTitle className="text-base">Look up sale</CardTitle>
           <CardDescription>
-            Search by printed receipt number (e.g. 00042) or transaction ID
-            (sale UUID).
+            Enter a printed receipt number, the sale ID (UUID), or scan the
+            barcode from a &quot;Receipt with barcode&quot; slip — the code
+            matches what you would type here.
           </CardDescription>
         </CardHeader>
         <CardContent className="flex flex-col gap-3 sm:flex-row sm:items-end">
           <div className="flex-1 space-y-2">
-            <Label htmlFor="pos-return-lookup">Receipt # or transaction ID</Label>
+            <Label htmlFor="pos-return-lookup">
+              Receipt #, sale ID, or scan receipt barcode
+            </Label>
             <Input
               id="pos-return-lookup"
               value={lookupInput}
               onChange={(e) => setLookupInput(e.target.value)}
-              placeholder="00042 or UUID"
+              onKeyDown={(e) => {
+                if (e.key === "Enter") {
+                  e.preventDefault();
+                  void runLookup();
+                }
+              }}
+              placeholder="00042, UUID, or scan"
               className="font-mono text-sm"
             />
           </div>

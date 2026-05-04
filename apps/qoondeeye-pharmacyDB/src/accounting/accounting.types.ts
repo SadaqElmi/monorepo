@@ -3,6 +3,7 @@ export type AccountKey =
   | 'cash'
   | 'bank'
   | 'card_clearing'
+  | 'wallet_clearing'
   | 'inventory'
   | 'accounts_receivable'
   | 'due_from_branch'
@@ -11,6 +12,8 @@ export type AccountKey =
   | 'sales_revenue'
   | 'cogs'
   | 'operating_expense'
+  | 'cash_shortage_expense'
+  | 'cash_overage_income'
   | 'equity_retained';
 
 export type JournalSourceType =
@@ -33,4 +36,5 @@ export type JournalSourceType =
   | 'consolidation_bs'
   | 'consolidation_pnl'
   | 'consolidation_reversal'
-  | 'period_adjustment';
+  | 'period_adjustment'
+  | 'pos_statement';

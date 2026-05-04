@@ -54,6 +54,12 @@ export const ACCOUNTING_NAV_SECTIONS: AccountingNavSection[] = [
         label: "Audit trail",
         description: "Data change log for the branch.",
       },
+      {
+        href: "/accounting/pos-statement",
+        label: "POS statement",
+        description:
+          "Open shift cash declaration, post variances, and close the POS session.",
+      },
     ],
   },
   {

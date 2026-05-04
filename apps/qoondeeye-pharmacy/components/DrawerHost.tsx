@@ -8,7 +8,7 @@ import {
   SheetDescription,
   SheetHeader,
   SheetTitle,
-} from "@repo/ui/sheet";
+} from "@/components/ui/sheet";
 
 export type DrawerPayload = {
   title: string;

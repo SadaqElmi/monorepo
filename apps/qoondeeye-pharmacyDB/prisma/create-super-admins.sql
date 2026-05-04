@@ -1,5 +1,5 @@
 -- Create public.super_admins if missing (used by SystemUser model).
--- Run with: npx prisma db execute --file prisma/create-super-admins.sql
+-- Run with (from apps/qoondeeye-pharmacyDB): pnpm exec prisma db execute --file prisma/create-super-admins.sql
 
 CREATE TABLE IF NOT EXISTS "public"."super_admins" (
   "id" UUID NOT NULL DEFAULT gen_random_uuid(),

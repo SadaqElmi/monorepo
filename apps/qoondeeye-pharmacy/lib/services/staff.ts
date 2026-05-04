@@ -4,7 +4,7 @@ import { type JsonHeaders, jsonFetch } from "./http";
 export type StaffMember = {
   id: string;
   name: string | null;
-  cashier_id?: string | null;
+  staff_id?: string | null;
   email: string | null;
   role: string | null;
   branch_id?: string | null;
@@ -24,7 +24,7 @@ export async function createStaff(
   tenantSlug: string,
   input: {
     name?: string;
-    cashierId?: string;
+    staffId?: string;
     email?: string;
     password?: string;
     role?: string;
@@ -49,7 +49,7 @@ export async function updateStaff(
   id: string,
   input: {
     name?: string;
-    cashierId?: string;
+    staffId?: string;
     email?: string;
     password?: string;
     role?: string;

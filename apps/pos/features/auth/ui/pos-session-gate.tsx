@@ -3,9 +3,9 @@
 import * as React from "react";
 import Link from "next/link";
 
-import { Button } from "@repo/ui/button";
-import { Card } from "@repo/ui/card";
-import { Input } from "@repo/ui/input";
+import { Button } from "@/components/ui/button";
+import { Card } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
 import { LogIn, LogOut } from "lucide-react";
 
 import {

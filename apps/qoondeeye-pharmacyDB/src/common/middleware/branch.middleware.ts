@@ -11,6 +11,7 @@ import {
   requiresAssignedBranch,
 } from '../security/branch-access.policy';
 import { ALL_ACCOUNTING_PERMISSIONS } from '../security/accounting-permissions';
+import { expressRequestPathname } from '../http/express-request-path';
 
 type JwtPayload =
   | {
@@ -275,12 +276,13 @@ export class BranchMiddleware implements NestMiddleware {
 
   async use(req: Request, res: Response, next: NextFunction) {
     // Keep these public routes branch-agnostic.
+    const pathname = expressRequestPathname(req);
     const isPublicRoute =
-      req.path.startsWith('/api/auth') ||
-      req.path.startsWith('/api/tenants') ||
-      req.path.startsWith('/api/domains') ||
-      req.path.startsWith('/api/system-users') ||
-      req.path === '/api';
+      pathname.startsWith('/api/auth') ||
+      pathname.startsWith('/api/tenants') ||
+      pathname.startsWith('/api/domains') ||
+      pathname.startsWith('/api/system-users') ||
+      pathname === '/api';
     if (isPublicRoute) return next();
 
     // System host / system routes: no tenant, no branch filtering.
@@ -349,16 +351,24 @@ export class BranchMiddleware implements NestMiddleware {
       headerBranchValue?.toLowerCase() === 'all' &&
       isTenantWideReadAllBranchesRoute(path);
 
+    /** POS register + shift / statement / X-Z reports (`PosSessionsController` under `/api/pos`). */
+    const isPosAppMutation =
+      path === '/api/pos' || path.startsWith('/api/pos/');
+
     const cashierPosMutation =
       roleLower === 'cashier' &&
       mutation &&
-      [
-        '/api/sales',
-        '/api/sale-returns',
-        '/api/return-vouchers',
-        '/api/vouchers',
-        '/api/transactions',
-      ].some((p) => path === p || path.startsWith(`${p}/`));
+      (isPosAppMutation ||
+        [
+          '/api/sales',
+          '/api/sale-returns',
+          '/api/return-vouchers',
+          '/api/vouchers',
+          '/api/transactions',
+        ].some((p) => path === p || path.startsWith(`${p}/`)));
+
+    const pharmacistPosMutation =
+      roleLower === 'pharmacist' && mutation && isPosAppMutation;
 
     const transferOperationalMutation =
       mutation && isStockTransferOperationalMutation(path);
@@ -366,12 +376,14 @@ export class BranchMiddleware implements NestMiddleware {
     // Global CRUD restriction:
     // - Reads (GET) allowed for all tenant roles
     // - Mutations (POST/PATCH/DELETE) allowed for admin/manager, cashier on POS APIs, or
+    //   pharmacist on `/api/pos` (shift/statement), or
     //   any tenant user on operational transfer mutations (create/update/confirm/request-approval/ship/receive;
     //   branch enforced in TransfersService)
     if (
       mutation &&
       !isBranchSuperUser &&
       !cashierPosMutation &&
+      !pharmacistPosMutation &&
       !transferOperationalMutation
     ) {
       await this.appendSecurityAudit(schemaName, {

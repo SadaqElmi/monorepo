@@ -4,14 +4,14 @@ import * as React from "react";
 import { createPortal } from "react-dom";
 import JsBarcode from "jsbarcode";
 
-import { Button } from "@repo/ui/button";
+import { Button } from "@/components/ui/button";
 import {
   Card,
   CardContent,
   CardFooter,
   CardHeader,
   CardTitle,
-} from "@repo/ui/card";
+} from "@/components/ui/card";
 
 type ReturnVoucherPrintProps = {
   voucherId: string;

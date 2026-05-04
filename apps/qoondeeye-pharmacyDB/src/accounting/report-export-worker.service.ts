@@ -12,6 +12,7 @@ import {
   writeProfitLossXlsx,
 } from './report-export.generator';
 import { ReportExportJobsService } from './report-export-jobs.service';
+import { TenantService } from '../tenant/tenant.service';
 
 @Injectable()
 export class ReportExportWorkerService {
@@ -21,6 +22,7 @@ export class ReportExportWorkerService {
     private readonly prisma: PrismaService,
     private readonly reports: FinancialReportsService,
     private readonly jobs: ReportExportJobsService,
+    private readonly tenantService: TenantService,
   ) {}
 
   private exportDir(): string {
@@ -39,6 +41,7 @@ export class ReportExportWorkerService {
     });
     for (const { schemaName } of tenants) {
       try {
+        await this.tenantService.applyTenantSchemaPatches(schemaName);
         await this.jobs.releaseStaleProcessingJobs(schemaName);
         await this.processOneJob(schemaName);
       } catch (e) {

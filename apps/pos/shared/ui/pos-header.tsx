@@ -1,7 +1,7 @@
 "use client";
 
 import * as React from "react";
-import { Input } from "@repo/ui/input";
+import { Input } from "@/components/ui/input";
 import { Calculator } from "lucide-react";
 
 type PosHeaderProps = {

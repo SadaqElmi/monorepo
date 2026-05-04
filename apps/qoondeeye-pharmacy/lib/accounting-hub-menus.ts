@@ -36,7 +36,10 @@ export const ACCOUNTING_HUB_MENUS: HubMenu[] = [
     sections: [
       {
         heading: "Transactions",
-        items: [{ label: "Journal Entries", href: "/accounting/journals" }],
+        items: [
+          { label: "Journal Entries", href: "/accounting/journals" },
+          { label: "POS statement", href: "/accounting/pos-statement" },
+        ],
       },
       {
         heading: "Assets and liabilities",

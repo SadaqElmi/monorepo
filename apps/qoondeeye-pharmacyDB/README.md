@@ -24,8 +24,10 @@ Database
 
 ### 1. Install dependencies
 
+From the **monorepo root** (not only this folder):
+
 ```bash
-npm install
+pnpm install
 ```
 
 ### 2. Configure database
@@ -49,7 +51,7 @@ POS_DEVICE_ENFORCED_TENANTS=pharmacy1,pharmacy2
 ### 3. Run migrations
 
 ```bash
-npm run prisma:migrate
+pnpm run prisma:migrate
 ```
 
 This creates the `public` and `tenant_template` schemas.
@@ -57,13 +59,13 @@ This creates the `public` and `tenant_template` schemas.
 ### 4. Generate Prisma client
 
 ```bash
-npm run prisma:generate
+pnpm run prisma:generate
 ```
 
 ### 5. Start the server
 
 ```bash
-npm run start:dev
+pnpm run start:dev
 ```
 
 ## API
@@ -96,12 +98,12 @@ npm run start:dev
 
 | Script                          | Description             |
 | ------------------------------- | ----------------------- |
-| `npm run start:dev`             | Start with hot reload   |
-| `npm run build`                 | Build for production    |
-| `npm run prisma:generate`       | Generate Prisma client  |
-| `npm run prisma:migrate`        | Run migrations (dev)    |
-| `npm run prisma:migrate:deploy` | Apply migrations (prod) |
-| `npm run prisma:studio`         | Open Prisma Studio      |
+| `pnpm run start:dev`             | Start with hot reload   |
+| `pnpm run build`                 | Build for production    |
+| `pnpm run prisma:generate`       | Generate Prisma client  |
+| `pnpm run prisma:migrate`        | Run migrations (dev)    |
+| `pnpm run prisma:migrate:deploy` | Apply migrations (prod) |
+| `pnpm run prisma:studio`         | Open Prisma Studio      |
 
 ## Tenant schema tables
 

@@ -65,8 +65,8 @@ export class AccountingPostingService {
           partnerId: custId,
         });
       } else {
-        const payKey = normalizePaymentKey(paymentMethod);
-        const clearingId = this.seed.resolvePaymentAccount(accounts, payKey);
+        const bucket = classifyPaymentMethod(paymentMethod);
+        const clearingId = this.seed.resolvePaymentAccount(accounts, bucket);
         lines.push({ accountId: clearingId, debit: revenue, credit: 0 });
         lines.push({
           accountId: accounts.sales_revenue,
@@ -779,6 +779,73 @@ export class AccountingPostingService {
           credit: amt,
         },
       ],
+    });
+  }
+
+  /**
+   * Till count variance only (per-sale revenue already posted).
+   * Shortage: Dr shortage expense / Cr clearing. Overage: Dr clearing / Cr overage income.
+   */
+  async postPosStatementVarianceJournal(
+    tx: Prisma.TransactionClient,
+    params: {
+      branchId: string;
+      statementId: string;
+      lines: Array<{ paymentBucket: string; difference: number }>;
+      entryDate: Date | string;
+    },
+  ): Promise<{ id: string } | null> {
+    const { branchId, statementId, lines, entryDate } = params;
+    const accounts = await this.seed.ensureAccountsForBranch(tx, branchId);
+    const journalLines: JournalLineInput[] = [];
+
+    const clearingForStatementBucket = (bucket: string): string => {
+      const b = bucket.trim().toLowerCase();
+      if (b === 'card') return this.seed.resolvePaymentAccount(accounts, 'card');
+      if (b === 'wallet')
+        return this.seed.resolvePaymentAccount(accounts, 'wallet');
+      return this.seed.resolvePaymentAccount(accounts, 'cash');
+    };
+
+    for (const ln of lines) {
+      const diff = round2(Number(ln.difference ?? 0));
+      if (Math.abs(diff) < 0.005) continue;
+      const clearingId = clearingForStatementBucket(ln.paymentBucket);
+      if (diff < 0) {
+        const amt = round2(Math.abs(diff));
+        journalLines.push({
+          accountId: accounts.cash_shortage_expense,
+          debit: amt,
+          credit: 0,
+        });
+        journalLines.push({
+          accountId: clearingId,
+          debit: 0,
+          credit: amt,
+        });
+      } else {
+        journalLines.push({
+          accountId: clearingId,
+          debit: diff,
+          credit: 0,
+        });
+        journalLines.push({
+          accountId: accounts.cash_overage_income,
+          debit: 0,
+          credit: diff,
+        });
+      }
+    }
+
+    if (journalLines.length === 0) return null;
+
+    return this.journal.createBalancedEntry(tx, {
+      branchId,
+      entryDate,
+      description: `POS statement ${statementId}`,
+      sourceType: 'pos_statement',
+      sourceId: statementId,
+      lines: journalLines,
     });
   }
 

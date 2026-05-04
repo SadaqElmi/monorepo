@@ -1,7 +1,7 @@
 import { Body, Controller, Post } from '@nestjs/common';
 import { AuthService } from './auth.service';
 import {
-  CashierLoginDto,
+  StaffLoginDto,
   LoginDto,
   PinLoginDto,
   PosDeviceEnrollDto,
@@ -34,13 +34,14 @@ export class AuthController {
       pin: dto.pin,
       tenant: dto.tenant,
       branchId: dto.branchId,
+      staffId: dto.staffId,
     });
   }
 
-  @Post('cashier-login')
-  cashierLogin(@Body() dto: CashierLoginDto) {
-    return this.authService.cashierLogin({
-      cashierId: dto.cashierId,
+  @Post('staff-login')
+  staffLogin(@Body() dto: StaffLoginDto) {
+    return this.authService.staffLogin({
+      staffId: dto.staffId,
       pin: dto.pin,
       deviceCredential: dto.deviceCredential,
       branchId: dto.branchId,

@@ -1,4 +1,18 @@
 -- Device-bound POS login foundation.
+
+-- Some databases lack baseline public SaaS tables (init never applied). FK requires tenants.
+CREATE TABLE IF NOT EXISTS "public"."tenants" (
+  "id" UUID NOT NULL DEFAULT gen_random_uuid(),
+  "name" VARCHAR(255) NOT NULL,
+  "schema_name" VARCHAR(100) NOT NULL,
+  "status" VARCHAR(20) NOT NULL DEFAULT 'active',
+  "created_at" TIMESTAMP(6) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  CONSTRAINT "tenants_pkey" PRIMARY KEY ("id")
+);
+
+CREATE UNIQUE INDEX IF NOT EXISTS "tenants_schema_name_key"
+  ON "public"."tenants"("schema_name");
+
 CREATE TABLE IF NOT EXISTS "public"."pos_devices" (
   "id" UUID NOT NULL DEFAULT gen_random_uuid(),
   "tenant_id" UUID NOT NULL,

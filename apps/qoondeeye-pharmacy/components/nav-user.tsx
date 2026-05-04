@@ -2,8 +2,8 @@
 
 import { LogOut, User } from "lucide-react";
 
-import { Avatar, AvatarFallback } from "@repo/ui/avatar";
-import { Button } from "@repo/ui/button";
+import { Avatar, AvatarFallback } from "@/components/ui/avatar";
+import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -11,7 +11,7 @@ import {
   DropdownMenuLabel,
   DropdownMenuSeparator,
   DropdownMenuTrigger,
-} from "@repo/ui/dropdown-menu";
+} from "@/components/ui/dropdown-menu";
 
 function formatRole(role: string) {
   return role

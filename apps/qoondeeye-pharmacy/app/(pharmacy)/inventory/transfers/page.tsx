@@ -25,16 +25,16 @@ import {
   canEditTransferLimited,
   isTransferLocked,
 } from "@/components/features/stock-transfers/transfer-rules";
-import { Button } from "@repo/ui/button";
-import { Card, CardContent } from "@repo/ui/card";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent } from "@/components/ui/card";
 import {
   Select,
   SelectContent,
   SelectItem,
   SelectTrigger,
   SelectValue,
-} from "@repo/ui/select";
-import { Input } from "@repo/ui/input";
+} from "@/components/ui/select";
+import { Input } from "@/components/ui/input";
 import { getStoredUser } from "@/lib/auth-client";
 import { getBranches } from "@/lib/services/branches";
 import { listTransfers } from "@/lib/services/transfers";

@@ -12,7 +12,7 @@ import {
 export class CreateProductDto {
   @IsString()
   @MinLength(1)
-  name: string;
+  name!: string;
 
   /** When true, product is visible to all branches (branch_id stored as NULL). */
   @IsOptional()

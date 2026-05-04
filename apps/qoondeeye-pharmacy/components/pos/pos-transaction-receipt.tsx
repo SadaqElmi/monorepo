@@ -3,9 +3,9 @@
 import * as React from "react";
 import { Building2, CreditCard } from "lucide-react";
 
-import { Badge } from "@repo/ui/badge";
-import { Card, CardContent, CardFooter } from "@repo/ui/card";
-import { Separator } from "@repo/ui/separator";
+import { Badge } from "@/components/ui/badge";
+import { Card, CardContent, CardFooter } from "@/components/ui/card";
+import { Separator } from "@/components/ui/separator";
 import {
   Table,
   TableBody,
@@ -13,8 +13,9 @@ import {
   TableHead,
   TableHeader,
   TableRow,
-} from "@repo/ui/table";
+} from "@/components/ui/table";
 import type { PosTransaction, PosTransactionLine } from "@repo/types";
+import { POS_TAX_RATE } from "@repo/types";
 import { cn, formatMoney } from "@repo/utils";
 
 export type { PosTransaction, PosTransactionLine };
@@ -166,7 +167,7 @@ export function PosTransactionReceipt({
             <span className="font-semibold tabular-nums">{formatMoney(tx.subtotal)}</span>
           </div>
           <div className="flex justify-between text-[11px]">
-            <span className="receipt-muted">VAT (15%)</span>
+            <span className="receipt-muted">{`VAT (${Math.round(POS_TAX_RATE * 100)}%)`}</span>
             <span className="font-semibold tabular-nums">{formatMoney(tx.tax)}</span>
           </div>
           <div className="flex justify-between text-[11px]">

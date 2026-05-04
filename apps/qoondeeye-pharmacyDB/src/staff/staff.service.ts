@@ -114,8 +114,20 @@ export class StaffService {
     };
   }
 
-  /** Reject if another cashier in the tenant already uses this PIN. */
-  private async assertCashierPinUnique(
+  /** Roles that may use POS PIN login (aligned with AuthService pin/staff login). */
+  private static readonly POS_PIN_ROLES = new Set([
+    'cashier',
+    'manager',
+    'admin',
+    'pharmacist',
+  ]);
+
+  private canUsePosPin(roleLower: string): boolean {
+    return StaffService.POS_PIN_ROLES.has(normalizeRole(roleLower));
+  }
+
+  /** Reject if another POS-eligible user in the tenant already uses this PIN. */
+  private async assertPosPinUnique(
     schemaName: string,
     plainPin: string,
     excludeUserId?: string,
@@ -126,7 +138,7 @@ export class StaffService {
       `SELECT u.id, u.pin_hash
        FROM "${schemaName}"."users" u
        INNER JOIN "${schemaName}"."roles" r ON u.role_id = r.id
-       WHERE lower(r.name) = 'cashier'
+       WHERE lower(r.name) IN ('cashier', 'manager', 'admin', 'pharmacist')
          AND u.pin_hash IS NOT NULL
          AND ($1::uuid IS NULL OR u.id <> $1::uuid)`,
       excludeUserId ?? null,
@@ -135,7 +147,7 @@ export class StaffService {
     for (const row of rows) {
       if (await bcrypt.compare(plainPin, row.pin_hash)) {
         throw new BadRequestException(
-          'This PIN is already in use by another cashier',
+          'This PIN is already in use by another staff member',
         );
       }
     }
@@ -161,7 +173,7 @@ export class StaffService {
       return this.prisma.queryRawUnsafe(
         `SELECT u.id,
                 u.name,
-                u.cashier_id,
+                u.staff_id,
                 u.email,
                 r.name AS role,
                 u.branch_id,
@@ -176,7 +188,7 @@ export class StaffService {
       return this.prisma.queryRawUnsafe(
         `SELECT u.id,
                 u.name,
-                u.cashier_id,
+                u.staff_id,
                 u.email,
                 u.role AS role,
                 u.branch_id,
@@ -189,7 +201,7 @@ export class StaffService {
     return this.prisma.queryRawUnsafe(
       `SELECT u.id,
               u.name,
-              u.cashier_id,
+              u.staff_id,
               u.email,
               NULL::text AS role,
               u.branch_id,
@@ -219,7 +231,7 @@ export class StaffService {
       [row] = await this.prisma.queryRawUnsafe<any[]>(
         `SELECT u.id,
                 u.name,
-                u.cashier_id,
+                u.staff_id,
                 u.email,
                 r.name AS role,
                 u.branch_id,
@@ -233,7 +245,7 @@ export class StaffService {
       [row] = await this.prisma.queryRawUnsafe<any[]>(
         `SELECT u.id,
                 u.name,
-                u.cashier_id,
+                u.staff_id,
                 u.email,
                 u.role AS role,
                 u.branch_id,
@@ -246,7 +258,7 @@ export class StaffService {
       [row] = await this.prisma.queryRawUnsafe<any[]>(
         `SELECT u.id,
                 u.name,
-                u.cashier_id,
+                u.staff_id,
                 u.email,
                 NULL::text AS role,
                 u.branch_id,
@@ -263,7 +275,7 @@ export class StaffService {
     schemaName: string,
     dto: {
       name?: string;
-      cashierId?: string;
+      staffId?: string;
       email?: string;
       password?: string;
       role?: string;
@@ -296,17 +308,31 @@ export class StaffService {
 
     const roleName = dto.role?.trim() ? dto.role.trim() : null;
     const roleLower = normalizeRole(roleName);
-    const cashierId = dto.cashierId?.trim() || null;
+    const staffId = dto.staffId?.trim() || null;
     const actorRoleLower = normalizeRole(actorRole);
     const actorHasGlobalAccess = hasGlobalBranchAccess(actorRoleLower);
     const pinPlain = dto.pin?.trim() ?? '';
     let pinHash: string | null = null;
     if (meta.hasPinHash && pinPlain.length > 0) {
-      if (roleName?.toLowerCase() !== 'cashier') {
-        throw new BadRequestException('PIN can only be set for cashier role');
+      if (!this.canUsePosPin(roleLower)) {
+        throw new BadRequestException(
+          'PIN can only be set for cashier, manager, admin, or pharmacist roles',
+        );
       }
-      await this.assertCashierPinUnique(schemaName, pinPlain);
+      await this.assertPosPinUnique(schemaName, pinPlain);
       pinHash = await import('bcrypt').then((m) => m.hash(pinPlain, 10));
+    } else if (
+      meta.hasPinHash &&
+      pinPlain.length === 0 &&
+      dto.password &&
+      /^\d{4,12}$/.test(dto.password.trim())
+    ) {
+      /** POS keypad login uses `pin_hash`; sync numeric web passwords when `pin` is omitted. */
+      if (this.canUsePosPin(roleLower)) {
+        const syncPin = dto.password.trim();
+        await this.assertPosPinUnique(schemaName, syncPin);
+        pinHash = await import('bcrypt').then((m) => m.hash(syncPin, 10));
+      }
     }
 
     let inserted: any = null;
@@ -324,9 +350,9 @@ export class StaffService {
         `Role "${roleName ?? 'staff'}" requires a branch assignment`,
       );
     }
-    if (roleLower === 'cashier' && !cashierId) {
+    if (roleLower === 'cashier' && !staffId) {
       throw new BadRequestException(
-        'Cashier ID is required for cashier accounts',
+        'Staff ID is required for cashier accounts',
       );
     }
     if (
@@ -356,11 +382,11 @@ export class StaffService {
 
       if (meta.hasPinHash) {
         [inserted] = await this.prisma.queryRawUnsafe<any[]>(
-          `INSERT INTO ${userTable} (name, cashier_id, email, password, role_id, pin_hash, branch_id)
+          `INSERT INTO ${userTable} (name, staff_id, email, password, role_id, pin_hash, branch_id)
            VALUES ($1, $2, $3, $4, $5::uuid, $6, $7::uuid)
            RETURNING id`,
           dto.name ?? null,
-          cashierId,
+          staffId,
           dto.email ?? null,
           hashed,
           roleId,
@@ -369,11 +395,11 @@ export class StaffService {
         );
       } else {
         [inserted] = await this.prisma.queryRawUnsafe<any[]>(
-          `INSERT INTO ${userTable} (name, cashier_id, email, password, role_id, branch_id)
+          `INSERT INTO ${userTable} (name, staff_id, email, password, role_id, branch_id)
            VALUES ($1, $2, $3, $4, $5::uuid, $6::uuid)
            RETURNING id`,
           dto.name ?? null,
-          cashierId,
+          staffId,
           dto.email ?? null,
           hashed,
           roleId,
@@ -383,11 +409,11 @@ export class StaffService {
     } else if (meta.hasRoleText) {
       if (meta.hasPinHash) {
         [inserted] = await this.prisma.queryRawUnsafe<any[]>(
-          `INSERT INTO ${userTable} (name, cashier_id, email, password, role, pin_hash, branch_id)
+          `INSERT INTO ${userTable} (name, staff_id, email, password, role, pin_hash, branch_id)
            VALUES ($1, $2, $3, $4, $5, $6, $7::uuid)
            RETURNING id`,
           dto.name ?? null,
-          cashierId,
+          staffId,
           dto.email ?? null,
           hashed,
           roleName,
@@ -396,11 +422,11 @@ export class StaffService {
         );
       } else {
         [inserted] = await this.prisma.queryRawUnsafe<any[]>(
-          `INSERT INTO ${userTable} (name, cashier_id, email, password, role, branch_id)
+          `INSERT INTO ${userTable} (name, staff_id, email, password, role, branch_id)
            VALUES ($1, $2, $3, $4, $5, $6::uuid)
            RETURNING id`,
           dto.name ?? null,
-          cashierId,
+          staffId,
           dto.email ?? null,
           hashed,
           roleName,
@@ -410,11 +436,11 @@ export class StaffService {
     } else {
       if (meta.hasPinHash) {
         [inserted] = await this.prisma.queryRawUnsafe<any[]>(
-          `INSERT INTO ${userTable} (name, cashier_id, email, password, pin_hash, branch_id)
+          `INSERT INTO ${userTable} (name, staff_id, email, password, pin_hash, branch_id)
            VALUES ($1, $2, $3, $4, $5, $6::uuid)
            RETURNING id`,
           dto.name ?? null,
-          cashierId,
+          staffId,
           dto.email ?? null,
           hashed,
           pinHash,
@@ -422,11 +448,11 @@ export class StaffService {
         );
       } else {
         [inserted] = await this.prisma.queryRawUnsafe<any[]>(
-          `INSERT INTO ${userTable} (name, cashier_id, email, password, branch_id)
+          `INSERT INTO ${userTable} (name, staff_id, email, password, branch_id)
            VALUES ($1, $2, $3, $4, $5::uuid)
            RETURNING id`,
           dto.name ?? null,
-          cashierId,
+          staffId,
           dto.email ?? null,
           hashed,
           targetBranchId,
@@ -446,7 +472,7 @@ export class StaffService {
     id: string,
     dto: {
       name?: string;
-      cashierId?: string;
+      staffId?: string;
       email?: string;
       password?: string;
       role?: string;
@@ -473,7 +499,7 @@ export class StaffService {
         : `"${schemaName}".${meta.roleTable}`);
 
     const roleName = dto.role?.trim() ? dto.role.trim() : null;
-    const cashierId = dto.cashierId?.trim() || null;
+    const staffId = dto.staffId?.trim() || null;
     const actorRoleLower = normalizeRole(actorRole);
     const actorHasGlobalAccess = hasGlobalBranchAccess(actorRoleLower);
     const password =
@@ -532,11 +558,11 @@ export class StaffService {
     }
     if (
       nextRoleLower === 'cashier' &&
-      dto.cashierId !== undefined &&
-      !cashierId
+      dto.staffId !== undefined &&
+      !staffId
     ) {
       throw new BadRequestException(
-        'Cashier ID is required for cashier accounts',
+        'Staff ID is required for cashier accounts',
       );
     }
 
@@ -564,7 +590,7 @@ export class StaffService {
       [updated] = await this.prisma.queryRawUnsafe<any[]>(
         `UPDATE ${userTable}
          SET name = COALESCE($2, name),
-             cashier_id = COALESCE($3, cashier_id),
+             staff_id = COALESCE($3, staff_id),
              email = COALESCE($4, email),
              password = COALESCE($5, password),
              role_id = CASE
@@ -580,7 +606,7 @@ export class StaffService {
          RETURNING id`,
         id,
         dto.name ?? null,
-        cashierId,
+        staffId,
         dto.email ?? null,
         password,
         dto.role === undefined
@@ -596,7 +622,7 @@ export class StaffService {
       [updated] = await this.prisma.queryRawUnsafe<any[]>(
         `UPDATE ${userTable}
          SET name = COALESCE($2, name),
-             cashier_id = COALESCE($3, cashier_id),
+             staff_id = COALESCE($3, staff_id),
              email = COALESCE($4, email),
              password = COALESCE($5, password),
              role = COALESCE($6, role),
@@ -608,7 +634,7 @@ export class StaffService {
          RETURNING id`,
         id,
         dto.name ?? null,
-        cashierId,
+        staffId,
         dto.email ?? null,
         password,
         roleName,
@@ -619,7 +645,7 @@ export class StaffService {
       [updated] = await this.prisma.queryRawUnsafe<any[]>(
         `UPDATE ${userTable}
          SET name = COALESCE($2, name),
-             cashier_id = COALESCE($3, cashier_id),
+             staff_id = COALESCE($3, staff_id),
              email = COALESCE($4, email),
              password = COALESCE($5, password),
              branch_id = CASE
@@ -630,7 +656,7 @@ export class StaffService {
          RETURNING id`,
         id,
         dto.name ?? null,
-        cashierId,
+        staffId,
         dto.email ?? null,
         password,
         dto.branchId === undefined ? '__KEEP__' : '__SET__',
@@ -661,10 +687,12 @@ export class StaffService {
       }
 
       if (pinPlain.length > 0) {
-        if (roleLower !== 'cashier') {
-          throw new BadRequestException('PIN can only be set for cashier role');
+        if (!this.canUsePosPin(roleLower)) {
+          throw new BadRequestException(
+            'PIN can only be set for cashier, manager, admin, or pharmacist roles',
+          );
         }
-        await this.assertCashierPinUnique(schemaName, pinPlain, id);
+        await this.assertPosPinUnique(schemaName, pinPlain, id);
         const ph = await import('bcrypt').then((m) => m.hash(pinPlain, 10));
         await this.prisma.queryRawUnsafe(
           `UPDATE ${userTable} SET pin_hash = $2 WHERE id = $1`,
@@ -675,6 +703,25 @@ export class StaffService {
         await this.prisma.queryRawUnsafe(
           `UPDATE ${userTable} SET pin_hash = NULL WHERE id = $1`,
           id,
+        );
+      }
+    }
+
+    if (
+      meta.hasPinHash &&
+      dto.pin === undefined &&
+      dto.password !== undefined &&
+      dto.password.length > 0 &&
+      /^\d{4,12}$/.test(dto.password.trim())
+    ) {
+      const syncPin = dto.password.trim();
+      if (this.canUsePosPin(nextRoleLower)) {
+        await this.assertPosPinUnique(schemaName, syncPin, id);
+        const ph = await import('bcrypt').then((m) => m.hash(syncPin, 10));
+        await this.prisma.queryRawUnsafe(
+          `UPDATE ${userTable} SET pin_hash = $2 WHERE id = $1`,
+          id,
+          ph,
         );
       }
     }

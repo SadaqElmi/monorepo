@@ -3,9 +3,14 @@
 import React, { useEffect, useState } from "react";
 import { usePos } from "./pos-context";
 import { PosActionRow } from "./pos-action-row";
-
 export function Footer() {
-  const { mainTab, checkoutStep, transactions, currentUser } = usePos();
+  const {
+    mainTab,
+    checkoutStep,
+    transactions,
+    currentUser,
+    managerTierActiveForUi,
+  } = usePos();
   const [now, setNow] = useState(new Date());
 
   useEffect(() => {
@@ -50,14 +55,22 @@ export function Footer() {
         <div className="flex items-center gap-4">
           <div className="flex items-center gap-1">
             <span className="text-emerald-400">STAFF:</span>
-            {(currentUser?.staffId ?? "1002").slice(0, 8)} (
-            {currentUser?.name ?? "Cashier"})
+            {(currentUser?.staffId?.trim()
+              ? currentUser.staffId
+              : "1002"
+            ).slice(0, 8)}
           </div>
           <div className="flex items-center gap-1">
             <span className="text-emerald-400">MANAGER:</span>
-            <span className="rounded-sm bg-emerald-500 px-1.5 py-0.5 text-[8px] text-slate-900">
-              ACTIVE
-            </span>
+            {managerTierActiveForUi ? (
+              <span className="rounded-sm bg-emerald-500 px-1.5 py-0.5 text-[8px] text-slate-900">
+                ACTIVE
+              </span>
+            ) : (
+              <span className="rounded-sm bg-slate-600 px-1.5 py-0.5 text-[8px] text-slate-200">
+                INACTIVE
+              </span>
+            )}
           </div>
           <div className="flex items-center gap-2 border-l border-white/20 pl-4 font-mono">
             <span>{formattedDate}</span>

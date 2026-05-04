@@ -9,7 +9,7 @@ import {
 export class CreateTenantDto {
   @IsString()
   @MinLength(1)
-  name: string;
+  name!: string;
 
   /** Primary domain (e.g. pharmacy1.pharmcare.my). SchemaName auto-derived from subdomain. */
   @IsOptional()

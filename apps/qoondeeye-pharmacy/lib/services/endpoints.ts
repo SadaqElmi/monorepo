@@ -49,3 +49,5 @@ export const TRANSFERS_PREFIX = apiUrl(
   process.env.NEXT_PUBLIC_TRANSFERS_API_PATH ?? "api/transfers",
 );
 
+/** POS device / shift APIs (cash declaration, Z-report data). */
+export const POS_PREFIX = `${API_BASE}/api/pos`;

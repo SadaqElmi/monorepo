@@ -10,7 +10,7 @@ const COOKIE_MAX_AGE_DAYS = 7;
 
 export type StoredUser = {
   id: string;
-  /** Empty for some cashier accounts */
+  /** Empty for some POS staff (cashier role) accounts */
   email?: string;
   name: string | null;
   userType?: "system" | "tenant";

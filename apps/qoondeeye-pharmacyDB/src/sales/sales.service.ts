@@ -5,9 +5,12 @@ import { TenantService } from '../tenant/tenant.service';
 import { AccountingPostingService } from '../accounting/accounting-posting.service';
 import { AccountingLockDateService } from '../accounting/accounting-lock-date.service';
 import { AuditLogService } from '../accounting/audit-log.service';
+import { maxSaleDiscountPercentForRole } from './sales-discount.policy';
 
 export type SalesMutationContext = {
   actorUserId?: string | null;
+  /** JWT role for POS discount caps (cashier/pharmacist 1%; manager/admin 10%). */
+  requestUserRole?: string | null;
 };
 
 @Injectable()
@@ -25,11 +28,12 @@ export class SalesService {
     await this.tenantService.applyTenantSchemaPatches(schemaName);
     return this.prisma.withTenantSchema(schemaName, (tx) =>
       tx.$queryRawUnsafe(
-        `SELECT id, branch_id, receipt_number, total_amount, discount, tax, sale_date,
-                customer_id, on_account
-         FROM sales
-         WHERE branch_id = ANY($1::uuid[])
-         ORDER BY sale_date DESC`,
+        `SELECT s.id, s.branch_id, s.receipt_number, s.total_amount, s.discount, s.tax, s.sale_date,
+                s.customer_id, s.on_account,
+                (SELECT p.method FROM payments p WHERE p.sale_id = s.id ORDER BY p.paid_at ASC NULLS LAST LIMIT 1) AS payment_method
+         FROM sales s
+         WHERE s.branch_id = ANY($1::uuid[])
+         ORDER BY s.sale_date DESC`,
         allowedBranchIds,
       ),
     );
@@ -39,16 +43,17 @@ export class SalesService {
     await this.tenantService.applyTenantSchemaPatches(schemaName);
     return this.prisma.withTenantSchema(schemaName, async (tx) => {
       const [row] = await tx.$queryRawUnsafe<any[]>(
-        `SELECT id, branch_id, receipt_number, total_amount, discount, tax, sale_date,
-                customer_id, on_account
-         FROM sales
-         WHERE id = $1 AND branch_id = ANY($2::uuid[])`,
+        `SELECT s.id, s.branch_id, s.receipt_number, s.total_amount, s.discount, s.tax, s.sale_date,
+                s.customer_id, s.on_account,
+                (SELECT p.method FROM payments p WHERE p.sale_id = s.id ORDER BY p.paid_at ASC NULLS LAST LIMIT 1) AS payment_method
+         FROM sales s
+         WHERE s.id = $1 AND s.branch_id = ANY($2::uuid[])`,
         id,
         allowedBranchIds,
       );
       if (!row) return null;
       const items = await tx.$queryRawUnsafe<any[]>(
-        `SELECT id, sale_id, branch_id, product_id, batch_id, quantity, price, total
+        `SELECT id, sale_id, branch_id, product_id, batch_id, quantity, price, total, misc_charge_kind
          FROM sale_items
          WHERE sale_id = $1
          ORDER BY id`,
@@ -74,19 +79,20 @@ export class SalesService {
     await this.tenantService.applyTenantSchemaPatches(schemaName);
     return this.prisma.withTenantSchema(schemaName, async (tx) => {
       const [row] = await tx.$queryRawUnsafe<any[]>(
-        `SELECT id, branch_id, receipt_number, total_amount, discount, tax, sale_date,
-                customer_id, on_account
-         FROM sales
-         WHERE branch_id = $1::uuid
-           AND branch_id = ANY($2::uuid[])
-           AND receipt_number = ANY($3::text[])`,
+        `SELECT s.id, s.branch_id, s.receipt_number, s.total_amount, s.discount, s.tax, s.sale_date,
+                s.customer_id, s.on_account,
+                (SELECT p.method FROM payments p WHERE p.sale_id = s.id ORDER BY p.paid_at ASC NULLS LAST LIMIT 1) AS payment_method
+         FROM sales s
+         WHERE s.branch_id = $1::uuid
+           AND s.branch_id = ANY($2::uuid[])
+           AND s.receipt_number = ANY($3::text[])`,
         branchId,
         allowedBranchIds,
         variants,
       );
       if (!row) return null;
       const items = await tx.$queryRawUnsafe<any[]>(
-        `SELECT id, sale_id, branch_id, product_id, batch_id, quantity, price, total
+        `SELECT id, sale_id, branch_id, product_id, batch_id, quantity, price, total, misc_charge_kind
          FROM sale_items
          WHERE sale_id = $1
          ORDER BY id`,
@@ -119,8 +125,10 @@ export class SalesService {
       paymentMethod?: string;
       onAccount?: boolean;
       customerId?: string;
+      posSessionId?: string;
       items: Array<{
-        productId: string;
+        productId?: string;
+        miscChargeKind?: string;
         quantity: number;
         price?: number;
       }>;
@@ -128,6 +136,30 @@ export class SalesService {
     ctx?: SalesMutationContext,
   ) {
     await this.tenantService.applyTenantSchemaPatches(schemaName);
+
+    let lineSubtotal = 0;
+    for (const item of dto.items) {
+      lineSubtotal += Number(item.quantity ?? 0) * Number(item.price ?? 0);
+    }
+    const discountAmt = Number(dto.discount ?? 0);
+    if (!Number.isFinite(discountAmt) || discountAmt < 0) {
+      throw new BadRequestException('Invalid discount amount');
+    }
+    const maxPct = maxSaleDiscountPercentForRole(ctx?.requestUserRole);
+    if (lineSubtotal <= 0 && discountAmt > 0) {
+      throw new BadRequestException(
+        'Discount is not allowed when line subtotal is zero',
+      );
+    }
+    if (lineSubtotal > 0 && discountAmt > 0) {
+      const pct = (discountAmt / lineSubtotal) * 100;
+      if (pct > maxPct + 1e-6) {
+        throw new BadRequestException(
+          `Discount exceeds the maximum ${maxPct}% allowed for your role`,
+        );
+      }
+    }
+
     return this.prisma.withTenantSchema(schemaName, async (tx) => {
       await this.lockDates.assertDocumentDateOpen(tx, branchId, new Date());
       const onAccount = Boolean(dto.onAccount);
@@ -153,11 +185,29 @@ export class SalesService {
 
       const receiptNumber = await this.nextReceiptNumber(tx, branchId);
 
+      let posSessionId: string | null = null;
+      const psRaw = dto.posSessionId?.trim();
+      if (psRaw) {
+        const [sess] = await tx.$queryRawUnsafe<{ id: string }[]>(
+          `SELECT id FROM pos_sessions
+           WHERE id = $1::uuid AND branch_id = $2::uuid AND status = 'open'`,
+          psRaw,
+          branchId,
+        );
+        if (!sess) {
+          throw new BadRequestException(
+            'Invalid or closed POS session for this branch',
+          );
+        }
+        posSessionId = sess.id;
+      }
+
       const [row] = await tx.$queryRawUnsafe<any[]>(
-        `INSERT INTO sales (branch_id, receipt_number, total_amount, discount, tax, customer_id, on_account)
-         VALUES ($1, $2, $3, COALESCE($4::numeric, 0::numeric), COALESCE($5::numeric, 0::numeric), $6::uuid, $7)
+        `INSERT INTO sales (branch_id, pos_session_id, receipt_number, total_amount, discount, tax, customer_id, on_account)
+         VALUES ($1, $2::uuid, $3, $4, COALESCE($5::numeric, 0::numeric), COALESCE($6::numeric, 0::numeric), $7::uuid, $8)
          RETURNING id, branch_id, receipt_number, total_amount, discount, tax, sale_date, customer_id, on_account`,
         branchId,
+        posSessionId,
         receiptNumber,
         dto.totalAmount ?? computedTotal ?? null,
         dto.discount ?? 0,
@@ -168,6 +218,8 @@ export class SalesService {
 
       let cogsTotal = 0;
 
+      const miscKinds = new Set(['delivery', 'tailor']);
+
       for (const item of dto.items) {
         const qty = Number(item.quantity ?? 0);
         if (qty <= 0) {
@@ -176,19 +228,53 @@ export class SalesService {
           );
         }
 
+        const miscRaw = item.miscChargeKind?.trim();
+        const pid = item.productId?.trim();
+        const hasMisc = Boolean(miscRaw);
+        const hasProd = Boolean(pid);
+        if (hasMisc === hasProd) {
+          throw new BadRequestException(
+            'Each item must have exactly one of productId or miscChargeKind',
+          );
+        }
+
+        if (miscRaw) {
+          if (!miscKinds.has(miscRaw)) {
+            throw new BadRequestException('Invalid miscChargeKind');
+          }
+          let unitPrice = Number(item.price ?? 0);
+          if (!Number.isFinite(unitPrice) || unitPrice <= 0) {
+            throw new BadRequestException(
+              'Manual charge lines require a positive unit price',
+            );
+          }
+          const lineTotal = unitPrice * qty;
+          await tx.$queryRawUnsafe(
+            `INSERT INTO sale_items (sale_id, branch_id, product_id, batch_id, quantity, price, total, misc_charge_kind)
+             VALUES ($1::uuid, $2::uuid, NULL, NULL, $3, $4, $5, $6)`,
+            row.id,
+            branchId,
+            qty,
+            unitPrice,
+            lineTotal,
+            miscRaw,
+          );
+          continue;
+        }
+
         await this.inventoryService.ensureBatchesCoverAggregate(tx, {
           branchId,
-          productId: item.productId,
+          productId: pid!,
         });
 
         const allocations = await this.inventoryService.consumeBatchesFifo(tx, {
           branchId,
-          productId: item.productId,
+          productId: pid!,
           quantity: qty,
         });
         await this.inventoryService.decreaseStock(tx, {
           branchId,
-          productId: item.productId,
+          productId: pid!,
           quantity: qty,
         });
 
@@ -196,7 +282,7 @@ export class SalesService {
         if (unitPrice <= 0) {
           const [pRow] = await tx.$queryRawUnsafe<any[]>(
             `SELECT list_price FROM products WHERE id = $1::uuid`,
-            item.productId,
+            pid,
           );
           unitPrice = Number(pRow?.list_price ?? 0);
         }
@@ -214,7 +300,7 @@ export class SalesService {
              VALUES ($1, $2, $3, $4, $5, $6, $7)`,
             row.id,
             branchId,
-            item.productId,
+            pid,
             alloc.batchId,
             alloc.quantity,
             unitPrice > 0 ? unitPrice : null,
@@ -236,7 +322,7 @@ export class SalesService {
       );
 
       const items = await tx.$queryRawUnsafe<any[]>(
-        `SELECT id, sale_id, branch_id, product_id, batch_id, quantity, price, total
+        `SELECT id, sale_id, branch_id, product_id, batch_id, quantity, price, total, misc_charge_kind
          FROM sale_items
          WHERE sale_id = $1
          ORDER BY id`,
@@ -290,7 +376,13 @@ export class SalesService {
         },
       });
 
-      return { ...updatedSale, items };
+      const paymentMethodOut = onAccount
+        ? null
+        : payMethod && String(payMethod).trim()
+          ? String(payMethod).trim()
+          : 'cash';
+
+      return { ...updatedSale, items, payment_method: paymentMethodOut };
     });
   }
 

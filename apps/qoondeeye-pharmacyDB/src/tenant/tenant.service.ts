@@ -1,4 +1,5 @@
 import {
+  BadRequestException,
   Injectable,
   Logger,
   ConflictException,
@@ -122,9 +123,58 @@ export class TenantService {
   }
 
   async remove(id: string) {
-    await this.findOne(id);
-    await this.prisma.tenant.delete({ where: { id } });
+    const tenant = await this.findOne(id);
+    await this.dropTenantPostgresSchema(tenant.schemaName);
+    await this.prisma.$transaction(async (tx) => {
+      await tx.reconciliationLog.deleteMany({ where: { tenantId: id } });
+      await tx.reconciliationRun.deleteMany({ where: { tenantId: id } });
+      await tx.domain.deleteMany({ where: { tenantId: id } });
+      await tx.posDevice.deleteMany({ where: { tenantId: id } });
+      await tx.tenant.delete({ where: { id } });
+    });
     return { deleted: true };
+  }
+
+  /** Must never drop system/template schemas. Tenant slug is lowercase `[a-z0-9_]+`. */
+  private assertSafeTenantSchemaName(schemaName: string): void {
+    const n = schemaName.trim().toLowerCase();
+    if (!n || !/^[a-z][a-z0-9_]*$/.test(n)) {
+      throw new BadRequestException(`Invalid tenant schema name: ${schemaName}`);
+    }
+    const reserved = new Set([
+      'public',
+      'pg_catalog',
+      'information_schema',
+      'tenant_template',
+      'pg_toast',
+    ]);
+    if (reserved.has(n)) {
+      throw new BadRequestException(`Cannot drop reserved schema: ${n}`);
+    }
+  }
+
+  /** Removes all tables/objects for this pharmacy schema (per-tenant data lives here). */
+  private async dropTenantPostgresSchema(schemaName: string): Promise<void> {
+    this.assertSafeTenantSchemaName(schemaName);
+    const esc = schemaName.replace(/"/g, '""');
+    await this.prisma.$executeRawUnsafe(
+      `DROP SCHEMA IF EXISTS "${esc}" CASCADE`,
+    );
+    this.logger.log(`Dropped Postgres schema "${schemaName}"`);
+  }
+
+  /** Delete tenant row by schema name (same rules as {@link resolveSchemaName} for explicit schema). */
+  async removeBySchemaName(schemaName: string): Promise<{ deleted: boolean }> {
+    const normalized = schemaName.trim().toLowerCase().replace(/\s+/g, '_');
+    const tenant = await this.prisma.tenant.findUnique({
+      where: { schemaName: normalized },
+    });
+    if (!tenant) {
+      throw new NotFoundException(
+        `Tenant with schema "${normalized}" not found`,
+      );
+    }
+    return this.remove(tenant.id);
   }
 
   private resolveSchemaName(input: {
@@ -220,7 +270,7 @@ export class TenantService {
       `CREATE TABLE "${schemaName}"."users" (
         id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
         name VARCHAR(200),
-        cashier_id VARCHAR(120) UNIQUE,
+        staff_id VARCHAR(120) UNIQUE,
         email VARCHAR(200) UNIQUE,
         password TEXT,
         pin_hash TEXT,
@@ -505,6 +555,8 @@ export class TenantService {
    */
   async applyTenantSchemaPatches(schemaName: string): Promise<void> {
     await this.ensureTenantBranchIsolationColumns(schemaName);
+    await this.ensureSaleItemsMiscChargeKindColumn(schemaName);
+    await this.ensurePosSessionsAndStatements(schemaName);
     await this.ensureInventoryMatrixCoverage(schemaName);
     await this.ensureStockTransfersTables(schemaName);
     await this.ensureReportSnapshotsTable(schemaName);
@@ -1604,12 +1656,365 @@ export class TenantService {
   }
 
   /**
+   * Legacy tenants may predate the `batches` table; branch-isolation patches assume it exists.
+   */
+  private async ensureBatchesTable(schemaName: string): Promise<void> {
+    await this.prisma.$executeRawUnsafe(
+      `CREATE TABLE IF NOT EXISTS "${schemaName}"."batches" (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        branch_id UUID REFERENCES "${schemaName}"."branches"(id),
+        product_id UUID REFERENCES "${schemaName}"."products"(id),
+        batch_number VARCHAR(100),
+        expiry_date DATE,
+        quantity INTEGER,
+        cost_price NUMERIC(10,2),
+        selling_price NUMERIC(10,2),
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      )`,
+    );
+    await this.prisma.$executeRawUnsafe(
+      `CREATE INDEX IF NOT EXISTS idx_batches_expiry ON "${schemaName}"."batches"(expiry_date)`,
+    );
+    await this.prisma.$executeRawUnsafe(
+      `CREATE INDEX IF NOT EXISTS idx_batches_fifo ON "${schemaName}"."batches"(branch_id, product_id, expiry_date, created_at)`,
+    );
+  }
+
+  /**
+   * Legacy schemas may lack purchasing tables; branch-isolation ALTERs require them.
+   * Depends on `branches`, `products`, and `batches` (ensure `ensureBatchesTable` ran first).
+   */
+  private async ensurePurchasingTablesIfMissing(
+    schemaName: string,
+  ): Promise<void> {
+    await this.prisma.$executeRawUnsafe(
+      `CREATE TABLE IF NOT EXISTS "${schemaName}"."suppliers" (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        name VARCHAR(255),
+        phone VARCHAR(50),
+        email VARCHAR(255),
+        address TEXT,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      )`,
+    );
+    await this.prisma.$executeRawUnsafe(
+      `CREATE TABLE IF NOT EXISTS "${schemaName}"."purchases" (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        supplier_id UUID REFERENCES "${schemaName}"."suppliers"(id),
+        branch_id UUID REFERENCES "${schemaName}"."branches"(id),
+        invoice_number VARCHAR(100),
+        total_amount NUMERIC(12,2),
+        purchase_date DATE,
+        on_credit BOOLEAN DEFAULT FALSE,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      )`,
+    );
+    await this.prisma.$executeRawUnsafe(
+      `CREATE TABLE IF NOT EXISTS "${schemaName}"."purchase_items" (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        purchase_id UUID REFERENCES "${schemaName}"."purchases"(id) ON DELETE CASCADE,
+        branch_id UUID REFERENCES "${schemaName}"."branches"(id),
+        product_id UUID REFERENCES "${schemaName}"."products"(id),
+        batch_id UUID REFERENCES "${schemaName}"."batches"(id),
+        quantity INTEGER,
+        cost_price NUMERIC(10,2),
+        selling_price NUMERIC(10,2),
+        expiry_date DATE
+      )`,
+    );
+  }
+
+  /**
+   * Legacy schemas may lack sales / cash tables referenced by branch-isolation patches.
+   */
+  private async ensureSalesAndCashTablesForBranchPatches(
+    schemaName: string,
+  ): Promise<void> {
+    await this.prisma.$executeRawUnsafe(
+      `CREATE TABLE IF NOT EXISTS "${schemaName}"."sales" (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        branch_id UUID REFERENCES "${schemaName}"."branches"(id),
+        receipt_number VARCHAR(20),
+        total_amount NUMERIC(12,2),
+        discount NUMERIC(10,2) DEFAULT 0,
+        tax NUMERIC(10,2) DEFAULT 0,
+        sale_date TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      )`,
+    );
+    await this.prisma.$executeRawUnsafe(
+      `CREATE UNIQUE INDEX IF NOT EXISTS sales_branch_receipt_unique ON "${schemaName}"."sales"(branch_id, receipt_number)`,
+    );
+    await this.prisma.$executeRawUnsafe(
+      `CREATE INDEX IF NOT EXISTS sales_branch_id_receipt_number_idx ON "${schemaName}"."sales"(branch_id, receipt_number)`,
+    );
+    await this.prisma.$executeRawUnsafe(
+      `CREATE INDEX IF NOT EXISTS idx_sales_date ON "${schemaName}"."sales"(sale_date)`,
+    );
+    await this.prisma.$executeRawUnsafe(
+      `CREATE TABLE IF NOT EXISTS "${schemaName}"."sale_items" (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        sale_id UUID REFERENCES "${schemaName}"."sales"(id) ON DELETE CASCADE,
+        branch_id UUID REFERENCES "${schemaName}"."branches"(id),
+        product_id UUID REFERENCES "${schemaName}"."products"(id),
+        batch_id UUID REFERENCES "${schemaName}"."batches"(id),
+        quantity INTEGER,
+        price NUMERIC(10,2),
+        total NUMERIC(10,2)
+      )`,
+    );
+    await this.prisma.$executeRawUnsafe(
+      `CREATE TABLE IF NOT EXISTS "${schemaName}"."cash_accounts" (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        name VARCHAR(255),
+        type VARCHAR(50),
+        balance NUMERIC(12,2) DEFAULT 0
+      )`,
+    );
+    await this.prisma.$executeRawUnsafe(
+      `CREATE TABLE IF NOT EXISTS "${schemaName}"."cash_transactions" (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        branch_id UUID REFERENCES "${schemaName}"."branches"(id),
+        account_id UUID REFERENCES "${schemaName}"."cash_accounts"(id),
+        type VARCHAR(10),
+        amount NUMERIC(12,2),
+        reference VARCHAR(255),
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      )`,
+    );
+  }
+
+  /**
+   * POS manual charges (Tailor / Delivery / Member card): nullable product, optional misc_charge_kind.
+   */
+  private async ensureSaleItemsMiscChargeKindColumn(
+    schemaName: string,
+  ): Promise<void> {
+    const [row] = await this.prisma.$queryRawUnsafe<{ ok: boolean }[]>(
+      `
+      SELECT EXISTS (
+        SELECT 1
+        FROM information_schema.tables
+        WHERE table_schema = $1
+          AND table_name = 'sale_items'
+      ) AS ok
+      `,
+      schemaName,
+    );
+    if (!row?.ok) return;
+
+    await this.prisma.$executeRawUnsafe(
+      `ALTER TABLE "${schemaName}"."sale_items"
+       ADD COLUMN IF NOT EXISTS misc_charge_kind VARCHAR(32)`,
+    );
+    await this.prisma.$executeRawUnsafe(
+      `ALTER TABLE "${schemaName}"."sale_items"
+       ALTER COLUMN product_id DROP NOT NULL`,
+    );
+  }
+
+  /** Idempotent: POS shift sessions, statements, sales.pos_session_id. */
+  private async ensurePosSessionsAndStatements(
+    schemaName: string,
+  ): Promise<void> {
+    const esc = schemaName.replace(/"/g, '""');
+    await this.prisma.$executeRawUnsafe(
+      `CREATE TABLE IF NOT EXISTS "${esc}"."pos_sessions" (
+        "id" UUID NOT NULL DEFAULT gen_random_uuid(),
+        "branch_id" UUID NOT NULL,
+        "device_id" UUID,
+        "staff_user_id" UUID,
+        "status" VARCHAR(20) NOT NULL DEFAULT 'open',
+        "opened_at" TIMESTAMP(6) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        "closed_at" TIMESTAMP(6),
+        CONSTRAINT "pos_sessions_pkey" PRIMARY KEY ("id")
+      )`,
+    );
+    await this.prisma.$executeRawUnsafe(
+      `ALTER TABLE "${esc}"."pos_sessions"
+       DROP CONSTRAINT IF EXISTS "pos_sessions_branch_id_fkey"`,
+    );
+    await this.prisma.$executeRawUnsafe(
+      `ALTER TABLE "${esc}"."pos_sessions"
+       ADD CONSTRAINT "pos_sessions_branch_id_fkey"
+       FOREIGN KEY ("branch_id") REFERENCES "${esc}"."branches"("id")
+       ON DELETE CASCADE ON UPDATE CASCADE`,
+    );
+    await this.prisma.$executeRawUnsafe(
+      `ALTER TABLE "${esc}"."pos_sessions"
+       DROP CONSTRAINT IF EXISTS "pos_sessions_staff_user_id_fkey"`,
+    );
+    await this.prisma.$executeRawUnsafe(
+      `ALTER TABLE "${esc}"."pos_sessions"
+       ADD CONSTRAINT "pos_sessions_staff_user_id_fkey"
+       FOREIGN KEY ("staff_user_id") REFERENCES "${esc}"."users"("id")
+       ON DELETE SET NULL ON UPDATE CASCADE`,
+    );
+    await this.prisma.$executeRawUnsafe(
+      `CREATE INDEX IF NOT EXISTS "idx_pos_sessions_branch_status"
+       ON "${esc}"."pos_sessions"("branch_id", "status")`,
+    );
+    await this.prisma.$executeRawUnsafe(
+      `CREATE INDEX IF NOT EXISTS "idx_pos_sessions_branch_opened"
+       ON "${esc}"."pos_sessions"("branch_id", "opened_at" DESC)`,
+    );
+    await this.prisma.$executeRawUnsafe(
+      `CREATE UNIQUE INDEX IF NOT EXISTS "pos_sessions_one_open_per_branch"
+       ON "${esc}"."pos_sessions"("branch_id")
+       WHERE "status" = 'open'`,
+    );
+
+    await this.prisma.$executeRawUnsafe(
+      `CREATE TABLE IF NOT EXISTS "${esc}"."pos_statements" (
+        "id" UUID NOT NULL DEFAULT gen_random_uuid(),
+        "session_id" UUID NOT NULL,
+        "status" VARCHAR(20) NOT NULL DEFAULT 'open',
+        "journal_entry_id" UUID,
+        "created_at" TIMESTAMP(6) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        "posted_at" TIMESTAMP(6),
+        CONSTRAINT "pos_statements_pkey" PRIMARY KEY ("id")
+      )`,
+    );
+    await this.prisma.$executeRawUnsafe(
+      `ALTER TABLE "${esc}"."pos_statements"
+       DROP CONSTRAINT IF EXISTS "pos_statements_session_id_fkey"`,
+    );
+    await this.prisma.$executeRawUnsafe(
+      `ALTER TABLE "${esc}"."pos_statements"
+       ADD CONSTRAINT "pos_statements_session_id_fkey"
+       FOREIGN KEY ("session_id") REFERENCES "${esc}"."pos_sessions"("id")
+       ON DELETE CASCADE ON UPDATE CASCADE`,
+    );
+    await this.prisma.$executeRawUnsafe(
+      `ALTER TABLE "${esc}"."pos_statements"
+       DROP CONSTRAINT IF EXISTS "pos_statements_journal_entry_id_fkey"`,
+    );
+    await this.prisma.$executeRawUnsafe(
+      `ALTER TABLE "${esc}"."pos_statements"
+       ADD CONSTRAINT "pos_statements_journal_entry_id_fkey"
+       FOREIGN KEY ("journal_entry_id") REFERENCES "${esc}"."journal_entries"("id")
+       ON DELETE SET NULL ON UPDATE CASCADE`,
+    );
+    await this.prisma.$executeRawUnsafe(
+      `CREATE INDEX IF NOT EXISTS "idx_pos_statements_session"
+       ON "${esc}"."pos_statements"("session_id")`,
+    );
+    await this.prisma.$executeRawUnsafe(
+      `CREATE UNIQUE INDEX IF NOT EXISTS "pos_statements_one_open_per_session"
+       ON "${esc}"."pos_statements"("session_id")
+       WHERE "status" = 'open'`,
+    );
+
+    await this.prisma.$executeRawUnsafe(
+      `CREATE TABLE IF NOT EXISTS "${esc}"."pos_statement_lines" (
+        "id" UUID NOT NULL DEFAULT gen_random_uuid(),
+        "statement_id" UUID NOT NULL,
+        "payment_bucket" VARCHAR(32) NOT NULL,
+        "expected_amount" DECIMAL(14,2) NOT NULL DEFAULT 0,
+        "actual_amount" DECIMAL(14,2) NOT NULL DEFAULT 0,
+        "difference" DECIMAL(14,2) NOT NULL DEFAULT 0,
+        CONSTRAINT "pos_statement_lines_pkey" PRIMARY KEY ("id"),
+        CONSTRAINT "pos_statement_lines_statement_bucket_unique" UNIQUE ("statement_id", "payment_bucket")
+      )`,
+    );
+    await this.prisma.$executeRawUnsafe(
+      `ALTER TABLE "${esc}"."pos_statement_lines"
+       DROP CONSTRAINT IF EXISTS "pos_statement_lines_statement_id_fkey"`,
+    );
+    await this.prisma.$executeRawUnsafe(
+      `ALTER TABLE "${esc}"."pos_statement_lines"
+       ADD CONSTRAINT "pos_statement_lines_statement_id_fkey"
+       FOREIGN KEY ("statement_id") REFERENCES "${esc}"."pos_statements"("id")
+       ON DELETE CASCADE ON UPDATE CASCADE`,
+    );
+
+    await this.prisma.$executeRawUnsafe(
+      `ALTER TABLE "${esc}"."sales" ADD COLUMN IF NOT EXISTS "pos_session_id" UUID`,
+    );
+    await this.prisma.$executeRawUnsafe(
+      `ALTER TABLE "${esc}"."sales"
+       DROP CONSTRAINT IF EXISTS "sales_pos_session_id_fkey"`,
+    );
+    await this.prisma.$executeRawUnsafe(
+      `ALTER TABLE "${esc}"."sales"
+       ADD CONSTRAINT "sales_pos_session_id_fkey"
+       FOREIGN KEY ("pos_session_id") REFERENCES "${esc}"."pos_sessions"("id")
+       ON DELETE SET NULL ON UPDATE CASCADE`,
+    );
+    await this.prisma.$executeRawUnsafe(
+      `CREATE INDEX IF NOT EXISTS "idx_sales_pos_session_id"
+       ON "${esc}"."sales"("pos_session_id")`,
+    );
+  }
+
+  private async ensureStaffIdUniqueIndex(schemaName: string): Promise<void> {
+    await this.prisma.$executeRawUnsafe(
+      `CREATE UNIQUE INDEX IF NOT EXISTS users_staff_id_unique_not_null
+       ON "${schemaName}"."users"(staff_id)
+       WHERE staff_id IS NOT NULL AND BTRIM(staff_id) <> ''`,
+    );
+  }
+
+  /** Migrate legacy cashier_id → staff_id and ensure partial unique index. */
+  private async ensureUsersStaffIdColumn(schemaName: string): Promise<void> {
+    const [staffCol] = await this.prisma.$queryRawUnsafe<{ ok: boolean }[]>(
+      `
+      SELECT EXISTS (
+        SELECT 1
+        FROM information_schema.columns
+        WHERE table_schema = $1
+          AND table_name = 'users'
+          AND column_name = 'staff_id'
+      ) AS ok
+      `,
+      schemaName,
+    );
+    if (staffCol?.ok) {
+      await this.ensureStaffIdUniqueIndex(schemaName);
+      return;
+    }
+
+    const [cashierCol] = await this.prisma.$queryRawUnsafe<{ ok: boolean }[]>(
+      `
+      SELECT EXISTS (
+        SELECT 1
+        FROM information_schema.columns
+        WHERE table_schema = $1
+          AND table_name = 'users'
+          AND column_name = 'cashier_id'
+      ) AS ok
+      `,
+      schemaName,
+    );
+
+    if (cashierCol?.ok) {
+      await this.prisma.$executeRawUnsafe(
+        `ALTER TABLE "${schemaName}"."users" RENAME COLUMN cashier_id TO staff_id`,
+      );
+      await this.prisma.$executeRawUnsafe(
+        `ALTER INDEX IF EXISTS "${schemaName}".users_cashier_id_unique_not_null RENAME TO users_staff_id_unique_not_null`,
+      );
+      await this.ensureStaffIdUniqueIndex(schemaName);
+      return;
+    }
+
+    await this.prisma.$executeRawUnsafe(
+      `ALTER TABLE "${schemaName}"."users" ADD COLUMN staff_id VARCHAR(120)`,
+    );
+    await this.ensureStaffIdUniqueIndex(schemaName);
+  }
+
+  /**
    * Lightweight schema upgrade for branch isolation.
    * Existing tenants may be missing branch_id columns; ensure they're present.
    */
   private async ensureTenantBranchIsolationColumns(
     schemaName: string,
   ): Promise<void> {
+    await this.ensureBatchesTable(schemaName);
+    await this.ensurePurchasingTablesIfMissing(schemaName);
+    await this.ensureSalesAndCashTablesForBranchPatches(schemaName);
+    await this.ensureUsersStaffIdColumn(schemaName);
+
     const checks: Array<{
       table: string;
       column: string;
@@ -1620,12 +2025,6 @@ export class TenantService {
         column: 'pin_hash',
         alterSql: `ALTER TABLE "${schemaName}"."users"
                     ADD COLUMN pin_hash TEXT`,
-      },
-      {
-        table: 'users',
-        column: 'cashier_id',
-        alterSql: `ALTER TABLE "${schemaName}"."users"
-                    ADD COLUMN cashier_id VARCHAR(120)`,
       },
       {
         table: 'batches',
@@ -1689,11 +2088,6 @@ export class TenantService {
       }
     }
 
-    await this.prisma.$executeRawUnsafe(
-      `CREATE UNIQUE INDEX IF NOT EXISTS users_cashier_id_unique_not_null
-       ON "${schemaName}"."users"(cashier_id)
-       WHERE cashier_id IS NOT NULL AND BTRIM(cashier_id) <> ''`,
-    );
     await this.prisma.$executeRawUnsafe(
       `CREATE UNIQUE INDEX IF NOT EXISTS sales_branch_receipt_unique ON "${schemaName}"."sales"(branch_id, receipt_number)`,
     );

@@ -30,6 +30,7 @@ export const ROUTES = {
     root: "/accounting",
     monitoring: "/accounting/monitoring",
     controlCenter: "/accounting/control-center",
+    posStatement: "/accounting/pos-statement",
   },
 } as const;
 

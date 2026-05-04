@@ -9,13 +9,13 @@ import {
   CardDescription,
   CardHeader,
   CardTitle,
-} from "@repo/ui/card";
+} from "@/components/ui/card";
 import {
   Accordion,
   AccordionContent,
   AccordionItem,
   AccordionTrigger,
-} from "@repo/ui/accordion";
+} from "@/components/ui/accordion";
 import {
   Table,
   TableBody,
@@ -23,7 +23,7 @@ import {
   TableHead,
   TableHeader,
   TableRow,
-} from "@repo/ui/table";
+} from "@/components/ui/table";
 import { getStoredUser } from "@/lib/auth-client";
 import { money } from "@/lib/accounting-display";
 import { getJournalEntries, type JournalEntryRow } from "@/lib/api";

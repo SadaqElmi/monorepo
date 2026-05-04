@@ -6,9 +6,9 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { Calculator, ChevronDown, ChevronUp, Undo2 } from "lucide-react";
 
-import { Button } from "@repo/ui/button";
-import { Card, CardContent } from "@repo/ui/card";
-import { Input } from "@repo/ui/input";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
 import {
   Dialog,
@@ -21,7 +21,13 @@ import {
 
 import { PosReturnPanel } from "@/components/pos/pos-return-panel";
 import { PosTransactionReceipt } from "@/components/pos/pos-transaction-receipt";
-import type { PosTransaction, UnitType } from "@repo/types";
+import {
+  POS_MISC_CHARGE_LINE_LABELS,
+  type PosMiscChargeKind,
+  type PosTransaction,
+  type UnitType,
+} from "@repo/types";
+import { CurrencyEntryDialog } from "@/components/currency-entry-dialog";
 import { usePos } from "@/components/pos-context";
 import {
   getBatches,
@@ -44,10 +50,12 @@ import {
   UNIT_TYPES,
 } from "../model/constants";
 import { resolvePosCatalogPricing } from "../model/pricing";
-import { cartTotals } from "../model/totals";
+import { billableCartLines, cartTotals } from "../model/totals";
 import { saleToPosTransaction } from "../model/transactions";
 import type { PosCatalogProduct } from "../model/types";
 import { formatMoney } from "@/shared/lib";
+import { posToast } from "@/lib/pos-toast";
+import { isManagerTierRole } from "../model/discount-policy";
 
 export function RegisterScreen() {
   const router = useRouter();
@@ -66,14 +74,49 @@ export function RegisterScreen() {
     showVatLine,
     receiptToPrint,
     setReceiptToPrint,
+    transactions,
     clearCart: contextClearCart,
     cancelEntry,
     holdOrder: contextHoldOrder,
     goToPayment: contextGoToPayment,
+    managerPrivilegesSuspended,
+    setManagerPrivilegesSuspended,
   } = usePos();
 
+  const handleManagerLoginButton = React.useCallback(() => {
+    const isMgr = isManagerTierRole(currentUser?.role);
+    if (!isMgr) {
+      router.push("/staff-login");
+      return;
+    }
+    if (!managerPrivilegesSuspended) {
+      setManagerPrivilegesSuspended(true);
+      return;
+    }
+    router.push("/staff-login");
+  }, [
+    currentUser?.role,
+    managerPrivilegesSuspended,
+    router,
+    setManagerPrivilegesSuspended,
+  ]);
+
+  const managerLoginButtonLabel =
+    isManagerTierRole(currentUser?.role) && managerPrivilegesSuspended
+      ? "Manager login"
+      : "Manager login";
+
   const [isTotalDialogOpen, setIsTotalDialogOpen] = React.useState(false);
+  /** After user opens the Total strip / breakdown or goes to payment, show amount incl. VAT. */
+  const [registerTotalRevealed, setRegisterTotalRevealed] =
+    React.useState(false);
   const [isSuspendDialogOpen, setIsSuspendDialogOpen] = React.useState(false);
+  const [miscChargeKind, setMiscChargeKind] =
+    React.useState<PosMiscChargeKind | null>(null);
+  const [miscAmountDraft, setMiscAmountDraft] = React.useState("");
+  /** Manual “receipt with barcode” reprint; excludes default post-sale print. */
+  const [reprintWithBarcode, setReprintWithBarcode] =
+    React.useState<PosTransaction | null>(null);
 
   const tenantSlug = currentUser?.tenantSlug ?? null;
 
@@ -427,27 +470,49 @@ export function RegisterScreen() {
     }
   }, [categoryList, activeCategory]);
 
+  const receiptPrintTarget = reprintWithBarcode ?? receiptToPrint;
+
+  const handleReceiptWithBarcodeClick = React.useCallback(() => {
+    const latest = transactions[0];
+    if (!latest) {
+      posToast.info(
+        "No receipt yet",
+        "Complete a sale first, then you can print a copy with a barcode.",
+      );
+      return;
+    }
+    setReprintWithBarcode(latest);
+  }, [transactions]);
+
   React.useEffect(() => {
-    if (!receiptToPrint) return;
+    if (!receiptPrintTarget) return;
     document.body.classList.add("printing-pos-receipt");
-    const id = requestAnimationFrame(() => {
+    let cancelled = false;
+    const runPrint = () => {
+      if (cancelled) return;
       requestAnimationFrame(() => {
-        window.print();
+        requestAnimationFrame(() => {
+          if (cancelled) return;
+          window.print();
+        });
       });
-    });
-    return () => {
-      cancelAnimationFrame(id);
     };
-  }, [receiptToPrint]);
+    const timerId = window.setTimeout(runPrint, 120);
+    return () => {
+      cancelled = true;
+      clearTimeout(timerId);
+    };
+  }, [receiptPrintTarget]);
 
   React.useEffect(() => {
     const onAfterPrint = () => {
       document.body.classList.remove("printing-pos-receipt");
       setReceiptToPrint(null);
+      setReprintWithBarcode(null);
     };
     window.addEventListener("afterprint", onAfterPrint);
     return () => window.removeEventListener("afterprint", onAfterPrint);
-  }, []);
+  }, [setReceiptToPrint]);
 
   React.useEffect(() => {
     setNow(new Date());
@@ -455,7 +520,39 @@ export function RegisterScreen() {
     return () => clearInterval(t);
   }, []);
 
-  const { subtotal, tax, total } = cartTotals(cart, discount);
+  React.useEffect(() => {
+    if (cart.length === 0) setRegisterTotalRevealed(false);
+  }, [cart.length]);
+
+  const billableForTotals = billableCartLines(cart);
+  const { subtotal, tax, total } = cartTotals(billableForTotals, discount);
+
+  const registerShowsTaxInclusive =
+    registerTotalRevealed || checkoutStep === "payment" || showVatLine;
+  const registerStripTotal = registerShowsTaxInclusive
+    ? total
+    : Math.max(0, subtotal - discount);
+
+  const discountSummary = React.useMemo(() => {
+    const bill = billableCartLines(cart);
+    const gross = bill.reduce((s, l) => s + l.unitPrice * l.qty, 0);
+    let lineDiscSum = 0;
+    for (const l of bill) {
+      const ls = l.unitPrice * l.qty;
+      if (typeof l.lineDiscountPct === "number" && l.lineDiscountPct > 0) {
+        lineDiscSum += (ls * l.lineDiscountPct) / 100;
+      }
+    }
+    const orderPct =
+      gross > 0 && discount > 1e-6 ? Math.round((discount / gross) * 100) : 0;
+    return {
+      gross,
+      orderPct,
+      lineDiscSum,
+      hasGlobal: discount > 1e-6,
+      hasLineExplicit: lineDiscSum > 1e-6,
+    };
+  }, [cart, discount]);
 
   const filteredProducts = React.useMemo(() => {
     const q = searchQuery.trim().toLowerCase();
@@ -552,6 +649,47 @@ export function RegisterScreen() {
     holdOrder();
     setIsSuspendDialogOpen(false);
   };
+
+  const openMiscAmountDialog = React.useCallback((kind: PosMiscChargeKind) => {
+    setMiscChargeKind(kind);
+    setMiscAmountDraft("");
+  }, []);
+
+  const confirmMiscCharge = React.useCallback(() => {
+    if (!miscChargeKind) return;
+    const normalized = miscAmountDraft.replaceAll(",", "").trim();
+    const amt = normalized.length > 0 ? Number(normalized) : NaN;
+    if (!Number.isFinite(amt) || amt < 0) {
+      posToast.error(
+        "Invalid amount",
+        "Enter a valid charge using digits only.",
+      );
+      return;
+    }
+    if (amt === 0) {
+      posToast.warning(
+        "Amount required",
+        "Enter an amount greater than zero for this charge.",
+      );
+      return;
+    }
+    const lineId = crypto.randomUUID();
+    setSelectedLineId(lineId);
+    setCart((prev) => [
+      ...prev,
+      {
+        lineId,
+        productId: crypto.randomUUID(),
+        name: POS_MISC_CHARGE_LINE_LABELS[miscChargeKind],
+        unitPrice: amt,
+        qty: 1,
+        unitType: "PC",
+        miscChargeKind,
+      },
+    ]);
+    setMiscChargeKind(null);
+    setMiscAmountDraft("");
+  }, [miscChargeKind, miscAmountDraft, setCart, setSelectedLineId]);
 
   const goToPayment = () => {
     contextGoToPayment();
@@ -861,6 +999,38 @@ export function RegisterScreen() {
                         </div>
                       );
                     })}
+                    {discountSummary.hasGlobal ||
+                    discountSummary.hasLineExplicit ? (
+                      <div className="space-y-0 border-t-2 border-emerald-500/50 bg-emerald-50/95 dark:bg-emerald-950/45">
+                        {discountSummary.hasGlobal ? (
+                          <div className="flex items-center justify-between gap-3 px-3 py-2 text-sm font-bold text-emerald-900 dark:text-emerald-100">
+                            <span className="min-w-0">Discount</span>
+                            <span className="shrink-0 tabular-nums">
+                              {formatMoney(discount)}
+                            </span>
+                          </div>
+                        ) : null}
+                        {discountSummary.hasLineExplicit ? (
+                          <div
+                            className={cn(
+                              "flex items-center justify-between gap-3 px-3 py-2 text-sm font-bold text-emerald-900 dark:text-emerald-100",
+                              discountSummary.hasGlobal
+                                ? "border-t border-emerald-400/40 dark:border-emerald-800/60"
+                                : null,
+                            )}
+                          >
+                            <span className="min-w-0">
+                              {discountSummary.hasGlobal
+                                ? "Additional line discounts"
+                                : "Line discounts (total)"}
+                            </span>
+                            <span className="shrink-0 tabular-nums">
+                              −{formatMoney(discountSummary.lineDiscSum)}
+                            </span>
+                          </div>
+                        ) : null}
+                      </div>
+                    ) : null}
                   </div>
                 )}
               </CardContent>
@@ -868,13 +1038,33 @@ export function RegisterScreen() {
                 <button
                   type="button"
                   className="flex w-full items-stretch"
-                  onClick={() => setIsTotalDialogOpen(true)}
+                  onClick={() => {
+                    setRegisterTotalRevealed(true);
+                    setIsTotalDialogOpen(true);
+                  }}
                 >
-                  <div className="flex h-16 w-1/2 items-center justify-center bg-[#7faea4] text-black font-semibold text-lg">
-                    Total
+                  <div className="flex min-h-16 w-1/2 flex-col items-center justify-center gap-0.5 bg-[#7faea4] px-2 py-1.5 text-black">
+                    <span className="font-semibold text-lg leading-none">
+                      Total
+                    </span>
+
+                    {(discountSummary.hasGlobal ||
+                      discountSummary.hasLineExplicit) && (
+                      <span className="max-w-full truncate text-center text-[10px] font-semibold leading-tight opacity-90">
+                        Discount −
+                        {formatMoney(
+                          discountSummary.hasGlobal &&
+                            discountSummary.hasLineExplicit
+                            ? discount + discountSummary.lineDiscSum
+                            : discountSummary.hasGlobal
+                              ? discount
+                              : discountSummary.lineDiscSum,
+                        )}
+                      </span>
+                    )}
                   </div>
-                  <div className="flex h-16 w-1/2 items-center justify-center bg-gray-100 text-black font-semibold text-lg tabular-nums">
-                    {formatMoney(total)}
+                  <div className="flex min-h-16 w-1/2 items-center justify-center bg-gray-100 px-2 py-1.5 text-black font-semibold text-lg tabular-nums">
+                    {formatMoney(registerStripTotal)}
                   </div>
                 </button>
               </div>
@@ -887,6 +1077,9 @@ export function RegisterScreen() {
                   showCloseButton={false}
                   className="w-[420px] max-w-sm gap-0 overflow-hidden border-slate-600 bg-slate-800 p-0 text-white"
                 >
+                  <DialogTitle className="sr-only">
+                    Order total breakdown
+                  </DialogTitle>
                   <div className="divide-y divide-slate-600">
                     <div className="flex items-center justify-between px-4 py-3">
                       <span className="font-medium">Total</span>
@@ -1030,7 +1223,7 @@ export function RegisterScreen() {
                   </div>
                 </div>
 
-                <div className="flex items-end m-0 p-0">
+                <div className="flex items-end m-0 p-0 flex-1">
                   <Card className="rounded-none p-0 m-0 shadow-none border-0 flex-1">
                     <div className="grid grid-cols-4 gap-0 m-0 p-0">
                       <Button
@@ -1178,16 +1371,21 @@ export function RegisterScreen() {
             <Card className="w-[300px] shrink-0 flex flex-col gap-0 overflow-hidden rounded-none border-0 bg-slate-50 p-3 shadow-none dark:bg-[#0a1514]">
               <div className="grid grid-cols-2 grid-rows-3 gap-[2px] bg-slate-900 border-2 border-slate-900">
                 <Button
+                  type="button"
                   variant="secondary"
-                  className="h-full w-full aspect-square bg-amber-400 text-slate-900 font-bold text-center flex flex-col items-center justify-center p-4 hover:bg-amber-500 active:scale-[0.98] transition-transform uppercase rounded-none shadow-none border-0 whitespace-normal"
+                  disabled
+                  title="Member points — coming soon"
+                  className="h-full w-full aspect-square bg-amber-400 text-slate-900 font-bold text-center flex flex-col items-center justify-center p-4 uppercase rounded-none shadow-none border-0 whitespace-normal opacity-50 cursor-not-allowed"
                 >
                   Member card
                 </Button>
                 <Button
+                  type="button"
                   variant="secondary"
                   className="h-full w-full aspect-square bg-amber-400 text-slate-900 font-bold text-center flex flex-col items-center justify-center p-4 hover:bg-amber-500 active:scale-[0.98] transition-transform uppercase rounded-none shadow-none border-0 whitespace-normal"
+                  onClick={handleManagerLoginButton}
                 >
-                  Manager login
+                  {managerLoginButtonLabel}
                 </Button>
                 <Button
                   variant="secondary"
@@ -1196,16 +1394,20 @@ export function RegisterScreen() {
                   Adeeg
                 </Button>
                 <Button
+                  type="button"
                   variant="secondary"
                   className="h-full w-full aspect-square bg-amber-400 text-slate-900 font-bold text-center flex flex-col items-center justify-center p-4 hover:bg-amber-500 active:scale-[0.98] transition-transform uppercase rounded-none shadow-none border-0 whitespace-normal"
+                  onClick={() => openMiscAmountDialog("delivery")}
                 >
                   Delivery Charge
                 </Button>
                 <Button
+                  type="button"
                   variant="secondary"
                   className="h-full w-full aspect-square bg-amber-400 text-slate-900 font-bold text-center flex flex-col items-center justify-center p-4 hover:bg-amber-500 active:scale-[0.98] transition-transform uppercase rounded-none shadow-none border-0 whitespace-normal"
+                  onClick={() => openMiscAmountDialog("tailor")}
                 >
-                  Taloir
+                  Tailor
                 </Button>
 
                 <Button
@@ -1234,10 +1436,36 @@ export function RegisterScreen() {
           </>
         ) : null}
 
-        {receiptToPrint != null && typeof document !== "undefined"
+        <CurrencyEntryDialog
+          open={miscChargeKind != null}
+          onOpenChange={(open) => {
+            if (!open) {
+              setMiscChargeKind(null);
+              setMiscAmountDraft("");
+            }
+          }}
+          value={miscAmountDraft}
+          onValueChange={setMiscAmountDraft}
+          title={
+            miscChargeKind
+              ? `${POS_MISC_CHARGE_LINE_LABELS[miscChargeKind]} — amount`
+              : "Amount"
+          }
+          autoFocusInput
+          onCancel={() => {
+            setMiscChargeKind(null);
+            setMiscAmountDraft("");
+          }}
+          onOk={confirmMiscCharge}
+        />
+
+        {receiptPrintTarget != null && typeof document !== "undefined"
           ? createPortal(
               <div className="receipt-print-mount">
-                <PosTransactionReceipt transaction={receiptToPrint} />
+                <PosTransactionReceipt
+                  transaction={receiptPrintTarget}
+                  showBarcode
+                />
               </div>,
               document.body,
             )

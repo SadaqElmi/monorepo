@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import { Geist_Mono, Roboto, Geist } from "next/font/google";
 import "./globals.css";
 import { Footer } from "@/components/footer";
-import { TooltipProvider } from "@repo/ui/tooltip";
+import { TooltipProvider } from "@/components/ui/tooltip";
 
 const geist = Geist({subsets:['latin'],variable:'--font-sans'});
 
@@ -17,6 +17,7 @@ export const metadata: Metadata = {
 };
 
 import { PosProvider } from "@/components/pos-context";
+import { Toaster } from "@/components/ui/sonner";
 import { cn } from "@/lib/utils";
 
 export default function RootLayout({
@@ -30,6 +31,7 @@ export default function RootLayout({
         <PosProvider>
           <TooltipProvider>{children}</TooltipProvider>
           <Footer />
+          <Toaster position="top-center" />
         </PosProvider>
       </body>
     </html>

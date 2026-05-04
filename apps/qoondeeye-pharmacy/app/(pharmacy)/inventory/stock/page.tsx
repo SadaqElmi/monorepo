@@ -11,10 +11,10 @@ import {
   ChevronRight,
 } from "lucide-react";
 
-import { Badge } from "@repo/ui/badge";
-import { Button } from "@repo/ui/button";
-import { Card, CardContent } from "@repo/ui/card";
-import { Input } from "@repo/ui/input";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
 import {
   Table,
   TableBody,
@@ -22,21 +22,21 @@ import {
   TableHead,
   TableHeader,
   TableRow,
-} from "@repo/ui/table";
+} from "@/components/ui/table";
 import {
   Sheet,
   SheetContent,
   SheetDescription,
   SheetHeader,
   SheetTitle,
-} from "@repo/ui/sheet";
+} from "@/components/ui/sheet";
 import {
   Select,
   SelectContent,
   SelectItem,
   SelectTrigger,
   SelectValue,
-} from "@repo/ui/select";
+} from "@/components/ui/select";
 
 import { getStoredUser } from "@/lib/auth-client";
 import {

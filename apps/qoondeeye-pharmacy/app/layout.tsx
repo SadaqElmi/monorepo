@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import { Geist_Mono, Roboto } from "next/font/google";
 import "./globals.css";
-import { TooltipProvider } from "@repo/ui/tooltip";
+import { TooltipProvider } from "@/components/ui/tooltip";
 
 const roboto = Roboto({
   variable: "--font-sans",

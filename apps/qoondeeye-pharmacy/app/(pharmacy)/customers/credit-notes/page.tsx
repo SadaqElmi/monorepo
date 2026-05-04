@@ -1,17 +1,17 @@
 "use client";
 
 import * as React from "react";
-import { Separator } from "@repo/ui/separator";
+import { Separator } from "@/components/ui/separator";
 import {
   Breadcrumb,
   BreadcrumbItem,
   BreadcrumbList,
   BreadcrumbPage,
-} from "@repo/ui/breadcrumb";
-import { Card, CardContent, CardHeader, CardTitle } from "@repo/ui/card";
-import { Input } from "@repo/ui/input";
-import { Label } from "@repo/ui/label";
-import { Button } from "@repo/ui/button";
+} from "@/components/ui/breadcrumb";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Button } from "@/components/ui/button";
 import { getStoredUser } from "@/lib/auth-client";
 import { createSaleReturn, getSaleReturns, type SaleReturn } from "@/lib/api";
 

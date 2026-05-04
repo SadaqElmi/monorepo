@@ -44,16 +44,18 @@ export async function login(
   });
 }
 
-/** Cashier POS sign-in (PIN + pharmacy slug). */
+/** POS sign-in (PIN + pharmacy slug). Optional staffId scopes login to that staff row. */
 export async function pinLogin(
   pin: string,
   tenant: string,
   branchId?: string,
+  staffId?: string,
 ): Promise<LoginResponse> {
   // Team switcher persists "all" for all-branches; pin-login DTO only accepts a UUID or omitted field.
   const trimmed = branchId?.trim();
   const resolvedBranchId =
     trimmed && trimmed.toLowerCase() !== "all" ? trimmed : undefined;
+  const sid = staffId?.trim();
   return jsonFetch<LoginResponse>(`${AUTH_PREFIX}/pin-login`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
@@ -61,6 +63,7 @@ export async function pinLogin(
       pin,
       tenant,
       ...(resolvedBranchId ? { branchId: resolvedBranchId } : {}),
+      ...(sid ? { staffId: sid } : {}),
     }),
   });
 }

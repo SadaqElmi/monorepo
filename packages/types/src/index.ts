@@ -73,6 +73,8 @@ export type SaleItem = {
   quantity: number | null;
   price: number | string | null;
   total: number | string | null;
+  /** POS manual charge type when `product_id` is null (Member / Delivery / Tailor). */
+  misc_charge_kind?: string | null;
 };
 
 export type Sale = {
@@ -83,8 +85,56 @@ export type Sale = {
   discount: number | string | null;
   tax: number | string | null;
   sale_date: string | null;
+  /** Primary payment method code (from `payments.method` when stored). */
+  payment_method?: string | null;
   items?: SaleItem[];
 };
+
+/** VAT rate for cart totals — standalone POS and ERP POS must match the API discount/tax fields. */
+export const POS_TAX_RATE = 0.05;
+
+/** Default cart discount before cashier edits (standalone POS default). */
+export const POS_DEFAULT_DISCOUNT = 0;
+
+/** Display labels for payment method codes sent to `POST /api/sales`. */
+export const POS_PAYMENT_METHOD_LABELS: Record<string, string> = {
+  cash: "Cash",
+  evc: "EVC",
+  edahab: "E-Dahab",
+  "merchant-evc": "Merchant EVC",
+  "merchant-edahab": "Merchant E-Dahab",
+  banks: "Banks",
+  "primary-wallet": "Primary Wallet",
+  "member-points": "Member Points",
+  voucher: "Voucher",
+  "My Cash": "My Cash",
+  Ebesa: "Ebesa",
+  "My Bank": "My Bank",
+  "T-plus": "T-plus",
+  "Yeel App": "Yeel App",
+  Refund: "Refund",
+};
+
+/** Button order on the register payment step (same as `apps/pos`). */
+export const POS_PAYMENT_METHOD_IDS = [
+  "cash",
+  "evc",
+  "edahab",
+  "merchant-evc",
+  "merchant-edahab",
+  "banks",
+  "primary-wallet",
+  "member-points",
+  "My Cash",
+  "Ebesa",
+  "My Bank",
+  "T-plus",
+  "Yeel App",
+  "Refund",
+] as const;
+
+/** Misc charges accepted by `POST /api/sales` (revenue lines). Member card is POS-only until points. */
+export type PosBillableMiscChargeKind = "delivery" | "tailor";
 
 export type CreateSaleInput = {
   branchId?: string;
@@ -92,8 +142,11 @@ export type CreateSaleInput = {
   discount?: number;
   tax?: number;
   paymentMethod?: string;
+  /** Open POS shift session id (required for register sales once shift workflow is enabled). */
+  posSessionId?: string;
   items: Array<{
-    productId: string;
+    productId?: string;
+    miscChargeKind?: PosBillableMiscChargeKind;
     quantity: number;
     price?: number;
   }>;
@@ -170,7 +223,21 @@ export type PosTransaction = {
   subtotal: number;
   tax: number;
   total: number;
+  /** Amount the customer tendered at checkout (from payment keypad). Change = amountTendered − total when overpaying. */
+  amountTendered?: number;
+  /** Overpayment to return; stored at checkout for receipt (avoids display issues if totals are re-read as strings). */
+  changeDue?: number;
 };
+/** Register manual charge keys (includes member card for future points — not posted to sales API yet). */
+export type PosMiscChargeKind = "member_card" | "delivery" | "tailor";
+
+/** Display / receipt labels for `misc_charge_kind` / POS cart (align with register). */
+export const POS_MISC_CHARGE_LINE_LABELS: Record<PosMiscChargeKind, string> = {
+  member_card: "Member card",
+  delivery: "Delivery charge",
+  tailor: "Tailor Service",
+};
+
 export type PosCartLine = {
   lineId: string;
   productId: string;
@@ -183,6 +250,8 @@ export type PosCartLine = {
   comment?: string;
   /** Per-line discount percent (0..100) applied via the Line Discount % action. */
   lineDiscountPct?: number;
+  /** Manual charge from Member card / Delivery / Tailor keys (see PosMiscChargeKind). */
+  miscChargeKind?: PosMiscChargeKind;
 };
 
 export type PosHeldOrder = {

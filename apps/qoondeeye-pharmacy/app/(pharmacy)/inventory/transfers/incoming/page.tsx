@@ -10,9 +10,9 @@ import {
 } from "@/components/features/stock-transfers/transfer-mappers";
 import type { StockTransferListRow } from "@/components/features/stock-transfers/types";
 import { TransfersTable } from "@/components/features/stock-transfers/transfers-table";
-import { Button } from "@repo/ui/button";
-import { Card, CardContent } from "@repo/ui/card";
-import { Input } from "@repo/ui/input";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
 import { getStoredUser } from "@/lib/auth-client";
 import { getBranches } from "@/lib/services/branches";
 import { getClientBranchId } from "@/lib/services/http";

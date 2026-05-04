@@ -8,10 +8,10 @@ import { Bell, Menu } from "lucide-react";
 
 import { useAccountingAlerts } from "@/hooks/use-accounting-alerts";
 import { ROUTES } from "@/lib/routes";
-import { Badge } from "@repo/ui/badge";
+import { Badge } from "@/components/ui/badge";
 import { TeamSwitcher } from "@/components/team-switcher";
 import { NavUser } from "@/components/nav-user";
-import { Button } from "@repo/ui/button";
+import { Button } from "@/components/ui/button";
 import {
   NavigationMenu,
   NavigationMenuContent,
@@ -20,14 +20,14 @@ import {
   NavigationMenuList,
   NavigationMenuTrigger,
   navigationMenuTriggerStyle,
-} from "@repo/ui/navigation-menu";
+} from "@/components/ui/navigation-menu";
 import {
   Sheet,
   SheetContent,
   SheetHeader,
   SheetTitle,
   SheetTrigger,
-} from "@repo/ui/sheet";
+} from "@/components/ui/sheet";
 import { cn } from "@/lib/utils";
 import { clearAuthToken, getResolvedStoredUser } from "@/lib/auth-client";
 import {

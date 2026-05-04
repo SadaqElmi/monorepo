@@ -11,11 +11,11 @@ import {
 /** Unified login: email + password; optional tenant for pharmacy users */
 export class LoginDto {
   @IsEmail()
-  email: string;
+  email!: string;
 
   @IsString()
   @MinLength(6)
-  password: string;
+  password!: string;
 
   @IsOptional()
   @IsString()
@@ -28,32 +28,39 @@ export class PinLoginDto {
   @MinLength(4)
   @MaxLength(12)
   @Matches(/^\d+$/, { message: 'PIN must contain digits only' })
-  pin: string;
+  pin!: string;
 
   @IsString()
   @MinLength(1)
-  tenant: string;
+  tenant!: string;
 
   @IsOptional()
   @IsUUID()
   branchId?: string;
-}
 
-/** Device-bound cashier login: cashier identifier + PIN + device credential */
-export class CashierLoginDto {
+  /** When set, only this staff member (staff_id or user UUID) may match the PIN. */
+  @IsOptional()
   @IsString()
   @MinLength(1)
-  cashierId: string;
+  @MaxLength(120)
+  staffId?: string;
+}
+
+/** Device-bound POS login: staff identifier + PIN + device credential */
+export class StaffLoginDto {
+  @IsString()
+  @MinLength(1)
+  staffId!: string;
 
   @IsString()
   @MinLength(4)
   @MaxLength(12)
   @Matches(/^\d+$/, { message: 'PIN must contain digits only' })
-  pin: string;
+  pin!: string;
 
   @IsString()
   @MinLength(1)
-  deviceCredential: string;
+  deviceCredential!: string;
 
   @IsOptional()
   @IsUUID()
@@ -64,14 +71,14 @@ export class CashierLoginDto {
 export class PosDeviceEnrollDto {
   @IsString()
   @MinLength(1)
-  tenant: string;
+  tenant!: string;
 
   @IsEmail()
-  email: string;
+  email!: string;
 
   @IsString()
   @MinLength(6)
-  password: string;
+  password!: string;
 
   @IsOptional()
   @IsString()
@@ -91,34 +98,34 @@ export class PosDeviceEnrollDto {
 export class PosDeviceRevokeDto {
   @IsString()
   @MinLength(1)
-  tenant: string;
+  tenant!: string;
 
   @IsEmail()
-  email: string;
+  email!: string;
 
   @IsString()
   @MinLength(6)
-  password: string;
+  password!: string;
 
   @IsString()
   @MinLength(1)
-  deviceCode: string;
+  deviceCode!: string;
 }
 
 /** Pharmacy owner signup: creates tenant + first user (admin) */
 export class RegisterDto {
   @IsString()
-  pharmacy_name: string;
+  pharmacy_name!: string;
 
   @IsString()
-  owner_name: string;
+  owner_name!: string;
 
   @IsEmail()
-  email: string;
+  email!: string;
 
   @IsString()
   @MinLength(6)
-  password: string;
+  password!: string;
 
   @IsOptional()
   @IsString()
@@ -129,11 +136,11 @@ export class RegisterDto {
 
 export class SuperAdminSignUpDto {
   @IsEmail()
-  email: string;
+  email!: string;
 
   @IsString()
   @MinLength(6)
-  password: string;
+  password!: string;
 
   @IsOptional()
   @IsString()
@@ -142,11 +149,11 @@ export class SuperAdminSignUpDto {
 
 export class SuperAdminLoginDto {
   @IsEmail()
-  email: string;
+  email!: string;
 
   @IsString()
   @MinLength(6)
-  password: string;
+  password!: string;
 }
 
 export class TenantSignUpDto {
@@ -155,11 +162,11 @@ export class TenantSignUpDto {
   name?: string;
 
   @IsEmail()
-  email: string;
+  email!: string;
 
   @IsString()
   @MinLength(6)
-  password: string;
+  password!: string;
 
   @IsOptional()
   @IsString()
@@ -168,9 +175,9 @@ export class TenantSignUpDto {
 
 export class TenantLoginDto {
   @IsEmail()
-  email: string;
+  email!: string;
 
   @IsString()
   @MinLength(6)
-  password: string;
+  password!: string;
 }

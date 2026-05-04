@@ -3,15 +3,16 @@
 import * as React from "react";
 import { useRouter } from "next/navigation";
 
-import { Button } from "@repo/ui/button";
-import { Card } from "@repo/ui/card";
-import { Input } from "@repo/ui/input";
-import { Label } from "@repo/ui/label";
+import { Button } from "@/components/ui/button";
+import { Card } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import { Keyboard } from "lucide-react";
 
 import { setAuthToken, type StoredUser } from "@/lib/auth-client";
+import { usePos } from "@/components/pos-context";
 import { getPosDeviceCredential } from "@/lib/device-client";
-import { cashierLogin, pinLogin } from "@/lib/services/auth";
+import { staffLogin, pinLogin } from "@/lib/services/auth";
 
 const POS_LOGIN_MODE = (
   process.env.NEXT_PUBLIC_POS_DEVICE_LOGIN_MODE ?? "dual"
@@ -19,8 +20,9 @@ const POS_LOGIN_MODE = (
 
 export default function StaffLoginPage() {
   const router = useRouter();
+  const { setManagerPrivilegesSuspended } = usePos();
 
-  const [cashierId, setCashierId] = React.useState("");
+  const [staffId, setStaffId] = React.useState("");
   const [pin, setPin] = React.useState("");
   const [error, setError] = React.useState("");
   const [loading, setLoading] = React.useState(false);
@@ -30,7 +32,7 @@ export default function StaffLoginPage() {
 
   React.useEffect(() => {
     try {
-      setCashierId((localStorage.getItem("posLastCashierId") ?? "").trim());
+      setStaffId((localStorage.getItem("posLastStaffId") ?? "").trim());
     } catch {
       /* ignore */
     }
@@ -39,7 +41,7 @@ export default function StaffLoginPage() {
   const append = (d: string) => {
     setError("");
     if (activeField === "staffId") {
-      setCashierId((v) => (v.length >= 24 ? v : v + d));
+      setStaffId((v) => (v.length >= 24 ? v : v + d));
       return;
     }
     setPin((p) => (p.length >= 12 ? p : p + d));
@@ -48,7 +50,7 @@ export default function StaffLoginPage() {
   const backspace = () => {
     setError("");
     if (activeField === "staffId") {
-      setCashierId((v) => v.slice(0, -1));
+      setStaffId((v) => v.slice(0, -1));
       return;
     }
     setPin((p) => p.slice(0, -1));
@@ -56,7 +58,7 @@ export default function StaffLoginPage() {
 
   const submit = async () => {
     setError("");
-    const id = cashierId.trim();
+    const id = staffId.trim();
     if (!id || pin.length < 4) {
       setError("Enter Staff ID and a Password (at least 4 digits).");
       return;
@@ -89,13 +91,14 @@ export default function StaffLoginPage() {
 
       const res =
         deviceCredential && POS_LOGIN_MODE !== "legacy"
-          ? await cashierLogin(id, pin, deviceCredential, branchId)
-          : await pinLogin(pin, fallbackTenant, branchId);
+          ? await staffLogin(id, pin, deviceCredential, branchId)
+          : await pinLogin(pin, fallbackTenant, branchId, id);
 
       const user: StoredUser = {
         id: res.user.id,
         email: res.user.email ?? "",
         name: res.user.name,
+        ...(id.trim() ? { staffId: id.trim() } : {}),
         userType: "tenant",
         role: res.role,
         tenantId: res.tenantId ?? undefined,
@@ -105,8 +108,9 @@ export default function StaffLoginPage() {
       };
 
       setAuthToken(res.token, user);
+      setManagerPrivilegesSuspended(false);
       try {
-        localStorage.setItem("posLastCashierId", id);
+        localStorage.setItem("posLastStaffId", id);
         if (res.tenantSlug)
           localStorage.setItem("posTenantSlug", res.tenantSlug);
         const initialBranchId = res.assignedBranchId ?? res.defaultBranchId;
@@ -157,8 +161,8 @@ export default function StaffLoginPage() {
             <div className="relative flex-1">
               <Input
                 id="pos-staff-id"
-                value={cashierId}
-                onChange={(e) => setCashierId(e.target.value)}
+                value={staffId}
+                onChange={(e) => setStaffId(e.target.value)}
                 placeholder="Staff ID"
                 className="h-11 rounded-md bg-sky-50 pr-10 font-sans"
                 autoComplete="off"

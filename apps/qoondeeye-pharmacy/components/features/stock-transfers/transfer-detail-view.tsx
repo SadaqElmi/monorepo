@@ -13,17 +13,17 @@ import {
   Undo2,
 } from "lucide-react";
 
-import { Alert, AlertDescription, AlertTitle } from "@repo/ui/alert";
-import { Badge } from "@repo/ui/badge";
-import { Button } from "@repo/ui/button";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import {
   Card,
   CardContent,
   CardDescription,
   CardHeader,
   CardTitle,
-} from "@repo/ui/card";
-import { Separator } from "@repo/ui/separator";
+} from "@/components/ui/card";
+import { Separator } from "@/components/ui/separator";
 import {
   Table,
   TableBody,
@@ -31,7 +31,7 @@ import {
   TableHead,
   TableHeader,
   TableRow,
-} from "@repo/ui/table";
+} from "@/components/ui/table";
 import type { TransferEventDto } from "@/lib/services/transfers";
 import { ROUTES } from "@/lib/routes";
 import { cn } from "@/lib/utils";

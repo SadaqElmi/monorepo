@@ -15,8 +15,8 @@ import {
   Alert,
   AlertDescription,
   AlertTitle,
-} from "@repo/ui/alert";
-import { Button } from "@repo/ui/button";
+} from "@/components/ui/alert";
+import { Button } from "@/components/ui/button";
 import {
   Card,
   CardAction,
@@ -24,28 +24,28 @@ import {
   CardDescription,
   CardHeader,
   CardTitle,
-} from "@repo/ui/card";
+} from "@/components/ui/card";
 import {
   Collapsible,
   CollapsibleContent,
   CollapsibleTrigger,
-} from "@repo/ui/collapsible";
+} from "@/components/ui/collapsible";
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuTrigger,
-} from "@repo/ui/dropdown-menu";
-import { Input } from "@repo/ui/input";
-import { Label } from "@repo/ui/label";
-import { Separator } from "@repo/ui/separator";
-import { Skeleton } from "@repo/ui/skeleton";
+} from "@/components/ui/dropdown-menu";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Separator } from "@/components/ui/separator";
+import { Skeleton } from "@/components/ui/skeleton";
 import { useReportBranchQuery } from "@/hooks/use-branch-for-reports";
 import { ReportScopeBadge } from "@/components/accounting/report-scope-badge";
 import { ReportCertificationBadge } from "@/components/accounting/report-certification-badge";
 import { ReportExportButtons } from "@/components/accounting/report-export-buttons";
 import { ReportVariancePanel } from "@/components/accounting/report-variance-panel";
-import { Checkbox } from "@repo/ui/checkbox";
+import { Checkbox } from "@/components/ui/checkbox";
 import { buildBalanceSheetTree } from "@/lib/balance-sheet-tree";
 import { money } from "@/lib/accounting-display";
 import { getStoredUser } from "@/lib/auth-client";

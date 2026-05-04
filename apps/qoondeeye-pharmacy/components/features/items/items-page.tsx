@@ -32,16 +32,16 @@ import {
   computeProductAggregateRows,
   type ProductAggregateRow,
 } from "@/components/features/items/items-inventory-shared";
-import { Badge } from "@repo/ui/badge";
-import { Button } from "@repo/ui/button";
-import { Input } from "@repo/ui/input";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import {
   Select,
   SelectContent,
   SelectItem,
   SelectTrigger,
   SelectValue,
-} from "@repo/ui/select";
+} from "@/components/ui/select";
 import {
   Table,
   TableBody,
@@ -49,7 +49,7 @@ import {
   TableHead,
   TableHeader,
   TableRow,
-} from "@repo/ui/table";
+} from "@/components/ui/table";
 
 function parseMoneyField(
   v: number | string | null | undefined,

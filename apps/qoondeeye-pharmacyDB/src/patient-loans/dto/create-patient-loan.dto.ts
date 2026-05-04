@@ -9,7 +9,7 @@ import {
 
 export class CreatePatientLoanDto {
   @IsUUID()
-  customerId: string;
+  customerId!: string;
 
   @IsOptional()
   @IsUUID()
@@ -21,7 +21,7 @@ export class CreatePatientLoanDto {
 
   @IsNumber()
   @Min(0)
-  totalAmount: number;
+  totalAmount!: number;
 
   @IsOptional()
   @IsNumber()

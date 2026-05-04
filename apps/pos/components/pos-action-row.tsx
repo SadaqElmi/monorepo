@@ -3,15 +3,19 @@
 import * as React from "react";
 import Link from "next/link";
 
-import { Button } from "@repo/ui/button";
+import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { clearAuthToken } from "@/lib/auth-client";
-import { Input } from "@repo/ui/input";
+import { Input } from "@/components/ui/input";
 
 import { usePos } from "./pos-context";
 import { PAYMENT_METHODS } from "@/features/register/model/constants";
 import { CurrencyEntryDialog } from "@/components/currency-entry-dialog";
-import { cartTotals } from "@/features/register/model/totals";
+import { PercentageEntryDialog } from "@/components/percentage-entry-dialog";
+import {
+  billableCartLines,
+  cartTotals,
+} from "@/features/register/model/totals";
 import {
   Dialog,
   DialogContent,
@@ -19,6 +23,8 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import { posToast } from "@/lib/pos-toast";
+import { getXReport } from "@/lib/api";
 
 /**
  * Three contextual button sets occupy the same footer strip:
@@ -48,7 +54,7 @@ const TONE_CLASSES: Record<ActionTone, string> = {
     "bg-white text-slate-700 hover:bg-slate-100 dark:bg-slate-900 dark:text-slate-100",
   brand: "bg-(--pos-brand) text-white hover:opacity-90 [--pos-brand:#0d968b]",
   danger: "bg-red-600 text-white hover:bg-red-700",
-  warning: "bg-amber-500 text-white hover:bg-amber-600",
+  warning: "bg-amber-500 text-black hover:bg-amber-600",
 };
 
 const MODE_GRID: Record<ActionMode, string> = {
@@ -100,20 +106,6 @@ function ActionButton({
   );
 }
 
-/** Prompt the user for a numeric value in [0, 100]. Returns null if cancelled or invalid. */
-function promptPercentage(message: string, current?: number): number | null {
-  const raw = window.prompt(message, current != null ? String(current) : "");
-  if (raw == null) return null;
-  const trimmed = raw.trim();
-  if (trimmed.length === 0) return null;
-  const n = Number(trimmed);
-  if (!Number.isFinite(n) || n < 0 || n > 100) {
-    window.alert("Enter a number between 0 and 100.");
-    return null;
-  }
-  return n;
-}
-
 export function PosActionRow() {
   const {
     mainTab,
@@ -133,9 +125,14 @@ export function PosActionRow() {
     setLineComment,
     completePayment,
     goToPayment,
+    currentUser,
+    posSessionId,
   } = usePos();
 
   const [isCurrencyDialogOpen, setIsCurrencyDialogOpen] = React.useState(false);
+  const [isXReportOpen, setIsXReportOpen] = React.useState(false);
+  const [xReportLoading, setXReportLoading] = React.useState(false);
+  const [xReportBody, setXReportBody] = React.useState<string | null>(null);
   const [pendingPayment, setPendingPayment] = React.useState<{
     id: string;
     label: string;
@@ -150,7 +147,13 @@ export function PosActionRow() {
 
   const [isLogoutDialogOpen, setIsLogoutDialogOpen] = React.useState(false);
 
-  const { total } = cartTotals(cart, discount);
+  const [isPctDialogOpen, setIsPctDialogOpen] = React.useState(false);
+  const [pctDraft, setPctDraft] = React.useState("");
+  const [pctKind, setPctKind] = React.useState<"line" | "total" | null>(null);
+  const [isLineDiscountHintOpen, setIsLineDiscountHintOpen] =
+    React.useState(false);
+
+  const { total } = cartTotals(billableCartLines(cart), discount);
 
   const handleLogout = React.useCallback(() => {
     setIsLogoutDialogOpen(true);
@@ -172,13 +175,31 @@ export function PosActionRow() {
     setSupervisorMode(false);
   }, [clearCart, setSupervisorMode]);
 
-  const handleZReport = React.useCallback(() => {
-    window.alert("Z-Report: not wired yet.");
-  }, []);
-
   const handleXReport = React.useCallback(() => {
-    window.alert("X-Report: not wired yet.");
-  }, []);
+    const slug = currentUser?.tenantSlug?.trim();
+    if (!slug || !posSessionId) {
+      posToast.warning(
+        "X-Report",
+        "Open a shift with a branch scope before running X-Report.",
+      );
+      return;
+    }
+    setIsXReportOpen(true);
+    setXReportLoading(true);
+    setXReportBody(null);
+    void (async () => {
+      try {
+        const data = await getXReport(slug, posSessionId);
+        setXReportBody(JSON.stringify(data, null, 2));
+      } catch (e) {
+        setXReportBody(
+          e instanceof Error ? e.message : "Could not load X-Report.",
+        );
+      } finally {
+        setXReportLoading(false);
+      }
+    })();
+  }, [currentUser?.tenantSlug, posSessionId]);
 
   const handleComment = React.useCallback(() => {
     if (cart.length === 0) return;
@@ -199,19 +220,56 @@ export function PosActionRow() {
 
   const handleLineDiscount = React.useCallback(() => {
     if (!selectedLineId) {
-      window.alert("Select a line first to apply a line discount.");
+      setIsLineDiscountHintOpen(true);
       return;
     }
-    const pct = promptPercentage("Line discount percentage (0–100):");
-    if (pct == null) return;
-    applyLineDiscountPct(pct);
-  }, [selectedLineId, applyLineDiscountPct]);
+    setPctKind("line");
+    setPctDraft("");
+    setIsPctDialogOpen(true);
+  }, [selectedLineId]);
 
   const handleTotalDiscount = React.useCallback(() => {
-    const pct = promptPercentage("Total discount percentage (0–100):");
-    if (pct == null) return;
-    applyTotalDiscountPct(pct);
-  }, [applyTotalDiscountPct]);
+    setPctKind("total");
+    setPctDraft("");
+    setIsPctDialogOpen(true);
+  }, []);
+
+  const closePctDialog = React.useCallback(() => {
+    setIsPctDialogOpen(false);
+    setPctKind(null);
+    setPctDraft("");
+  }, []);
+
+  const confirmPctDialog = React.useCallback(() => {
+    const normalized = pctDraft.replaceAll(",", ".").trim();
+    if (normalized.length === 0) {
+      posToast.warning(
+        "Percentage required",
+        "Enter a discount percentage between 0 and 100.",
+      );
+      return;
+    }
+    const n = Number(normalized);
+    if (!Number.isFinite(n) || n < 0 || n > 100) {
+      posToast.error(
+        "Invalid percentage",
+        "Use a number from 0 to 100 (decimals allowed).",
+      );
+      return;
+    }
+    if (pctKind === "line") {
+      applyLineDiscountPct(n);
+    } else if (pctKind === "total") {
+      applyTotalDiscountPct(n);
+    }
+    closePctDialog();
+  }, [
+    pctDraft,
+    pctKind,
+    applyLineDiscountPct,
+    applyTotalDiscountPct,
+    closePctDialog,
+  ]);
 
   const mode: ActionMode = supervisorMode
     ? "supervisor"
@@ -302,7 +360,7 @@ export function PosActionRow() {
       PAYMENT_METHODS.map((m) => ({
         id: m.id,
         label: m.label,
-        tone: "default" as const,
+        tone: "warning" as const,
         onClick: () => {
           setPendingPayment({ id: m.id, label: m.label });
           setEnteredAmount(total > 0 ? total.toFixed(2) : "");
@@ -324,7 +382,7 @@ export function PosActionRow() {
         id: "sup-z",
         label: "Z-Report",
         tone: "brand",
-        onClick: handleZReport,
+        href: "/z-report",
       },
       {
         id: "sup-x",
@@ -333,8 +391,13 @@ export function PosActionRow() {
         onClick: handleXReport,
       },
     ],
-    [handleSupervisorBack, handleZReport, handleXReport],
+    [handleSupervisorBack, handleXReport],
   );
+
+  const closeXReport = React.useCallback(() => {
+    setIsXReportOpen(false);
+    setXReportBody(null);
+  }, []);
 
   const buttons =
     mode === "idle"
@@ -398,14 +461,62 @@ export function PosActionRow() {
           const normalized = enteredAmount.replaceAll(",", "").trim();
           const amt = normalized.length > 0 ? Number(normalized) : NaN;
           if (!Number.isFinite(amt) || amt < 0) {
-            window.alert("Enter a valid amount.");
+            posToast.error(
+              "Invalid amount",
+              "Enter a valid payment total using digits only.",
+            );
             return;
           }
           setIsCurrencyDialogOpen(false);
-          void completePayment(pendingPayment.label, pendingPayment.id);
+          void completePayment(pendingPayment.label, pendingPayment.id, amt);
           setPendingPayment(null);
         }}
       />
+
+      <PercentageEntryDialog
+        open={isPctDialogOpen}
+        onOpenChange={(open) => {
+          if (!open) closePctDialog();
+        }}
+        value={pctDraft}
+        onValueChange={setPctDraft}
+        title={
+          pctKind === "total"
+            ? "Total discount %"
+            : pctKind === "line"
+              ? "Line discount %"
+              : "Discount %"
+        }
+        onCancel={closePctDialog}
+        onOk={confirmPctDialog}
+      />
+
+      <Dialog
+        open={isLineDiscountHintOpen}
+        onOpenChange={setIsLineDiscountHintOpen}
+      >
+        <DialogContent className="w-[420px] max-w-sm gap-3 overflow-hidden rounded-none border-slate-600 bg-slate-900 p-0 text-white">
+          <DialogHeader className="bg-amber-400 px-4 py-3">
+            <DialogTitle className="text-base font-extrabold tracking-tight text-amber-950">
+              Line discount
+            </DialogTitle>
+          </DialogHeader>
+          <div className="px-4 pb-2">
+            <p className="text-sm font-semibold text-slate-200">
+              Select a line in the cart first, then apply a line discount.
+            </p>
+          </div>
+          <DialogFooter className="gap-2 rounded-none bg-slate-900 px-4 pb-4 sm:justify-end">
+            <Button
+              type="button"
+              className="h-12 w-full rounded-none bg-emerald-500 font-extrabold text-emerald-950 hover:bg-emerald-400"
+              onClick={() => setIsLineDiscountHintOpen(false)}
+            >
+              OK
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       <Dialog
         open={isCommentDialogOpen}
@@ -506,6 +617,32 @@ export function PosActionRow() {
                 Log out
               </Button>
             </div>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={isXReportOpen} onOpenChange={(o) => !o && closeXReport()}>
+        <DialogContent className="max-h-[85vh] max-w-lg overflow-y-auto rounded-none border-slate-600 bg-slate-900 p-4 text-white">
+          <DialogHeader>
+            <DialogTitle className="text-base font-extrabold tracking-tight">
+              X-Report (read-only)
+            </DialogTitle>
+          </DialogHeader>
+          {xReportLoading ? (
+            <p className="text-sm text-slate-300">Loading…</p>
+          ) : (
+            <pre className="max-h-[60vh] overflow-auto whitespace-pre-wrap break-all text-left text-xs text-slate-200">
+              {xReportBody}
+            </pre>
+          )}
+          <DialogFooter className="mt-2">
+            <Button
+              type="button"
+              className="w-full rounded-none"
+              onClick={closeXReport}
+            >
+              Close
+            </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>

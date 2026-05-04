@@ -8,6 +8,7 @@ export const POSTING_ACCOUNT_KEYS: readonly AccountKey[] = [
   'cash',
   'bank',
   'card_clearing',
+  'wallet_clearing',
   'accounts_receivable',
   'due_from_branch',
   'inventory',
@@ -16,6 +17,8 @@ export const POSTING_ACCOUNT_KEYS: readonly AccountKey[] = [
   'sales_revenue',
   'cogs',
   'operating_expense',
+  'cash_shortage_expense',
+  'cash_overage_income',
   'equity_retained',
 ] as const;
 
@@ -162,6 +165,14 @@ const COA_SEED_ROWS: CoaSeedRow[] = [
     name: 'Card clearing',
     account_type: 'asset',
     payment_method_key: 'card',
+    parent_key: 'sec_current_assets',
+  },
+  {
+    account_key: 'wallet_clearing',
+    code: '1025',
+    name: 'Mobile wallet clearing',
+    account_type: 'asset',
+    payment_method_key: null,
     parent_key: 'sec_current_assets',
   },
   {
@@ -322,6 +333,14 @@ const COA_SEED_ROWS: CoaSeedRow[] = [
     payment_method_key: null,
     parent_key: 'sec_income',
   },
+  {
+    account_key: 'cash_overage_income',
+    code: '4250',
+    name: 'Cash overage',
+    account_type: 'income',
+    payment_method_key: null,
+    parent_key: 'sec_income',
+  },
 
   // COGS & expenses
   {
@@ -384,6 +403,14 @@ const COA_SEED_ROWS: CoaSeedRow[] = [
     account_key: 'operating_expense',
     code: '5990',
     name: 'General operating expenses',
+    account_type: 'expense',
+    payment_method_key: null,
+    parent_key: 'sec_operating_exp',
+  },
+  {
+    account_key: 'cash_shortage_expense',
+    code: '5995',
+    name: 'Cash shortage',
     account_type: 'expense',
     payment_method_key: null,
     parent_key: 'sec_operating_exp',
@@ -502,6 +529,7 @@ export class ChartOfAccountsSeedService {
   ): string {
     if (key === 'card') return accounts.card_clearing;
     if (key === 'bank') return accounts.bank;
+    if (key === 'wallet') return accounts.wallet_clearing;
     return accounts.cash;
   }
 }

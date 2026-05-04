@@ -31,15 +31,17 @@ export type PosDeviceEnrollmentResponse = {
   deviceCredential: string;
 };
 
-/** Cashier POS sign-in (PIN + pharmacy slug). */
+/** PIN-only POS sign-in (pharmacy slug). Optional staffId scopes login to that staff row. */
 export async function pinLogin(
   pin: string,
   tenant: string,
   branchId?: string,
+  staffId?: string,
 ): Promise<LoginResponse> {
   const trimmed = branchId?.trim();
   const resolvedBranchId =
     trimmed && trimmed.toLowerCase() !== "all" ? trimmed : undefined;
+  const sid = staffId?.trim();
   return jsonFetch<LoginResponse>(`${AUTH_PREFIX}/pin-login`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
@@ -47,12 +49,13 @@ export async function pinLogin(
       pin,
       tenant,
       ...(resolvedBranchId ? { branchId: resolvedBranchId } : {}),
+      ...(sid ? { staffId: sid } : {}),
     }),
   });
 }
 
-export async function cashierLogin(
-  cashierId: string,
+export async function staffLogin(
+  staffId: string,
   pin: string,
   deviceCredential: string,
   branchId?: string,
@@ -60,11 +63,11 @@ export async function cashierLogin(
   const trimmed = branchId?.trim();
   const resolvedBranchId =
     trimmed && trimmed.toLowerCase() !== "all" ? trimmed : undefined;
-  return jsonFetch<LoginResponse>(`${AUTH_PREFIX}/cashier-login`, {
+  return jsonFetch<LoginResponse>(`${AUTH_PREFIX}/staff-login`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
-      cashierId,
+      staffId,
       pin,
       deviceCredential,
       ...(resolvedBranchId ? { branchId: resolvedBranchId } : {}),

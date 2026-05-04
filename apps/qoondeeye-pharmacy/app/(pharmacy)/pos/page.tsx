@@ -7,8 +7,9 @@ import { useRouter } from "next/navigation";
 import {
   Activity,
   Banknote,
-  CreditCard,
   FileEdit,
+  Gift,
+  Landmark,
   LogOut,
   Package,
   PauseCircle,
@@ -20,29 +21,31 @@ import {
   Search,
   ShoppingCart,
   Smartphone,
+  Star,
   Undo2,
   Wallet,
   X,
 } from "lucide-react";
+import type { LucideIcon } from "lucide-react";
 
-import { Badge } from "@repo/ui/badge";
-import { Button } from "@repo/ui/button";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import {
   Card,
   CardContent,
   CardFooter,
   CardHeader,
   CardTitle,
-} from "@repo/ui/card";
-import { Input } from "@repo/ui/input";
-import { Separator } from "@repo/ui/separator";
+} from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
+import { Separator } from "@/components/ui/separator";
 import {
   Sheet,
   SheetContent,
   SheetDescription,
   SheetHeader,
   SheetTitle,
-} from "@repo/ui/sheet";
+} from "@/components/ui/sheet";
 import { cn } from "@/lib/utils";
 import { PosReturnPanel } from "@/components/pos/pos-return-panel";
 import {
@@ -67,11 +70,16 @@ import {
   type Batch,
   type Sale,
 } from "@/lib/api";
+import type { PosMiscChargeKind } from "@repo/types";
+import {
+  POS_DEFAULT_DISCOUNT,
+  POS_MISC_CHARGE_LINE_LABELS,
+  POS_PAYMENT_METHOD_IDS,
+  POS_PAYMENT_METHOD_LABELS,
+  POS_TAX_RATE,
+} from "@repo/types";
 
 const brand = "#0d968b";
-
-const TAX_RATE = 0.15;
-const DEFAULT_DISCOUNT = 2;
 
 const ALL_CATEGORIES_LABEL = "All Categories";
 
@@ -111,6 +119,8 @@ type CartLine = {
   listUnitPrice?: number;
   qty: number;
   unitType: UnitType;
+  /** Manual charge (delivery/tailor); member_card excluded from billable totals until points. */
+  miscChargeKind?: PosMiscChargeKind;
 };
 
 type HeldOrder = {
@@ -236,21 +246,18 @@ function lineIconForProductId(productId: string) {
 
 function cartTotals(lines: CartLine[], discount: number) {
   const subtotal = lines.reduce((s, l) => s + l.unitPrice * l.qty, 0);
-  const tax = subtotal * TAX_RATE;
+  const tax = subtotal * POS_TAX_RATE;
   const total = subtotal + tax - discount;
   return { subtotal, tax, total };
+}
+
+function billableCartLines(lines: CartLine[]): CartLine[] {
+  return lines.filter((l) => l.miscChargeKind !== "member_card");
 }
 
 function cloneLines(lines: CartLine[]): CartLine[] {
   return lines.map((l) => ({ ...l, lineId: crypto.randomUUID() }));
 }
-
-const PAYMENT_METHOD_LABELS: Record<string, string> = {
-  cash: "Cash",
-  card: "Card",
-  mobile: "Mobile money",
-  wallet: "Digital wallet",
-};
 
 function toFiniteNumber(v: unknown): number {
   const n = typeof v === "number" ? v : Number(v);
@@ -261,7 +268,11 @@ function normalizePaymentMethod(v: unknown): string {
   if (typeof v !== "string") return "Sale";
   const key = v.trim();
   if (!key) return "Sale";
-  return PAYMENT_METHOD_LABELS[key.toLowerCase()] ?? key;
+  return (
+    POS_PAYMENT_METHOD_LABELS[key] ??
+    POS_PAYMENT_METHOD_LABELS[key.toLowerCase()] ??
+    key
+  );
 }
 
 function saleToPosTransaction(
@@ -272,13 +283,25 @@ function saleToPosTransaction(
   const lines: PosTransaction["lines"] = rawLines.map((item, index) => {
     const qty = Math.max(1, Math.round(toFiniteNumber(item.quantity)));
     const unitPrice = toFiniteNumber(item.price);
-    const productId = (item.product_id ?? "").trim() || `item-${index + 1}`;
+    const miscKindRaw =
+      typeof item.misc_charge_kind === "string"
+        ? item.misc_charge_kind.trim()
+        : "";
+    const miscKind =
+      miscKindRaw && miscKindRaw in POS_MISC_CHARGE_LINE_LABELS
+        ? (miscKindRaw as PosMiscChargeKind)
+        : null;
+    const productId =
+      (item.product_id ?? "").trim() ||
+      (miscKind ? `misc-${miscKind}` : `item-${index + 1}`);
     const resolvedName =
-      (productNameById && productNameById[productId]) || undefined;
+      miscKind != null
+        ? POS_MISC_CHARGE_LINE_LABELS[miscKind]
+        : (productNameById && productNameById[productId]) || undefined;
     return {
       lineId: (item.id ?? "").trim() || `${sale.id}-${index + 1}`,
       productId,
-      name: resolvedName || (item.product_id ? "Product" : "Item"),
+      name: resolvedName ?? (item.product_id ? "Product" : "Item"),
       unitPrice,
       qty,
       unitType: "PC",
@@ -295,9 +318,7 @@ function saleToPosTransaction(
   const createdAtParsed = sale.sale_date ? Date.parse(String(sale.sale_date)) : Number.NaN;
   const createdAt = Number.isFinite(createdAtParsed) ? createdAtParsed : Date.now();
   const receiptId = (sale.receipt_number ?? "").trim() || sale.id;
-  const paymentMethod = normalizePaymentMethod(
-    (sale as Sale & { payment_method?: string | null }).payment_method,
-  );
+  const paymentMethod = normalizePaymentMethod(sale.payment_method);
 
   return {
     receiptId,
@@ -326,12 +347,28 @@ function StockBadge({ stock }: { stock: Product["stock"] }) {
   );
 }
 
-const PAYMENT_METHODS = [
-  { id: "cash", label: "Cash", icon: Banknote },
-  { id: "card", label: "Card", icon: CreditCard },
-  { id: "mobile", label: "Mobile money", icon: Smartphone },
-  { id: "wallet", label: "Digital wallet", icon: Wallet },
-] as const;
+const POS_PAYMENT_ICONS: Record<string, LucideIcon> = {
+  cash: Banknote,
+  evc: Smartphone,
+  edahab: Smartphone,
+  "merchant-evc": Smartphone,
+  "merchant-edahab": Smartphone,
+  banks: Landmark,
+  "primary-wallet": Wallet,
+  "member-points": Star,
+  "My Cash": Gift,
+  Ebesa: Gift,
+  "My Bank": Gift,
+  "T-plus": Gift,
+  "Yeel App": Gift,
+  Refund: Gift,
+};
+
+const PAYMENT_METHODS = POS_PAYMENT_METHOD_IDS.map((id) => ({
+  id,
+  label: POS_PAYMENT_METHOD_LABELS[id] ?? id,
+  icon: POS_PAYMENT_ICONS[id] ?? Banknote,
+}));
 
 function PosSessionGate({ children }: { children: React.ReactNode }) {
   const [session, setSession] = React.useState<0 | 1 | 2>(0);
@@ -527,7 +564,7 @@ function POSUserPageInner() {
   const [searchQuery, setSearchQuery] = React.useState("");
   const [cart, setCart] = React.useState<CartLine[]>([]);
   const [heldOrders, setHeldOrders] = React.useState<HeldOrder[]>([]);
-  const [discount, setDiscount] = React.useState(DEFAULT_DISCOUNT);
+  const [discount, setDiscount] = React.useState(POS_DEFAULT_DISCOUNT);
   const [checkoutStep, setCheckoutStep] = React.useState<"cart" | "payment">(
     "cart",
   );
@@ -893,7 +930,10 @@ function POSUserPageInner() {
     return () => clearInterval(t);
   }, []);
 
-  const { subtotal, tax, total } = cartTotals(cart, discount);
+  const { subtotal, tax, total } = cartTotals(
+    billableCartLines(cart),
+    discount,
+  );
 
   const filteredProducts = React.useMemo(() => {
     const q = searchQuery.trim().toLowerCase();
@@ -989,6 +1029,12 @@ function POSUserPageInner() {
 
   const goToPayment = () => {
     if (cart.length === 0) return;
+    if (billableCartLines(cart).length === 0) {
+      window.alert(
+        "Add products or delivery/tailor charges. Member card is not included until points are enabled.",
+      );
+      return;
+    }
     setCheckoutStep("payment");
   };
 
@@ -997,10 +1043,17 @@ function POSUserPageInner() {
     paymentMethodCode?: string,
   ) => {
     if (cart.length === 0) return;
-    const { subtotal: s, tax: t, total: tot } = cartTotals(cart, discount);
+    const billable = billableCartLines(cart);
+    if (billable.length === 0) {
+      window.alert(
+        "Add products or delivery/tailor charges. Member card is not included until points are enabled.",
+      );
+      return;
+    }
+    const { subtotal: s, tax: t, total: tot } = cartTotals(billable, discount);
 
     if (tenantSlug) {
-      const zeroPrice = cart.some((l) => l.unitPrice <= 0);
+      const zeroPrice = billable.some((l) => l.miscChargeKind == null && l.unitPrice <= 0);
       if (zeroPrice) {
         window.alert(
           "One or more lines have no price (no batch selling price). Set prices in inventory or batches before completing the sale.",
@@ -1013,11 +1066,19 @@ function POSUserPageInner() {
           discount,
           tax: t,
           paymentMethod: paymentMethodCode ?? paymentLabel,
-          items: cart.map((l) => ({
-            productId: l.productId,
-            quantity: l.qty,
-            price: l.unitPrice,
-          })),
+          items: billable.map((l) =>
+            l.miscChargeKind === "delivery" || l.miscChargeKind === "tailor"
+              ? {
+                  miscChargeKind: l.miscChargeKind,
+                  quantity: l.qty,
+                  price: l.unitPrice,
+                }
+              : {
+                  productId: l.productId,
+                  quantity: l.qty,
+                  price: l.unitPrice,
+                },
+          ),
         });
         const receiptNum =
           (sale.receipt_number as string | null | undefined)?.trim() ||
@@ -1027,7 +1088,7 @@ function POSUserPageInner() {
           saleId: sale.id,
           createdAt: Date.now(),
           paymentMethod: paymentLabel,
-          lines: cloneLines(cart),
+          lines: cloneLines(billable),
           discount,
           subtotal: s,
           tax: t,
@@ -1055,7 +1116,7 @@ function POSUserPageInner() {
       receiptId: newReceiptId(),
       createdAt: Date.now(),
       paymentMethod: paymentLabel,
-      lines: cloneLines(cart),
+      lines: cloneLines(billable),
       discount,
       subtotal: s,
       tax: t,
@@ -1604,7 +1665,7 @@ function POSUserPageInner() {
                       </span>
                     </div>
                     <div className="flex justify-between text-sm">
-                      <span className="text-muted-foreground">Tax (15%)</span>
+                      <span className="text-muted-foreground">{`Tax (${Math.round(POS_TAX_RATE * 100)}%)`}</span>
                       <span className="font-medium">{formatMoney(tax)}</span>
                     </div>
                     <div className="flex items-center justify-between text-sm">
@@ -1679,7 +1740,7 @@ function POSUserPageInner() {
                     {formatMoney(total)}
                   </p>
                 </div>
-                <div className="grid w-full grid-cols-2 gap-3">
+                <div className="grid w-full max-h-[min(45vh,420px)] grid-cols-3 gap-2 overflow-y-auto pr-1">
                   {PAYMENT_METHODS.map((m) => {
                     const Icon = m.icon;
                     return (
@@ -1687,11 +1748,11 @@ function POSUserPageInner() {
                         key={m.id}
                         type="button"
                         variant="outline"
-                        className="h-auto flex-col gap-2 rounded-xl border-2 border-[color:var(--pos-brand)]/25 py-5 font-semibold hover:bg-[color:var(--pos-brand)]/10"
+                        className="h-auto flex-col gap-1 rounded-xl border-2 border-[color:var(--pos-brand)]/25 px-2 py-3 text-[11px] font-semibold hover:bg-[color:var(--pos-brand)]/10"
                         onClick={() => void completePayment(m.label, m.id)}
                       >
-                        <Icon className="size-6 text-[color:var(--pos-brand)]" />
-                        {m.label}
+                        <Icon className="size-5 shrink-0 text-[color:var(--pos-brand)]" />
+                        <span className="text-center leading-tight">{m.label}</span>
                       </Button>
                     );
                   })}

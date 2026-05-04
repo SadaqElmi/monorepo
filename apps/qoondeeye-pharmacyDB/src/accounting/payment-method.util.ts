@@ -20,7 +20,9 @@ export function classifyPaymentMethod(
     m.includes('wallet') ||
     m.includes('mobile') ||
     m.includes('mpesa') ||
-    m.includes('m-pesa')
+    m.includes('m-pesa') ||
+    m.includes('evc') ||
+    m.includes('dahab')
   ) {
     return 'wallet';
   }

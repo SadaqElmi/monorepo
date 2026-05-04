@@ -10,8 +10,8 @@ import {
   BreadcrumbList,
   BreadcrumbPage,
   BreadcrumbSeparator,
-} from "@repo/ui/breadcrumb";
-import { Separator } from "@repo/ui/separator";
+} from "@/components/ui/breadcrumb";
+import { Separator } from "@/components/ui/separator";
 import { cn } from "@/lib/utils";
 
 export type ErpWorkbenchCrumb = {

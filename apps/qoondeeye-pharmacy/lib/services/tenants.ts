@@ -53,3 +53,11 @@ export async function deleteTenant(id: string) {
   });
 }
 
+/** Deletes the row in `public.tenants` by unique `schemaName` (survives stale/missing client UUIDs). */
+export async function deleteTenantBySchemaName(schemaName: string) {
+  const enc = encodeURIComponent(schemaName.trim());
+  return jsonFetch<{ deleted: boolean }>(`${TENANTS_PREFIX}/schema/${enc}`, {
+    method: "DELETE",
+  });
+}
+

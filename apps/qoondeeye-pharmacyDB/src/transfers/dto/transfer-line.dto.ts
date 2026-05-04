@@ -3,10 +3,10 @@ import { IsInt, IsUUID, Min } from 'class-validator';
 
 export class TransferLineDto {
   @IsUUID()
-  product_id: string;
+  product_id!: string;
 
   @Type(() => Number)
   @IsInt()
   @Min(1)
-  quantity: number;
+  quantity!: number;
 }

@@ -74,18 +74,18 @@ describe('AuthService device-bound login helpers', () => {
 
   it('keeps lockout isolated per device key', () => {
     const { service } = createService();
-    const keyA = (service as any).buildCashierLockKey('deviceA', 'cashier-1');
-    const keyB = (service as any).buildCashierLockKey('deviceB', 'cashier-1');
+    const keyA = (service as any).buildStaffLoginLockKey('deviceA', 'staff-1');
+    const keyB = (service as any).buildStaffLoginLockKey('deviceB', 'staff-1');
 
     for (let i = 0; i < 5; i += 1) {
-      (service as any).registerCashierLoginFailure(keyA);
+      (service as any).registerStaffLoginFailure(keyA);
     }
 
-    expect(() => (service as any).assertCashierLoginNotLocked(keyA)).toThrow(
+    expect(() => (service as any).assertStaffLoginNotLocked(keyA)).toThrow(
       UnauthorizedException,
     );
     expect(() =>
-      (service as any).assertCashierLoginNotLocked(keyB),
+      (service as any).assertStaffLoginNotLocked(keyB),
     ).not.toThrow();
   });
 
@@ -148,7 +148,7 @@ describe('AuthService device-bound login helpers', () => {
     expect(prisma.$queryRawUnsafe).toHaveBeenCalled();
   });
 
-  it('cashierLogin resolves tenant from device and scopes query to that tenant', async () => {
+  it('staffLogin resolves tenant from device and scopes query to that tenant', async () => {
     const { service, prisma } = createService();
     const jwt = (service as any).jwtService as { signAsync: jest.Mock };
     const tenantService = (service as any).tenantService as {
@@ -187,14 +187,15 @@ describe('AuthService device-bound login helpers', () => {
               name: 'Cashier',
               pin_hash: pinHash,
               branch_id: 'branch-1',
+              role_name: 'cashier',
             },
           ]),
         }),
     );
     jwt.signAsync.mockResolvedValue('signed-token');
 
-    const res = await service.cashierLogin({
-      cashierId: 'cashier@example.com',
+    const res = await service.staffLogin({
+      staffId: 'cashier@example.com',
       pin: '1234',
       deviceCredential,
     });
@@ -208,5 +209,10 @@ describe('AuthService device-bound login helpers', () => {
     );
     expect(res.tenantSlug).toBe('pharmacy_alpha');
     expect(res.token).toBe('signed-token');
+    expect(res.role).toBe('cashier');
+    expect(jwt.signAsync).toHaveBeenCalledWith(
+      expect.objectContaining({ role: 'cashier' }),
+      expect.anything(),
+    );
   });
 });

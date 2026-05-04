@@ -8,6 +8,7 @@ import { JwtService } from '@nestjs/jwt';
 import type { JwtSignOptions } from '@nestjs/jwt';
 import * as bcrypt from 'bcrypt';
 import { createHash, randomBytes, randomUUID, timingSafeEqual } from 'crypto';
+import { Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { TenantContextService } from '../tenant/tenant-context.service';
 import { TenantService } from '../tenant/tenant.service';
@@ -49,12 +50,12 @@ export type RegisterResponse = {
 
 @Injectable()
 export class AuthService {
-  private readonly cashierLockState = new Map<
+  private readonly staffLoginLockState = new Map<
     string,
     { failures: number; lockUntil: number; lastFailedAt: number }
   >();
-  private readonly cashierMaxFailures = 5;
-  private readonly cashierLockWindowMs = 5 * 60 * 1000;
+  private readonly staffLoginMaxFailures = 5;
+  private readonly staffLoginLockWindowMs = 5 * 60 * 1000;
 
   constructor(
     private readonly prisma: PrismaService,
@@ -221,49 +222,85 @@ export class AuthService {
     });
   }
 
-  /** Cashier login: PIN + tenant slug (optional branch). */
+  /** POS PIN login: PIN + tenant slug (optional branch and optional staff id). */
   async pinLogin(input: {
     pin: string;
     tenant: string;
     branchId?: string;
+    staffId?: string;
   }): Promise<LoginResponse> {
     const slug = input.tenant.trim();
     if (this.isDeviceLoginEnforcedForTenant(slug)) {
       throw new UnauthorizedException(
-        'Device-bound login is required for this pharmacy. Use cashier ID + PIN.',
+        'Device-bound login is required for this pharmacy. Use staff ID + PIN.',
       );
     }
-    const anyTenant = await this.tenantService.findBySchemaNameAny(slug);
-    if (!anyTenant || anyTenant.status !== 'active') {
-      throw new UnauthorizedException('Invalid credentials');
+    const tenantRow = await this.prisma.tenant.findFirst({
+      where: {
+        schemaName: { equals: slug, mode: 'insensitive' },
+      },
+    });
+    if (!tenantRow) {
+      throw new UnauthorizedException('Pharmacy code not recognized');
+    }
+    if (tenantRow.status !== 'active') {
+      throw new UnauthorizedException('Pharmacy is inactive');
     }
     const tenant = {
-      id: anyTenant.id,
-      schemaName: anyTenant.schemaName,
-      name: anyTenant.name,
+      id: tenantRow.id,
+      schemaName: tenantRow.schemaName,
+      name: tenantRow.name,
     };
 
     // Public auth routes skip tenant middleware; ensure live tenant schemas have `pin_hash`, etc.
     await this.tenantService.applyTenantSchemaPatches(tenant.schemaName);
 
+    const staffFilter = input.staffId?.trim();
+
+    const usersRef = Prisma.raw(`"${tenant.schemaName}"."users"`);
+    const rolesRef = Prisma.raw(`"${tenant.schemaName}"."roles"`);
+
     return this.prisma.withTenantSchema(tenant.schemaName, async (tx) => {
-      // Match PIN against all cashiers who have a PIN (tenant-wide; staff enforces unique PIN).
-      // Do not filter by branch here.
-      const candidates = await tx.$queryRawUnsafe<
-        {
-          id: string;
-          email: string | null;
-          name: string | null;
-          pin_hash: string;
-          branch_id: string | null;
-        }[]
-      >(
-        `SELECT u.id, u.email, u.name, u.pin_hash, u.branch_id
-         FROM "${tenant.schemaName}"."users" u
-         INNER JOIN "${tenant.schemaName}"."roles" r ON u.role_id = r.id
-         WHERE lower(r.name) = 'cashier'
-           AND u.pin_hash IS NOT NULL`,
-      );
+      // Match PIN against POS-eligible users with a PIN. Optional staffId scopes to one user.
+      const candidates = staffFilter
+        ? await tx.$queryRaw<
+            {
+              id: string;
+              email: string | null;
+              name: string | null;
+              pin_hash: string;
+              branch_id: string | null;
+              role_name: string;
+            }[]
+          >`
+            SELECT u.id, u.email, u.name, u.pin_hash, u.branch_id,
+                   lower(r.name) AS role_name
+            FROM ${usersRef} u
+            INNER JOIN ${rolesRef} r ON u.role_id = r.id
+            WHERE lower(r.name) IN ('cashier', 'manager', 'admin', 'pharmacist')
+              AND u.pin_hash IS NOT NULL
+              AND (
+                lower(COALESCE(u.staff_id, '')) = lower(${staffFilter})
+                OR u.id::text = ${staffFilter}
+              )
+          `
+        : await tx.$queryRaw<
+            {
+              id: string;
+              email: string | null;
+              name: string | null;
+              pin_hash: string;
+              branch_id: string | null;
+              role_name: string;
+            }[]
+          >`
+            SELECT u.id, u.email, u.name, u.pin_hash, u.branch_id,
+                   lower(r.name) AS role_name
+            FROM ${usersRef} u
+            INNER JOIN ${rolesRef} r ON u.role_id = r.id
+            WHERE lower(r.name) IN ('cashier', 'manager', 'admin', 'pharmacist')
+              AND u.pin_hash IS NOT NULL
+          `;
 
       let matched: (typeof candidates)[0] | null = null;
       for (const row of candidates) {
@@ -275,21 +312,25 @@ export class AuthService {
       }
 
       if (!matched) {
-        throw new UnauthorizedException('Invalid credentials');
+        throw new UnauthorizedException(
+          'Invalid PIN or staff ID (ensure POS PIN is set on this user, not only the web password)',
+        );
       }
       if (!matched.branch_id) {
         throw new UnauthorizedException(
-          'Cashier branch assignment is required',
+          'Branch assignment is required for POS sign-in',
         );
       }
       if (input.branchId && input.branchId !== matched.branch_id) {
         throw new UnauthorizedException('Access denied to this branch');
       }
 
+      const resolvedRole = matched.role_name.trim().toLowerCase();
+
       const token = await this.signToken(
         {
           sub: matched.id,
-          role: 'cashier',
+          role: resolvedRole,
           type: 'tenant_user',
           tenantSchema: tenant.schemaName,
           tenantId: tenant.id,
@@ -309,7 +350,7 @@ export class AuthService {
         },
         token,
         userId: matched.id,
-        role: 'cashier',
+        role: resolvedRole,
         tenantId: tenant.id,
         tenantSlug: tenant.schemaName,
         userType: 'tenant',
@@ -322,21 +363,21 @@ export class AuthService {
     });
   }
 
-  async cashierLogin(input: {
-    cashierId: string;
+  async staffLogin(input: {
+    staffId: string;
     pin: string;
     deviceCredential: string;
     branchId?: string;
   }): Promise<LoginResponse> {
-    const identifier = input.cashierId.trim();
+    const identifier = input.staffId.trim();
     if (!identifier) {
       throw new UnauthorizedException('Invalid credentials');
     }
     const device = await this.resolvePosDeviceFromCredential(
       input.deviceCredential,
     );
-    const lockKey = this.buildCashierLockKey(device.id, identifier);
-    this.assertCashierLoginNotLocked(lockKey);
+    const lockKey = this.buildStaffLoginLockKey(device.id, identifier);
+    this.assertStaffLoginNotLocked(lockKey);
 
     await this.tenantService.applyTenantSchemaPatches(device.tenantSchema);
 
@@ -350,15 +391,17 @@ export class AuthService {
             name: string | null;
             pin_hash: string;
             branch_id: string | null;
+            role_name: string;
           }[]
         >(
-          `SELECT u.id, u.email, u.name, u.pin_hash, u.branch_id
+          `SELECT u.id, u.email, u.name, u.pin_hash, u.branch_id,
+                  lower(r.name) AS role_name
            FROM "${device.tenantSchema}"."users" u
            INNER JOIN "${device.tenantSchema}"."roles" r ON u.role_id = r.id
-           WHERE lower(r.name) = 'cashier'
+           WHERE lower(r.name) IN ('cashier', 'manager', 'admin', 'pharmacist')
              AND u.pin_hash IS NOT NULL
              AND (
-               lower(COALESCE(u.cashier_id, '')) = lower($1)
+               lower(COALESCE(u.staff_id, '')) = lower($1)
                OR u.id::text = $1
              )
            LIMIT 1`,
@@ -369,36 +412,40 @@ export class AuthService {
     );
 
     if (!matched) {
-      this.registerCashierLoginFailure(lockKey);
+      this.registerStaffLoginFailure(lockKey);
       throw new UnauthorizedException('Invalid credentials');
     }
 
     const pinMatches = await bcrypt.compare(input.pin, matched.pin_hash);
     if (!pinMatches) {
-      this.registerCashierLoginFailure(lockKey);
+      this.registerStaffLoginFailure(lockKey);
       throw new UnauthorizedException('Invalid credentials');
     }
 
     if (!matched.branch_id) {
-      throw new UnauthorizedException('Cashier branch assignment is required');
+      throw new UnauthorizedException(
+        'Branch assignment is required for POS sign-in',
+      );
     }
 
     if (device.branchId && device.branchId !== matched.branch_id) {
       throw new UnauthorizedException(
-        'This cashier is not assigned to the enrolled device branch',
+        'This user is not assigned to the enrolled device branch',
       );
     }
     if (input.branchId && input.branchId !== matched.branch_id) {
       throw new UnauthorizedException('Access denied to this branch');
     }
 
-    this.clearCashierLoginFailures(lockKey);
+    this.clearStaffLoginFailures(lockKey);
     await this.touchPosDevice(device.id);
+
+    const resolvedRole = matched.role_name.trim().toLowerCase();
 
     const token = await this.signToken(
       {
         sub: matched.id,
-        role: 'cashier',
+        role: resolvedRole,
         type: 'tenant_user',
         tenantSchema: device.tenantSchema,
         tenantId: device.tenantId,
@@ -417,7 +464,7 @@ export class AuthService {
       },
       token,
       userId: matched.id,
-      role: 'cashier',
+      role: resolvedRole,
       tenantId: device.tenantId,
       tenantSlug: device.tenantSchema,
       userType: 'tenant',
@@ -720,12 +767,12 @@ export class AuthService {
     );
   }
 
-  private buildCashierLockKey(deviceId: string, cashierId: string): string {
-    return `${deviceId}:${cashierId.trim().toLowerCase()}`;
+  private buildStaffLoginLockKey(deviceId: string, staffId: string): string {
+    return `${deviceId}:${staffId.trim().toLowerCase()}`;
   }
 
-  private assertCashierLoginNotLocked(lockKey: string): void {
-    const existing = this.cashierLockState.get(lockKey);
+  private assertStaffLoginNotLocked(lockKey: string): void {
+    const existing = this.staffLoginLockState.get(lockKey);
     if (!existing) return;
     const now = Date.now();
     if (existing.lockUntil > now) {
@@ -733,28 +780,30 @@ export class AuthService {
         'Too many failed attempts. Please wait before retrying.',
       );
     }
-    if (now - existing.lastFailedAt > this.cashierLockWindowMs) {
-      this.cashierLockState.delete(lockKey);
+    if (now - existing.lastFailedAt > this.staffLoginLockWindowMs) {
+      this.staffLoginLockState.delete(lockKey);
     }
   }
 
-  private registerCashierLoginFailure(lockKey: string): void {
+  private registerStaffLoginFailure(lockKey: string): void {
     const now = Date.now();
-    const existing = this.cashierLockState.get(lockKey);
+    const existing = this.staffLoginLockState.get(lockKey);
     const shouldResetWindow =
-      !existing || now - existing.lastFailedAt > this.cashierLockWindowMs;
+      !existing || now - existing.lastFailedAt > this.staffLoginLockWindowMs;
     const failures = shouldResetWindow ? 1 : existing.failures + 1;
     const lockUntil =
-      failures >= this.cashierMaxFailures ? now + this.cashierLockWindowMs : 0;
-    this.cashierLockState.set(lockKey, {
+      failures >= this.staffLoginMaxFailures
+        ? now + this.staffLoginLockWindowMs
+        : 0;
+    this.staffLoginLockState.set(lockKey, {
       failures,
       lockUntil,
       lastFailedAt: now,
     });
   }
 
-  private clearCashierLoginFailures(lockKey: string): void {
-    this.cashierLockState.delete(lockKey);
+  private clearStaffLoginFailures(lockKey: string): void {
+    this.staffLoginLockState.delete(lockKey);
   }
 
   private isDeviceLoginEnforcedForTenant(tenantSlug: string): boolean {

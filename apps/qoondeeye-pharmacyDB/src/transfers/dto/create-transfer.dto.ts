@@ -14,7 +14,7 @@ export class CreateTransferDto {
   from_branch_id?: string;
 
   @IsUUID()
-  to_branch_id: string;
+  to_branch_id!: string;
 
   @IsOptional()
   @IsDateString()
@@ -23,5 +23,5 @@ export class CreateTransferDto {
   @IsArray()
   @ValidateNested({ each: true })
   @Type(() => TransferLineDto)
-  items: TransferLineDto[];
+  items!: TransferLineDto[];
 }

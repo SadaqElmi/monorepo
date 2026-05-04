@@ -10,8 +10,10 @@ const COOKIE_MAX_AGE_DAYS = 7;
 
 export type StoredUser = {
   id: string;
-  /** Empty for some cashier accounts */
+  /** Empty for some POS staff (cashier role) accounts */
   email?: string;
+  /** POS staff ID entered at login (device-bound flow). */
+  staffId?: string;
   name: string | null;
   userType?: "system" | "tenant";
   role?: string;
@@ -35,7 +37,8 @@ export function setAuthToken(token: string, user: StoredUser) {
   const maxAge = COOKIE_MAX_AGE_DAYS * 24 * 60 * 60;
   document.cookie = `${AUTH_TOKEN_KEY}=${encodeURIComponent(token)}; ${cookieOptions(maxAge)}`;
   const payload = {
-    userType: user.userType ?? (user.role === "super_admin" ? "system" : "tenant"),
+    userType:
+      user.userType ?? (user.role === "super_admin" ? "system" : "tenant"),
     role: user.role ?? "user",
     tenantId: user.tenantId ?? null,
     tenantSlug: user.tenantSlug ?? null,
@@ -48,6 +51,9 @@ export function setAuthToken(token: string, user: StoredUser) {
     id: user.id,
     email: user.email ?? "",
     name: user.name,
+    ...(typeof user.staffId === "string" && user.staffId.trim()
+      ? { staffId: user.staffId.trim() }
+      : {}),
   };
   document.cookie = `${AUTH_USER_COOKIE}=${encodeURIComponent(JSON.stringify(payload))}; ${cookieOptions(maxAge)}`;
   try {
@@ -109,6 +115,9 @@ export function getResolvedStoredUser(): StoredUser | null {
     id: fromCookie.id,
     email: fromCookie.email?.trim() || undefined,
     name: fromCookie.name ?? fromCookie.email ?? null,
+    ...(typeof fromCookie.staffId === "string" && fromCookie.staffId.trim()
+      ? { staffId: fromCookie.staffId.trim() }
+      : {}),
     userType: fromCookie.userType,
     role: fromCookie.role,
     tenantId: fromCookie.tenantId ?? undefined,
@@ -127,6 +136,7 @@ export function getResolvedStoredUser(): StoredUser | null {
 /** Parsed auth payload from cookie (for middleware). */
 export type AuthCookiePayload = {
   userType?: "system" | "tenant";
+  staffId?: string;
   role?: string;
   tenantId?: string | null;
   tenantSlug?: string | null;
@@ -139,7 +149,9 @@ export type AuthCookiePayload = {
   name?: string | null;
 };
 
-export function getAuthFromCookie(cookieHeader: string | undefined): AuthCookiePayload | null {
+export function getAuthFromCookie(
+  cookieHeader: string | undefined,
+): AuthCookiePayload | null {
   if (!cookieHeader) return null;
   const match = cookieHeader.match(new RegExp(`${AUTH_USER_COOKIE}=([^;]+)`));
   if (!match) return null;
