@@ -62,7 +62,7 @@ export class TenantMiddleware implements NestMiddleware {
 
       // Keep existing service/controller patterns working (TenantContextService.getSchemaName()).
       // The object shape matches the Prisma Tenant model fields we rely on.
-      this.tenantContext.setTenant(resolved as any);
+      this.tenantContext.setTenant(resolved);
 
       return next();
     });

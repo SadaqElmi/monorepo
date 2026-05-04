@@ -1,10 +1,80 @@
 import { BadRequestException, Injectable } from '@nestjs/common';
+import { Prisma } from '@prisma/client';
 import { randomBytes } from 'crypto';
 import { PrismaService } from '../prisma/prisma.service';
 import { SaleReturnsService } from '../sale-returns/sale-returns.service';
 import { TenantService } from '../tenant/tenant.service';
 
 const PRICE_EPS = 0.02;
+
+export interface SaleBranchRow {
+  id: string;
+  branch_id: string;
+}
+
+export interface SaleItemLineRow {
+  id: string;
+  sale_id: string;
+  product_id: string | null;
+  quantity: number | string;
+  price: number | string | null;
+}
+
+export interface ReturnVoucherInsertRow {
+  id: string;
+  branch_id: string;
+  sale_id: string;
+  sale_item_id: string;
+  quantity: number | string;
+  unit_price: number | string | null;
+  token: string;
+  status: string;
+  reason: string | null;
+  expires_at: Date | null;
+  created_at: Date;
+}
+
+export interface ReturnVoucherLockedRow {
+  id: string;
+  branch_id: string;
+  sale_id: string;
+  sale_item_id: string;
+  quantity: number | string;
+  unit_price: number | string | null;
+  token: string;
+  status: string;
+  reason: string | null;
+  expires_at: Date | null;
+  sale_return_id: string | null;
+  used_at: Date | null;
+  created_at: Date;
+}
+
+export interface SaleReturnInsertRow {
+  id: string;
+  sale_id: string;
+  branch_id: string;
+  reason: string | null;
+  refund_method: string;
+  refund_amount: number | string;
+  return_date: Date;
+}
+
+export interface ReturnVoucherLookupRow {
+  id: string;
+  branchId: string;
+  saleId: string;
+  saleItemId: string;
+  quantity: number | string;
+  unitPrice: number | string | null;
+  token: string;
+  status: string;
+  reason: string | null;
+  saleReturnId: string | null;
+  expiresAt: Date | null;
+  usedAt: Date | null;
+  createdAt: Date;
+}
 
 @Injectable()
 export class ReturnVouchersService {
@@ -15,11 +85,11 @@ export class ReturnVouchersService {
   ) {}
 
   private async sumPendingVoucherQty(
-    tx: any,
+    tx: Prisma.TransactionClient,
     saleItemId: string,
     excludeVoucherId?: string,
   ): Promise<number> {
-    const [r] = (await tx.$queryRawUnsafe(
+    const [r] = await tx.$queryRawUnsafe<{ q: number }[]>(
       `SELECT COALESCE(SUM(quantity), 0)::int AS q
        FROM return_vouchers
        WHERE sale_item_id = $1
@@ -27,7 +97,7 @@ export class ReturnVouchersService {
          AND ($2::uuid IS NULL OR id <> $2::uuid)`,
       saleItemId,
       excludeVoucherId ?? null,
-    )) as { q: number }[];
+    );
     return Number(r?.q ?? 0);
   }
 
@@ -42,7 +112,7 @@ export class ReturnVouchersService {
     },
   ) {
     return this.prisma.withTenantSchema(schemaName, async (tx) => {
-      const [sale] = await tx.$queryRawUnsafe<any[]>(
+      const [sale] = await tx.$queryRawUnsafe<SaleBranchRow[]>(
         `SELECT id, branch_id FROM sales WHERE id = $1 FOR UPDATE`,
         dto.saleId,
       );
@@ -53,7 +123,7 @@ export class ReturnVouchersService {
         throw new BadRequestException('Sale does not belong to active branch');
       }
 
-      const [saleItem] = await tx.$queryRawUnsafe<any[]>(
+      const [saleItem] = await tx.$queryRawUnsafe<SaleItemLineRow[]>(
         `SELECT id, sale_id, product_id, quantity, price
          FROM sale_items
          WHERE id = $1 AND sale_id = $2
@@ -86,7 +156,7 @@ export class ReturnVouchersService {
       const expiresAt = new Date();
       expiresAt.setDate(expiresAt.getDate() + 14);
 
-      const [row] = await tx.$queryRawUnsafe<any[]>(
+      const [row] = await tx.$queryRawUnsafe<ReturnVoucherInsertRow[]>(
         `INSERT INTO return_vouchers (
            branch_id, sale_id, sale_item_id, quantity, unit_price, token, status, reason, expires_at
          )
@@ -122,8 +192,8 @@ export class ReturnVouchersService {
   ) {
     await this.tenantService.applyTenantSchemaPatches(schemaName);
     return this.prisma.withTenantSchema(schemaName, async (tx) => {
-      const [v] = await tx.$queryRawUnsafe<any[]>(
-        `SELECT *
+      const [v] = await tx.$queryRawUnsafe<ReturnVoucherLockedRow[]>(
+        `SELECT id, branch_id, sale_id, sale_item_id, quantity, unit_price, token, status, reason, expires_at, sale_return_id, used_at, created_at
          FROM return_vouchers
          WHERE id = $1 AND branch_id = $2::uuid
          FOR UPDATE`,
@@ -143,7 +213,7 @@ export class ReturnVouchersService {
         throw new BadRequestException('Voucher has expired');
       }
 
-      const [saleItem] = await tx.$queryRawUnsafe<any[]>(
+      const [saleItem] = await tx.$queryRawUnsafe<SaleItemLineRow[]>(
         `SELECT id, sale_id, product_id, quantity, price
          FROM sale_items
          WHERE id = $1 AND sale_id = $2
@@ -176,7 +246,7 @@ export class ReturnVouchersService {
 
       const refundAmount = voucherUnit * Number(v.quantity ?? 0);
 
-      const [saleReturn] = await tx.$queryRawUnsafe<any[]>(
+      const [saleReturn] = await tx.$queryRawUnsafe<SaleReturnInsertRow[]>(
         `INSERT INTO sale_returns (sale_id, branch_id, reason, refund_method, refund_amount)
          VALUES ($1, $2, $3, $4, $5)
          RETURNING id, sale_id, branch_id, reason, refund_method, refund_amount, return_date`,
@@ -234,7 +304,7 @@ export class ReturnVouchersService {
       return null;
     }
     return this.prisma.withTenantSchema(schemaName, async (tx) => {
-      const [row] = await tx.$queryRawUnsafe<any[]>(
+      const [row] = await tx.$queryRawUnsafe<ReturnVoucherLookupRow[]>(
         `SELECT
            id,
            branch_id AS "branchId",

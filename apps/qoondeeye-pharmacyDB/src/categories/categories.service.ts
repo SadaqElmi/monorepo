@@ -9,6 +9,15 @@ const categorySelect = `
   branch_id AS "branchId",
   parent_id AS "parentId"`;
 
+export interface ProductCategoryRow {
+  id: string;
+  name: string;
+  description: string | null;
+  slug: string | null;
+  branchId: string | null;
+  parentId: string | null;
+}
+
 @Injectable()
 export class CategoriesService {
   constructor(private readonly prisma: PrismaService) {}
@@ -16,14 +25,14 @@ export class CategoriesService {
   async findAll(schemaName: string, allowedBranchIds: string[]) {
     return this.prisma.withTenantSchema(schemaName, (tx) => {
       if (!allowedBranchIds.length) {
-        return tx.$queryRawUnsafe<any[]>(
+        return tx.$queryRawUnsafe<ProductCategoryRow[]>(
           `SELECT ${categorySelect.replace(/\s+/g, ' ').trim()}
            FROM product_categories
            WHERE branch_id IS NULL
            ORDER BY name`,
         );
       }
-      return tx.$queryRawUnsafe<any[]>(
+      return tx.$queryRawUnsafe<ProductCategoryRow[]>(
         `SELECT ${categorySelect.replace(/\s+/g, ' ').trim()}
          FROM product_categories
          WHERE (branch_id IS NULL OR branch_id = ANY($1::uuid[]))
@@ -36,7 +45,7 @@ export class CategoriesService {
   async findOne(schemaName: string, id: string, allowedBranchIds: string[]) {
     return this.prisma.withTenantSchema(schemaName, async (tx) => {
       if (!allowedBranchIds.length) {
-        const [row] = await tx.$queryRawUnsafe<any[]>(
+        const [row] = await tx.$queryRawUnsafe<ProductCategoryRow[]>(
           `SELECT ${categorySelect.replace(/\s+/g, ' ').trim()}
            FROM product_categories
            WHERE id = $1
@@ -45,7 +54,7 @@ export class CategoriesService {
         );
         return row ?? null;
       }
-      const [row] = await tx.$queryRawUnsafe<any[]>(
+      const [row] = await tx.$queryRawUnsafe<ProductCategoryRow[]>(
         `SELECT ${categorySelect.replace(/\s+/g, ' ').trim()}
          FROM product_categories
          WHERE id = $1
@@ -68,7 +77,7 @@ export class CategoriesService {
     branchId: string | null,
   ) {
     return this.prisma.withTenantSchema(schemaName, async (tx) => {
-      const [row] = await tx.$queryRawUnsafe<any[]>(
+      const [row] = await tx.$queryRawUnsafe<ProductCategoryRow[]>(
         `INSERT INTO product_categories (branch_id, name, description, slug, parent_id)
          VALUES ($1, $2, $3, $4, $5)
          RETURNING ${categorySelect.replace(/\s+/g, ' ').trim()}`,
@@ -98,7 +107,7 @@ export class CategoriesService {
 
     return this.prisma.withTenantSchema(schemaName, async (tx) => {
       if (!allowedBranchIds.length) {
-        const [row] = await tx.$queryRawUnsafe<any[]>(
+        const [row] = await tx.$queryRawUnsafe<ProductCategoryRow[]>(
           `UPDATE product_categories
            SET
              name = COALESCE($2, name),
@@ -117,7 +126,7 @@ export class CategoriesService {
         );
         return row ?? null;
       }
-      const [row] = await tx.$queryRawUnsafe<any[]>(
+      const [row] = await tx.$queryRawUnsafe<ProductCategoryRow[]>(
         `UPDATE product_categories
          SET
            name = COALESCE($3, name),

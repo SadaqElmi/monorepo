@@ -2,6 +2,35 @@ import { BadRequestException, Injectable } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 
+export interface InventoryLockRow {
+  id: string;
+  quantity: number | string;
+  reorder_level: number | string;
+}
+
+export interface InventoryListRow {
+  id: string;
+  product_id: string;
+  branch_id: string;
+  quantity: number | string;
+  reorder_level: number | string;
+  updated_at: Date;
+}
+
+export interface BatchFifoRow {
+  id: string;
+  quantity: number | string | null;
+  cost_price: number | string | null;
+}
+
+export interface ProductListPriceRow {
+  list_price: number | string | null;
+}
+
+export interface SumQtyRow {
+  q: number | string;
+}
+
 @Injectable()
 export class InventoryService {
   constructor(private readonly prisma: PrismaService) {}
@@ -11,7 +40,7 @@ export class InventoryService {
     branchId: string,
     productId: string,
   ) {
-    const [existing] = await tx.$queryRawUnsafe<any[]>(
+    const [existing] = await tx.$queryRawUnsafe<InventoryLockRow[]>(
       `SELECT id, quantity, reorder_level
        FROM inventory
        WHERE branch_id = $1 AND product_id = $2
@@ -23,7 +52,7 @@ export class InventoryService {
       return existing;
     }
 
-    const [created] = await tx.$queryRawUnsafe<any[]>(
+    const [created] = await tx.$queryRawUnsafe<InventoryLockRow[]>(
       `INSERT INTO inventory (branch_id, product_id, quantity, reorder_level)
        VALUES ($1, $2, 0, 10)
        ON CONFLICT (product_id, branch_id) DO UPDATE
@@ -37,7 +66,7 @@ export class InventoryService {
 
   async findAll(schemaName: string, allowedBranchIds: string[]) {
     return this.prisma.withTenantSchema(schemaName, (tx) =>
-      tx.$queryRawUnsafe(
+      tx.$queryRawUnsafe<InventoryListRow[]>(
         `SELECT id, product_id, branch_id, quantity, reorder_level, updated_at
          FROM inventory
          WHERE branch_id = ANY($1::uuid[])
@@ -83,7 +112,7 @@ export class InventoryService {
 
   async findOne(schemaName: string, id: string, allowedBranchIds: string[]) {
     return this.prisma.withTenantSchema(schemaName, async (tx) => {
-      const [row] = await tx.$queryRawUnsafe<any[]>(
+      const [row] = await tx.$queryRawUnsafe<InventoryListRow[]>(
         `SELECT id, product_id, branch_id, quantity, reorder_level, updated_at
          FROM inventory
          WHERE id = $1 AND branch_id = ANY($2::uuid[])`,
@@ -150,7 +179,9 @@ export class InventoryService {
     tx: Prisma.TransactionClient,
     input: { branchId: string; productId: string },
   ): Promise<void> {
-    const [invRow] = await tx.$queryRawUnsafe<any[]>(
+    const [invRow] = await tx.$queryRawUnsafe<
+      Array<{ quantity: number | string }>
+    >(
       `SELECT quantity
        FROM inventory
        WHERE branch_id = $1::uuid AND product_id = $2::uuid
@@ -161,7 +192,7 @@ export class InventoryService {
     const invQty = Number(invRow?.quantity ?? 0);
     if (invQty <= 0) return;
 
-    const [sumRow] = await tx.$queryRawUnsafe<any[]>(
+    const [sumRow] = await tx.$queryRawUnsafe<SumQtyRow[]>(
       `SELECT COALESCE(SUM(COALESCE(quantity, 0)), 0)::int AS q
        FROM batches
        WHERE branch_id = $1::uuid AND product_id = $2::uuid`,
@@ -172,7 +203,7 @@ export class InventoryService {
     const gap = invQty - batchSum;
     if (gap <= 0) return;
 
-    const [prod] = await tx.$queryRawUnsafe<any[]>(
+    const [prod] = await tx.$queryRawUnsafe<ProductListPriceRow[]>(
       `SELECT list_price FROM products WHERE id = $1::uuid`,
       input.productId,
     );
@@ -202,7 +233,7 @@ export class InventoryService {
       unitCost: number;
     }> = [];
 
-    const batches = await tx.$queryRawUnsafe<any[]>(
+    const batches = await tx.$queryRawUnsafe<BatchFifoRow[]>(
       `SELECT id, quantity, cost_price
        FROM batches
        WHERE branch_id = $1 AND product_id = $2 AND COALESCE(quantity, 0) > 0

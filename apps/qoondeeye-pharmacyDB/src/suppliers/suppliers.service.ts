@@ -1,6 +1,15 @@
 import { Injectable } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 
+export interface SupplierRow {
+  id: string;
+  name: string | null;
+  phone: string | null;
+  email: string | null;
+  address: string | null;
+  created_at: Date;
+}
+
 @Injectable()
 export class SuppliersService {
   constructor(private readonly prisma: PrismaService) {}
@@ -9,13 +18,17 @@ export class SuppliersService {
     return this.prisma.withTenantSchema(
       schemaName,
       (tx) =>
-        tx.$queryRaw`SELECT id, name, phone, email, address, created_at FROM suppliers ORDER BY name`,
+        tx.$queryRaw<SupplierRow[]>`
+          SELECT id, name, phone, email, address, created_at
+          FROM suppliers
+          ORDER BY name
+        `,
     );
   }
 
   async findOne(schemaName: string, id: string) {
     return this.prisma.withTenantSchema(schemaName, async (tx) => {
-      const [row] = await tx.$queryRawUnsafe<any[]>(
+      const [row] = await tx.$queryRawUnsafe<SupplierRow[]>(
         `SELECT id, name, phone, email, address, created_at FROM suppliers WHERE id = $1`,
         id,
       );
@@ -28,7 +41,7 @@ export class SuppliersService {
     dto: { name?: string; phone?: string; email?: string; address?: string },
   ) {
     return this.prisma.withTenantSchema(schemaName, async (tx) => {
-      const [row] = await tx.$queryRawUnsafe<any[]>(
+      const [row] = await tx.$queryRawUnsafe<SupplierRow[]>(
         `INSERT INTO suppliers (name, phone, email, address) VALUES ($1, $2, $3, $4) RETURNING id, name, phone, email, address, created_at`,
         dto.name ?? null,
         dto.phone ?? null,
@@ -45,7 +58,7 @@ export class SuppliersService {
     dto: { name?: string; phone?: string; email?: string; address?: string },
   ) {
     return this.prisma.withTenantSchema(schemaName, async (tx) => {
-      const [row] = await tx.$queryRawUnsafe<any[]>(
+      const [row] = await tx.$queryRawUnsafe<SupplierRow[]>(
         `UPDATE suppliers SET name = COALESCE($2, name), phone = COALESCE($3, phone), email = COALESCE($4, email), address = COALESCE($5, address) WHERE id = $1 RETURNING id, name, phone, email, address, created_at`,
         id,
         dto.name ?? null,

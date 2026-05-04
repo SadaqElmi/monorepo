@@ -33,6 +33,58 @@ import { MergeChartOfAccountsDto } from './dto/merge-chart-of-accounts.dto';
 import { ChartOfAccountsMergeService } from './chart-of-accounts-merge.service';
 import { isGlobalBranchRole } from '../common/branch-scope/branch-scope.util';
 
+interface ChartOfAccountsListRow {
+  id: string;
+  branch_id: string;
+  code: string | null;
+  name: string;
+  account_type: string;
+  account_key: string | null;
+  is_system: boolean;
+  payment_method_key: string | null;
+  parent_id: string | null;
+  created_at: Date;
+}
+
+interface JournalEntryRow {
+  id: string;
+  branch_id: string;
+  entry_date: Date;
+  description: string | null;
+  source_type: string | null;
+  source_id: string | null;
+  journal_book_id: string | null;
+  created_at: Date;
+}
+
+interface JournalLineListRow {
+  id: string;
+  journal_entry_id: string;
+  account_id: string;
+  debit: number | string | null;
+  credit: number | string | null;
+  partner_kind: string | null;
+  partner_id: string | null;
+  account_name: string;
+  account_key: string | null;
+}
+
+interface PaymentTermRow {
+  id: string;
+  branch_id: string;
+  name: string;
+  days_until_due: number;
+  created_at: Date;
+}
+
+interface FollowUpLevelRow {
+  id: string;
+  branch_id: string;
+  name: string;
+  days_after_due: number;
+  created_at: Date;
+}
+
 @Controller('accounting')
 export class AccountingController {
   constructor(
@@ -359,7 +411,7 @@ export class AccountingController {
     const schema = this.tenantContext.getSchemaName()!;
     await this.tenantService.applyTenantSchemaPatches(schema);
     return this.prisma.withTenantSchema(schema, (tx) =>
-      tx.$queryRawUnsafe(
+      tx.$queryRawUnsafe<ChartOfAccountsListRow[]>(
         `SELECT id, branch_id, code, name, account_type, account_key, is_system, payment_method_key, parent_id, created_at
          FROM chart_of_accounts
          WHERE branch_id = $1::uuid
@@ -376,7 +428,7 @@ export class AccountingController {
     const schema = this.tenantContext.getSchemaName()!;
     await this.tenantService.applyTenantSchemaPatches(schema);
     return this.prisma.withTenantSchema(schema, async (tx) => {
-      const [entry] = await tx.$queryRawUnsafe<any[]>(
+      const [entry] = await tx.$queryRawUnsafe<JournalEntryRow[]>(
         `SELECT id, branch_id, entry_date, description, source_type, source_id,
                 journal_book_id, created_at
          FROM journal_entries
@@ -386,7 +438,7 @@ export class AccountingController {
       if (!entry || !allowed.includes(entry.branch_id)) {
         throw new ForbiddenException('Journal not found');
       }
-      const lines = await tx.$queryRawUnsafe<any[]>(
+      const lines = await tx.$queryRawUnsafe<JournalLineListRow[]>(
         `SELECT jl.id, jl.journal_entry_id, jl.account_id, jl.debit, jl.credit,
                 jl.partner_kind, jl.partner_id,
                 coa.name AS account_name, coa.account_key
@@ -440,7 +492,7 @@ export class AccountingController {
       }
       params.push(take);
       const whereSql = conditions.join(' AND ');
-      const entries = await tx.$queryRawUnsafe<any[]>(
+      const entries = await tx.$queryRawUnsafe<JournalEntryRow[]>(
         `SELECT id, branch_id, entry_date, description, source_type, source_id,
                 journal_book_id, created_at
          FROM journal_entries
@@ -451,7 +503,7 @@ export class AccountingController {
       );
       if (!entries.length) return [];
       const ids = entries.map((e) => e.id);
-      const lines = await tx.$queryRawUnsafe<any[]>(
+      const lines = await tx.$queryRawUnsafe<JournalLineListRow[]>(
         `SELECT jl.id, jl.journal_entry_id, jl.account_id, jl.debit, jl.credit,
                 jl.partner_kind, jl.partner_id,
                 coa.name AS account_name, coa.account_key
@@ -460,7 +512,7 @@ export class AccountingController {
          WHERE jl.journal_entry_id = ANY($1::uuid[])`,
         ids,
       );
-      const byJe = new Map<string, any[]>();
+      const byJe = new Map<string, JournalLineListRow[]>();
       for (const ln of lines) {
         const list = byJe.get(ln.journal_entry_id) ?? [];
         list.push(ln);
@@ -538,13 +590,13 @@ export class AccountingController {
       if (!result) {
         throw new BadRequestException('Could not create journal entry');
       }
-      const [entry] = await tx.$queryRawUnsafe<any[]>(
+      const [entry] = await tx.$queryRawUnsafe<JournalEntryRow[]>(
         `SELECT id, branch_id, entry_date, description, source_type, source_id,
                 journal_book_id, created_at
          FROM journal_entries WHERE id = $1::uuid`,
         result.id,
       );
-      const jl = await tx.$queryRawUnsafe<any[]>(
+      const jl = await tx.$queryRawUnsafe<JournalLineListRow[]>(
         `SELECT jl.id, jl.journal_entry_id, jl.account_id, jl.debit, jl.credit,
                 jl.partner_kind, jl.partner_id,
                 coa.name AS account_name, coa.account_key
@@ -567,7 +619,7 @@ export class AccountingController {
     const schema = this.tenantContext.getSchemaName()!;
     await this.tenantService.applyTenantSchemaPatches(schema);
     return this.prisma.withTenantSchema(schema, (tx) =>
-      tx.$queryRawUnsafe(
+      tx.$queryRawUnsafe<PaymentTermRow[]>(
         `SELECT id, branch_id, name, days_until_due, created_at
          FROM payment_terms
          WHERE branch_id = $1::uuid
@@ -587,7 +639,7 @@ export class AccountingController {
     const schema = this.tenantContext.getSchemaName()!;
     await this.tenantService.applyTenantSchemaPatches(schema);
     return this.prisma.withTenantSchema(schema, async (tx) => {
-      const [row] = await tx.$queryRawUnsafe<any[]>(
+      const [row] = await tx.$queryRawUnsafe<PaymentTermRow[]>(
         `INSERT INTO payment_terms (branch_id, name, days_until_due)
          VALUES ($1::uuid, $2, COALESCE($3, 0))
          RETURNING id, branch_id, name, days_until_due, created_at`,
@@ -609,7 +661,7 @@ export class AccountingController {
     const schema = this.tenantContext.getSchemaName()!;
     await this.tenantService.applyTenantSchemaPatches(schema);
     return this.prisma.withTenantSchema(schema, (tx) =>
-      tx.$queryRawUnsafe(
+      tx.$queryRawUnsafe<FollowUpLevelRow[]>(
         `SELECT id, branch_id, name, days_after_due, created_at
          FROM follow_up_levels
          WHERE branch_id = $1::uuid
@@ -629,7 +681,7 @@ export class AccountingController {
     const schema = this.tenantContext.getSchemaName()!;
     await this.tenantService.applyTenantSchemaPatches(schema);
     return this.prisma.withTenantSchema(schema, async (tx) => {
-      const [row] = await tx.$queryRawUnsafe<any[]>(
+      const [row] = await tx.$queryRawUnsafe<FollowUpLevelRow[]>(
         `INSERT INTO follow_up_levels (branch_id, name, days_after_due)
          VALUES ($1::uuid, $2, COALESCE($3, 0))
          RETURNING id, branch_id, name, days_after_due, created_at`,

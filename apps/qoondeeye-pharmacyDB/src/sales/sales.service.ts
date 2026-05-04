@@ -1,4 +1,5 @@
 import { BadRequestException, Injectable } from '@nestjs/common';
+import { Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { InventoryService } from '../inventory/inventory.service';
 import { TenantService } from '../tenant/tenant.service';
@@ -12,6 +13,55 @@ export type SalesMutationContext = {
   /** JWT role for POS discount caps (cashier/pharmacist 1%; manager/admin 10%). */
   requestUserRole?: string | null;
 };
+
+export interface SaleListRow {
+  id: string;
+  branch_id: string;
+  receipt_number: string | null;
+  total_amount: number | string | null;
+  discount: number | string | null;
+  tax: number | string | null;
+  sale_date: Date;
+  customer_id: string | null;
+  on_account: boolean;
+  payment_method: string | null;
+}
+
+export interface SaleItemRow {
+  id: string;
+  sale_id: string;
+  branch_id: string;
+  product_id: string | null;
+  batch_id: string | null;
+  quantity: number | string;
+  price: number | string | null;
+  total: number | string | null;
+  misc_charge_kind: string | null;
+}
+
+export interface SaleInsertRow {
+  id: string;
+  branch_id: string;
+  receipt_number: string | null;
+  total_amount: number | string | null;
+  discount: number | string | null;
+  tax: number | string | null;
+  sale_date: Date;
+  customer_id: string | null;
+  on_account: boolean;
+}
+
+export interface SaleUpdateRow {
+  id: string;
+  branch_id: string;
+  receipt_number: string | null;
+  total_amount: number | string | null;
+  discount: number | string | null;
+  tax: number | string | null;
+  sale_date: Date;
+  customer_id: string | null;
+  on_account: boolean;
+}
 
 @Injectable()
 export class SalesService {
@@ -27,7 +77,7 @@ export class SalesService {
   async findAll(schemaName: string, allowedBranchIds: string[]) {
     await this.tenantService.applyTenantSchemaPatches(schemaName);
     return this.prisma.withTenantSchema(schemaName, (tx) =>
-      tx.$queryRawUnsafe(
+      tx.$queryRawUnsafe<SaleListRow[]>(
         `SELECT s.id, s.branch_id, s.receipt_number, s.total_amount, s.discount, s.tax, s.sale_date,
                 s.customer_id, s.on_account,
                 (SELECT p.method FROM payments p WHERE p.sale_id = s.id ORDER BY p.paid_at ASC NULLS LAST LIMIT 1) AS payment_method
@@ -42,7 +92,7 @@ export class SalesService {
   async findOne(schemaName: string, id: string, allowedBranchIds: string[]) {
     await this.tenantService.applyTenantSchemaPatches(schemaName);
     return this.prisma.withTenantSchema(schemaName, async (tx) => {
-      const [row] = await tx.$queryRawUnsafe<any[]>(
+      const [row] = await tx.$queryRawUnsafe<SaleListRow[]>(
         `SELECT s.id, s.branch_id, s.receipt_number, s.total_amount, s.discount, s.tax, s.sale_date,
                 s.customer_id, s.on_account,
                 (SELECT p.method FROM payments p WHERE p.sale_id = s.id ORDER BY p.paid_at ASC NULLS LAST LIMIT 1) AS payment_method
@@ -52,7 +102,7 @@ export class SalesService {
         allowedBranchIds,
       );
       if (!row) return null;
-      const items = await tx.$queryRawUnsafe<any[]>(
+      const items = await tx.$queryRawUnsafe<SaleItemRow[]>(
         `SELECT id, sale_id, branch_id, product_id, batch_id, quantity, price, total, misc_charge_kind
          FROM sale_items
          WHERE sale_id = $1
@@ -78,7 +128,7 @@ export class SalesService {
     const variants = [...candidates];
     await this.tenantService.applyTenantSchemaPatches(schemaName);
     return this.prisma.withTenantSchema(schemaName, async (tx) => {
-      const [row] = await tx.$queryRawUnsafe<any[]>(
+      const [row] = await tx.$queryRawUnsafe<SaleListRow[]>(
         `SELECT s.id, s.branch_id, s.receipt_number, s.total_amount, s.discount, s.tax, s.sale_date,
                 s.customer_id, s.on_account,
                 (SELECT p.method FROM payments p WHERE p.sale_id = s.id ORDER BY p.paid_at ASC NULLS LAST LIMIT 1) AS payment_method
@@ -91,7 +141,7 @@ export class SalesService {
         variants,
       );
       if (!row) return null;
-      const items = await tx.$queryRawUnsafe<any[]>(
+      const items = await tx.$queryRawUnsafe<SaleItemRow[]>(
         `SELECT id, sale_id, branch_id, product_id, batch_id, quantity, price, total, misc_charge_kind
          FROM sale_items
          WHERE sale_id = $1
@@ -102,15 +152,18 @@ export class SalesService {
     });
   }
 
-  private async nextReceiptNumber(tx: any, branchId: string): Promise<string> {
-    const [r] = (await tx.$queryRawUnsafe(
+  private async nextReceiptNumber(
+    tx: Prisma.TransactionClient,
+    branchId: string,
+  ): Promise<string> {
+    const [r] = await tx.$queryRawUnsafe<{ next_n: number }[]>(
       `SELECT COALESCE(MAX(CAST(receipt_number AS INTEGER)), 0) + 1 AS next_n
        FROM sales
        WHERE branch_id = $1::uuid
          AND receipt_number IS NOT NULL
          AND receipt_number ~ '^[0-9]+$'`,
       branchId,
-    )) as { next_n: number }[];
+    );
     const n = Number(r?.next_n ?? 1);
     return String(n).padStart(5, '0');
   }
@@ -202,7 +255,7 @@ export class SalesService {
         posSessionId = sess.id;
       }
 
-      const [row] = await tx.$queryRawUnsafe<any[]>(
+      const [row] = await tx.$queryRawUnsafe<SaleInsertRow[]>(
         `INSERT INTO sales (branch_id, pos_session_id, receipt_number, total_amount, discount, tax, customer_id, on_account)
          VALUES ($1, $2::uuid, $3, $4, COALESCE($5::numeric, 0::numeric), COALESCE($6::numeric, 0::numeric), $7::uuid, $8)
          RETURNING id, branch_id, receipt_number, total_amount, discount, tax, sale_date, customer_id, on_account`,
@@ -280,15 +333,16 @@ export class SalesService {
 
         let unitPrice = Number(item.price ?? 0);
         if (unitPrice <= 0) {
-          const [pRow] = await tx.$queryRawUnsafe<any[]>(
-            `SELECT list_price FROM products WHERE id = $1::uuid`,
-            pid,
-          );
+          const [pRow] = await tx.$queryRawUnsafe<
+            { list_price: number | string | null }[]
+          >(`SELECT list_price FROM products WHERE id = $1::uuid`, pid);
           unitPrice = Number(pRow?.list_price ?? 0);
         }
 
         for (const alloc of allocations) {
-          const [batchRow] = await tx.$queryRawUnsafe<any[]>(
+          const [batchRow] = await tx.$queryRawUnsafe<
+            { cost_price: number | string | null }[]
+          >(
             `SELECT cost_price FROM batches WHERE id = $1::uuid`,
             alloc.batchId,
           );
@@ -309,7 +363,7 @@ export class SalesService {
         }
       }
 
-      const [sumRow] = await tx.$queryRawUnsafe<any[]>(
+      const [sumRow] = await tx.$queryRawUnsafe<{ t: number | string }[]>(
         `SELECT COALESCE(SUM(COALESCE(total, 0)), 0)::numeric AS t
          FROM sale_items WHERE sale_id = $1::uuid`,
         row.id,
@@ -321,7 +375,7 @@ export class SalesService {
         saleTotal,
       );
 
-      const items = await tx.$queryRawUnsafe<any[]>(
+      const items = await tx.$queryRawUnsafe<SaleItemRow[]>(
         `SELECT id, sale_id, branch_id, product_id, batch_id, quantity, price, total, misc_charge_kind
          FROM sale_items
          WHERE sale_id = $1
@@ -329,7 +383,7 @@ export class SalesService {
         row.id,
       );
 
-      const [updatedSale] = await tx.$queryRawUnsafe<any[]>(
+      const [updatedSale] = await tx.$queryRawUnsafe<SaleInsertRow[]>(
         `SELECT id, branch_id, receipt_number, total_amount, discount, tax, sale_date,
                 customer_id, on_account
          FROM sales WHERE id = $1::uuid`,
@@ -426,7 +480,7 @@ export class SalesService {
         existing.sale_date,
       );
 
-      const [row] = await tx.$queryRawUnsafe<any[]>(
+      const [row] = await tx.$queryRawUnsafe<SaleUpdateRow[]>(
         `UPDATE sales
          SET branch_id = $2,
              total_amount = COALESCE($3, total_amount),
@@ -488,7 +542,7 @@ export class SalesService {
         sale.sale_date,
       );
 
-      const [itemCount] = await tx.$queryRawUnsafe<any[]>(
+      const [itemCount] = await tx.$queryRawUnsafe<{ count: number }[]>(
         `SELECT COUNT(*)::int AS count
          FROM sale_items
          WHERE sale_id = $1`,

@@ -9,6 +9,16 @@ export type ExpenseMutationContext = {
   actorUserId?: string | null;
 };
 
+export interface ExpenseRow {
+  id: string;
+  category_id: string | null;
+  branch_id: string;
+  amount: number | string;
+  description: string | null;
+  expense_date: Date | string | null;
+  created_at: Date;
+}
+
 @Injectable()
 export class ExpensesService {
   constructor(
@@ -21,7 +31,7 @@ export class ExpensesService {
 
   async findAll(schemaName: string, allowedBranchIds: string[]) {
     return this.prisma.withTenantSchema(schemaName, (tx) =>
-      tx.$queryRawUnsafe(
+      tx.$queryRawUnsafe<ExpenseRow[]>(
         `SELECT id, category_id, branch_id, amount, description, expense_date, created_at
          FROM expenses
          WHERE branch_id = ANY($1::uuid[])
@@ -33,7 +43,7 @@ export class ExpensesService {
 
   async findOne(schemaName: string, id: string, allowedBranchIds: string[]) {
     return this.prisma.withTenantSchema(schemaName, async (tx) => {
-      const [row] = await tx.$queryRawUnsafe<any[]>(
+      const [row] = await tx.$queryRawUnsafe<ExpenseRow[]>(
         `SELECT id, category_id, branch_id, amount, description, expense_date, created_at
          FROM expenses
          WHERE id = $1 AND branch_id = ANY($2::uuid[])`,
@@ -62,7 +72,7 @@ export class ExpensesService {
         ed && ed.length >= 10 ? ed.slice(0, 10) : new Date();
       await this.lockDates.assertDocumentDateOpen(tx, branchId, docDateForLock);
 
-      const [row] = await tx.$queryRawUnsafe<any[]>(
+      const [row] = await tx.$queryRawUnsafe<ExpenseRow[]>(
         `INSERT INTO expenses (category_id, branch_id, amount, description, expense_date)
          VALUES ($1, $2, $3, $4, $5)
          RETURNING id, category_id, branch_id, amount, description, expense_date, created_at`,
@@ -153,7 +163,7 @@ export class ExpensesService {
         );
       }
 
-      const [row] = await tx.$queryRawUnsafe<any[]>(
+      const [row] = await tx.$queryRawUnsafe<ExpenseRow[]>(
         `UPDATE expenses
          SET category_id = COALESCE($2, category_id),
              branch_id = $3,

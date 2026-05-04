@@ -222,8 +222,7 @@ export class FinancialReportsController {
     const tenant = this.tenantContext.getTenant()!;
     const allowedBranchIds = req.allowedBranchIds ?? [];
     const warnings = [...baseWarnings];
-    const prismaPublic = this.prisma as any;
-    const latest = await prismaPublic.reconciliationRun.findFirst({
+    const latest = await this.prisma.reconciliationRun.findFirst({
       where: { tenantId: tenant.id, status: 'completed' },
       orderBy: { finishedAt: 'desc' },
       select: { id: true, startedAt: true, finishedAt: true },
@@ -237,7 +236,7 @@ export class FinancialReportsController {
           'No completed reconciliation run is available yet for this tenant.',
       });
     } else {
-      const logs = await prismaPublic.reconciliationLog.findMany({
+      const logs = await this.prisma.reconciliationLog.findMany({
         where: {
           tenantId: tenant.id,
           runId: latest.id,

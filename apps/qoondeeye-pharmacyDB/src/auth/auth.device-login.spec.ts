@@ -1,6 +1,24 @@
 import { UnauthorizedException } from '@nestjs/common';
+import type { JwtService } from '@nestjs/jwt';
 import * as bcrypt from 'bcrypt';
 import { AuthService } from './auth.service';
+
+/** Narrow view of `AuthService` private helpers used only in these tests. */
+type AuthDeviceLoginInternals = {
+  isDeviceLoginEnforcedForTenant(schemaName: string): boolean;
+  buildStaffLoginLockKey(deviceId: string, staffId: string): string;
+  registerStaffLoginFailure(lockKey: string): void;
+  assertStaffLoginNotLocked(lockKey: string): void;
+  encodeDeviceCredential(deviceId: string, plainSecret: string): string;
+  hashDeviceSecret(plainSecret: string): string;
+  resolvePosDeviceFromCredential(credential: string): Promise<unknown>;
+  jwtService: Pick<JwtService, 'signAsync'> & { signAsync: jest.Mock };
+  tenantService: { applyTenantSchemaPatches: jest.Mock };
+};
+
+function authDeviceHooks(service: AuthService): AuthDeviceLoginInternals {
+  return service as unknown as AuthDeviceLoginInternals;
+}
 
 function createService(overrides?: {
   configGet?: (key: string) => string | undefined;
@@ -43,10 +61,9 @@ describe('AuthService device-bound login helpers', () => {
     const { service } = createService({
       configGet: (key) => (key === 'POS_DEVICE_LOGIN_MODE' ? 'device' : ''),
     });
-    expect((service as any).isDeviceLoginEnforcedForTenant('pharmacy1')).toBe(
-      true,
-    );
-    expect((service as any).isDeviceLoginEnforcedForTenant('any')).toBe(true);
+    const a = authDeviceHooks(service);
+    expect(a.isDeviceLoginEnforcedForTenant('pharmacy1')).toBe(true);
+    expect(a.isDeviceLoginEnforcedForTenant('any')).toBe(true);
   });
 
   it('enforces only listed tenants in dual mode', () => {
@@ -57,42 +74,34 @@ describe('AuthService device-bound login helpers', () => {
         return '';
       },
     });
-    expect((service as any).isDeviceLoginEnforcedForTenant('pharmacy1')).toBe(
-      true,
-    );
-    expect((service as any).isDeviceLoginEnforcedForTenant('pilot_b')).toBe(
-      true,
-    );
-    expect((service as any).isDeviceLoginEnforcedForTenant('pharmacy2')).toBe(
-      false,
-    );
+    const a = authDeviceHooks(service);
+    expect(a.isDeviceLoginEnforcedForTenant('pharmacy1')).toBe(true);
+    expect(a.isDeviceLoginEnforcedForTenant('pilot_b')).toBe(true);
+    expect(a.isDeviceLoginEnforcedForTenant('pharmacy2')).toBe(false);
   });
 
   it('keeps lockout isolated per device key', () => {
     const { service } = createService();
-    const keyA = (service as any).buildStaffLoginLockKey('deviceA', 'staff-1');
-    const keyB = (service as any).buildStaffLoginLockKey('deviceB', 'staff-1');
+    const a = authDeviceHooks(service);
+    const keyA = a.buildStaffLoginLockKey('deviceA', 'staff-1');
+    const keyB = a.buildStaffLoginLockKey('deviceB', 'staff-1');
 
     for (let i = 0; i < 5; i += 1) {
-      (service as any).registerStaffLoginFailure(keyA);
+      a.registerStaffLoginFailure(keyA);
     }
 
-    expect(() => (service as any).assertStaffLoginNotLocked(keyA)).toThrow(
+    expect(() => a.assertStaffLoginNotLocked(keyA)).toThrow(
       UnauthorizedException,
     );
-    expect(() =>
-      (service as any).assertStaffLoginNotLocked(keyB),
-    ).not.toThrow();
+    expect(() => a.assertStaffLoginNotLocked(keyB)).not.toThrow();
   });
 
   it('rejects invalid device secret while resolving credential', async () => {
     const { service, prisma } = createService();
+    const a = authDeviceHooks(service);
     const validSecret = 'abc123';
-    const credential = (service as any).encodeDeviceCredential(
-      'device-uuid',
-      validSecret,
-    );
-    const hash = (service as any).hashDeviceSecret('different-secret');
+    const credential = a.encodeDeviceCredential('device-uuid', validSecret);
+    const hash = a.hashDeviceSecret('different-secret');
 
     prisma.$queryRawUnsafe.mockResolvedValueOnce([
       {
@@ -108,7 +117,7 @@ describe('AuthService device-bound login helpers', () => {
     ]);
 
     await expect(
-      (service as any).resolvePosDeviceFromCredential(credential),
+      a.resolvePosDeviceFromCredential(credential),
     ).rejects.toBeInstanceOf(UnauthorizedException);
   });
 
@@ -146,16 +155,15 @@ describe('AuthService device-bound login helpers', () => {
 
   it('staffLogin resolves tenant from device and scopes query to that tenant', async () => {
     const { service, prisma } = createService();
-    const jwt = (service as any).jwtService as { signAsync: jest.Mock };
-    const tenantService = (service as any).tenantService as {
-      applyTenantSchemaPatches: jest.Mock;
-    };
+    const a = authDeviceHooks(service);
+    const jwt = a.jwtService;
+    const tenantService = a.tenantService;
     const deviceSecret = 'device-secret';
-    const deviceCredential = (service as any).encodeDeviceCredential(
+    const deviceCredential = a.encodeDeviceCredential(
       'device-id',
       deviceSecret,
     );
-    const deviceHash = (service as any).hashDeviceSecret(deviceSecret);
+    const deviceHash = a.hashDeviceSecret(deviceSecret);
     const pinHash = await bcrypt.hash('1234', 4);
 
     prisma.$queryRawUnsafe.mockResolvedValueOnce([

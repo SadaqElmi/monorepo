@@ -12,7 +12,10 @@ import type { Request } from 'express';
 import * as jwt from 'jsonwebtoken';
 import { assertAllowedBranches } from '../common/branch-scope';
 import { TenantContextService } from '../tenant/tenant-context.service';
-import { ReconciliationService } from './reconciliation.service';
+import {
+  ReconciliationService,
+  type ReconciliationLogEnrichedItem,
+} from './reconciliation.service';
 import { RECONCILIATION_LOG_TYPES } from './reconciliation.types';
 
 function parseCookies(
@@ -133,7 +136,7 @@ export class ReconciliationController {
     });
 
     return {
-      items: items.map((row: any) => ({
+      items: items.map((row: ReconciliationLogEnrichedItem) => ({
         id: row.id,
         runId: row.runId,
         type: row.type,

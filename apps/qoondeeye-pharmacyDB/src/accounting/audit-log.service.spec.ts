@@ -1,8 +1,31 @@
+import type { PrismaService } from '../prisma/prisma.service';
 import { AuditLogService } from './audit-log.service';
+
+type AuditHashParams = {
+  prevHash: string | null;
+  entityType: string;
+  entityId: string;
+  action: string;
+  branchId: string | null;
+  userId: string | null;
+  eventTs: string;
+  before: Record<string, unknown> | null;
+  after: Record<string, unknown> | null;
+};
+
+type AuditLogHashTestApi = {
+  computeAuditHash(params: AuditHashParams): string;
+};
+
+function auditHashApi(prisma: PrismaService): AuditLogHashTestApi {
+  return new AuditLogService(prisma) as unknown as AuditLogHashTestApi;
+}
 
 describe('AuditLogService hash chain', () => {
   it('verifies a deterministic hash link', () => {
-    const svc = new AuditLogService({} as any);
+    const mockPrisma = {} as unknown as PrismaService;
+    const hashApi = auditHashApi(mockPrisma);
+    const svc = new AuditLogService(mockPrisma);
     const payload = {
       prevHash: 'abc123',
       entityType: 'transfer',
@@ -14,7 +37,7 @@ describe('AuditLogService hash chain', () => {
       before: { status: 'shipped' },
       after: { status: 'received' },
     };
-    const auditHash = (svc as any).computeAuditHash(payload) as string;
+    const auditHash = hashApi.computeAuditHash(payload);
     expect(auditHash).toHaveLength(64);
     expect(
       svc.verifyHashLink({
@@ -25,7 +48,8 @@ describe('AuditLogService hash chain', () => {
   });
 
   it('rejects missing hash in verification', () => {
-    const svc = new AuditLogService({} as any);
+    const mockPrisma = {} as unknown as PrismaService;
+    const svc = new AuditLogService(mockPrisma);
     expect(
       svc.verifyHashLink({
         prevHash: null,

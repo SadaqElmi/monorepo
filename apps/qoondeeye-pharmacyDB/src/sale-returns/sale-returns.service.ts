@@ -16,6 +16,64 @@ export type SaleReturnMutationContext = {
   actorUserId?: string | null;
 };
 
+export interface SaleReturnListRow {
+  id: string;
+  sale_id: string;
+  branch_id: string;
+  reason: string | null;
+  return_date: Date;
+  refund_method: string | null;
+  refund_amount: number | string | null;
+}
+
+export interface SaleForReturnRow {
+  id: string;
+  branch_id: string;
+  on_account: boolean;
+  customer_id: string | null;
+}
+
+export interface SaleItemForReturnRow {
+  id: string;
+  product_id: string | null;
+  batch_id: string | null;
+  quantity: number | string;
+}
+
+export interface SaleItemPriceRow {
+  price: number | string | null;
+}
+
+export interface SaleReturnInsertRow {
+  id: string;
+  sale_id: string;
+  branch_id: string;
+  reason: string | null;
+  refund_method: string | null;
+  refund_amount: number | string | null;
+  return_date: Date;
+}
+
+export interface SaleReturnRemoveJoinRow {
+  id: string;
+  branch_id: string;
+  refund_method: string | null;
+  refund_amount: number | string | null;
+  return_date: Date | null;
+  on_account: boolean;
+  customer_id: string | null;
+}
+
+export interface SaleReturnItemStockRow {
+  product_id: string | null;
+  batch_id: string | null;
+  quantity: number | string;
+}
+
+export interface BatchQtyLockRow {
+  quantity: number | string;
+}
+
 @Injectable()
 export class SaleReturnsService {
   constructor(
@@ -29,7 +87,7 @@ export class SaleReturnsService {
 
   async findAll(schemaName: string, allowedBranchIds: string[]) {
     return this.prisma.withTenantSchema(schemaName, (tx) =>
-      tx.$queryRawUnsafe(
+      tx.$queryRawUnsafe<SaleReturnListRow[]>(
         `SELECT id, sale_id, branch_id, reason, return_date, refund_method, refund_amount
          FROM sale_returns
          WHERE branch_id = ANY($1::uuid[])
@@ -41,7 +99,7 @@ export class SaleReturnsService {
 
   async findOne(schemaName: string, id: string, allowedBranchIds: string[]) {
     return this.prisma.withTenantSchema(schemaName, async (tx) => {
-      const [row] = await tx.$queryRawUnsafe<any[]>(
+      const [row] = await tx.$queryRawUnsafe<SaleReturnListRow[]>(
         `SELECT id, sale_id, branch_id, reason, return_date, refund_method, refund_amount
          FROM sale_returns
          WHERE id = $1 AND branch_id = ANY($2::uuid[])`,
@@ -53,15 +111,15 @@ export class SaleReturnsService {
   }
 
   async sumReturnedQtyForSaleItem(
-    tx: any,
+    tx: Prisma.TransactionClient,
     saleItemId: string,
   ): Promise<number> {
-    const [r] = (await tx.$queryRawUnsafe(
+    const [r] = await tx.$queryRawUnsafe<{ q: number }[]>(
       `SELECT COALESCE(SUM(quantity), 0)::int AS q
        FROM sale_return_items
        WHERE sale_item_id = $1`,
       saleItemId,
-    )) as { q: number }[];
+    );
     return Number(r?.q ?? 0);
   }
 
@@ -105,7 +163,7 @@ export class SaleReturnsService {
   }
 
   async processReturnLineItemsInTx(
-    tx: any,
+    tx: Prisma.TransactionClient,
     params: {
       saleReturnId: string;
       saleId: string;
@@ -114,14 +172,14 @@ export class SaleReturnsService {
     },
   ): Promise<void> {
     for (const item of params.items) {
-      const [saleItem] = (await tx.$queryRawUnsafe(
+      const [saleItem] = await tx.$queryRawUnsafe<SaleItemForReturnRow[]>(
         `SELECT id, product_id, batch_id, quantity
          FROM sale_items
          WHERE id = $1 AND sale_id = $2
          FOR UPDATE`,
         item.saleItemId,
         params.saleId,
-      )) as any[];
+      );
       if (!saleItem) {
         throw new BadRequestException('Invalid sale item in return request');
       }
@@ -186,7 +244,7 @@ export class SaleReturnsService {
     return this.prisma.withTenantSchema(schemaName, async (tx) => {
       await this.lockDates.assertDocumentDateOpen(tx, branchId, new Date());
 
-      const [sale] = await tx.$queryRawUnsafe<any[]>(
+      const [sale] = await tx.$queryRawUnsafe<SaleForReturnRow[]>(
         `SELECT id, branch_id, on_account, customer_id
          FROM sales
          WHERE id = $1`,
@@ -208,7 +266,7 @@ export class SaleReturnsService {
         refundTotal = Number(dto.refundAmount);
       } else {
         for (const it of dto.items) {
-          const [si] = await tx.$queryRawUnsafe<any[]>(
+          const [si] = await tx.$queryRawUnsafe<SaleItemPriceRow[]>(
             `SELECT price FROM sale_items WHERE id = $1::uuid AND sale_id = $2::uuid`,
             it.saleItemId,
             dto.saleId,
@@ -218,7 +276,7 @@ export class SaleReturnsService {
         }
       }
 
-      const [saleReturn] = await tx.$queryRawUnsafe<any[]>(
+      const [saleReturn] = await tx.$queryRawUnsafe<SaleReturnInsertRow[]>(
         `INSERT INTO sale_returns (sale_id, branch_id, reason, refund_method, refund_amount)
          VALUES ($1, $2, $3, $4, $5)
          RETURNING id, sale_id, branch_id, reason, refund_method, refund_amount, return_date`,
@@ -270,7 +328,7 @@ export class SaleReturnsService {
     dto: { reason?: string },
   ) {
     return this.prisma.withTenantSchema(schemaName, async (tx) => {
-      const [row] = await tx.$queryRawUnsafe<any[]>(
+      const [row] = await tx.$queryRawUnsafe<SaleReturnInsertRow[]>(
         `UPDATE sale_returns
          SET reason = COALESCE($3, reason)
          WHERE id = $1 AND branch_id = ANY($2::uuid[])
@@ -290,7 +348,7 @@ export class SaleReturnsService {
     ctx?: SaleReturnMutationContext,
   ) {
     return this.prisma.withTenantSchema(schemaName, async (tx) => {
-      const [saleReturn] = await tx.$queryRawUnsafe<any[]>(
+      const [saleReturn] = await tx.$queryRawUnsafe<SaleReturnRemoveJoinRow[]>(
         `SELECT sr.id,
                 sr.branch_id,
                 sr.refund_method,
@@ -356,7 +414,7 @@ export class SaleReturnsService {
         });
       }
 
-      const items = await tx.$queryRawUnsafe<any[]>(
+      const items = await tx.$queryRawUnsafe<SaleReturnItemStockRow[]>(
         `SELECT product_id, batch_id, quantity
          FROM sale_return_items
          WHERE sale_return_id = $1
@@ -369,7 +427,7 @@ export class SaleReturnsService {
         if (!item.product_id || qty <= 0) continue;
 
         if (item.batch_id) {
-          const [batch] = await tx.$queryRawUnsafe<any[]>(
+          const [batch] = await tx.$queryRawUnsafe<BatchQtyLockRow[]>(
             `SELECT quantity
              FROM batches
              WHERE id = $1

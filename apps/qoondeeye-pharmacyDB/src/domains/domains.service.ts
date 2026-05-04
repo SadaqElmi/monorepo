@@ -1,5 +1,6 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
+import type { TenantContextPayload } from '../tenant/tenant-context.service';
 
 @Injectable()
 export class DomainsService {
@@ -7,10 +8,7 @@ export class DomainsService {
 
   private readonly domainCache = new Map<
     string,
-    {
-      value: { id: string; name: string; schemaName: string; status: string };
-      expiresAt: number;
-    }
+    { value: TenantContextPayload; expiresAt: number }
   >();
 
   private getCached(domain: string) {
@@ -24,10 +22,7 @@ export class DomainsService {
     return entry.value;
   }
 
-  private setCached(
-    domain: string,
-    value: { id: string; name: string; schemaName: string; status: string },
-  ) {
+  private setCached(domain: string, value: TenantContextPayload) {
     const key = domain.trim().toLowerCase();
     // small TTL to avoid stale tenant/domain changes while still preventing a DB hit per request
     const ttlMs = 60_000;
@@ -61,7 +56,7 @@ export class DomainsService {
    * Resolve a tenant by full domain/host (e.g. pharmacy1.yourdomain.com).
    * Returns the tenant fields needed for multi-tenant schema resolution.
    */
-  async findByDomain(domain: string) {
+  async findByDomain(domain: string): Promise<TenantContextPayload | null> {
     const normalized = domain.trim().toLowerCase();
     if (!normalized) return null;
 

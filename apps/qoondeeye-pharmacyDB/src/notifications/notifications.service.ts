@@ -1,13 +1,22 @@
 import { Injectable } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 
+export interface NotificationRow {
+  id: string;
+  title: string | null;
+  message: string | null;
+  type: string | null;
+  is_read: boolean;
+  created_at: Date;
+}
+
 @Injectable()
 export class NotificationsService {
   constructor(private readonly prisma: PrismaService) {}
 
   async findAll(schemaName: string) {
     return this.prisma.withTenantSchema(schemaName, (tx) =>
-      tx.$queryRawUnsafe(
+      tx.$queryRawUnsafe<NotificationRow[]>(
         `SELECT id, title, message, type, is_read, created_at FROM notifications ORDER BY created_at DESC`,
       ),
     );
@@ -15,7 +24,7 @@ export class NotificationsService {
 
   async findOne(schemaName: string, id: string) {
     return this.prisma.withTenantSchema(schemaName, async (tx) => {
-      const [row] = await tx.$queryRawUnsafe<any[]>(
+      const [row] = await tx.$queryRawUnsafe<NotificationRow[]>(
         `SELECT id, title, message, type, is_read, created_at FROM notifications WHERE id = $1`,
         id,
       );
@@ -33,7 +42,7 @@ export class NotificationsService {
     },
   ) {
     return this.prisma.withTenantSchema(schemaName, async (tx) => {
-      const [row] = await tx.$queryRawUnsafe<any[]>(
+      const [row] = await tx.$queryRawUnsafe<NotificationRow[]>(
         `INSERT INTO notifications (title, message, type, is_read) VALUES ($1, $2, $3, COALESCE($4, false)) RETURNING id, title, message, type, is_read, created_at`,
         dto.title ?? null,
         dto.message ?? null,
@@ -55,7 +64,7 @@ export class NotificationsService {
     },
   ) {
     return this.prisma.withTenantSchema(schemaName, async (tx) => {
-      const [row] = await tx.$queryRawUnsafe<any[]>(
+      const [row] = await tx.$queryRawUnsafe<NotificationRow[]>(
         `UPDATE notifications SET title = COALESCE($2, title), message = COALESCE($3, message), type = COALESCE($4, type), is_read = COALESCE($5, is_read) WHERE id = $1 RETURNING id, title, message, type, is_read, created_at`,
         id,
         dto.title ?? null,

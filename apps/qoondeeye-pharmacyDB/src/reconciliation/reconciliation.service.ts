@@ -39,6 +39,21 @@ import {
   type ReconciliationSeverity,
 } from './reconciliation.types';
 
+/** Row returned from `findLogs` after enrichment (entity labels for UI). */
+export type ReconciliationLogEnrichedItem = {
+  id: string;
+  runId: string;
+  tenantId: string;
+  type: string;
+  entityId: string | null;
+  severity: string;
+  message: string;
+  metadata: Prisma.JsonValue | null;
+  createdAt: Date;
+  entityDisplay: string | null;
+  entityCode: string | null;
+};
+
 type TransferCheckRow = {
   id: string;
   transfer_number: string | null;
@@ -123,7 +138,7 @@ export class ReconciliationService implements OnModuleInit {
       await this.ensurePublicReconciliationTables();
     } catch (err) {
       this.logger.error(
-        `Reconciliation DDL skipped or partial: ${err instanceof Error ? err.message : err}`,
+        `Reconciliation DDL skipped or partial: ${err instanceof Error ? err.message : String(err)}`,
       );
     }
   }
@@ -269,7 +284,7 @@ END $f$`);
       this.logger.log('Public reconciliation tables are present');
     } catch (err) {
       this.logger.error(
-        `Failed to ensure public reconciliation tables: ${err instanceof Error ? err.message : err}`,
+        `Failed to ensure public reconciliation tables: ${err instanceof Error ? err.message : String(err)}`,
       );
       throw err;
     }
@@ -283,7 +298,7 @@ END $f$`);
         await this.runFullReconciliation(tenant.id, { waitForLock: true });
       } catch (err) {
         this.logger.error(
-          `Full reconciliation failed for tenant ${tenant.schemaName}: ${err instanceof Error ? err.message : err}`,
+          `Full reconciliation failed for tenant ${tenant.schemaName}: ${err instanceof Error ? err.message : String(err)}`,
         );
       }
     }
@@ -561,7 +576,7 @@ END $f$`);
         },
       });
       this.logger.warn(
-        `Transfer scope reconciliation failed: ${err instanceof Error ? err.message : err}`,
+        `Transfer scope reconciliation failed: ${err instanceof Error ? err.message : String(err)}`,
       );
     }
   }
@@ -575,7 +590,7 @@ END $f$`);
     offset: number;
     /** When set, only logs whose metadata references one of these branches (or type system). */
     allowedBranchIds?: string[];
-  }) {
+  }): Promise<{ items: ReconciliationLogEnrichedItem[]; total: number }> {
     const where = {
       tenantId: params.tenantId,
       ...(params.runId?.trim() ? { runId: params.runId.trim() } : {}),
@@ -657,7 +672,14 @@ END $f$`);
         select: { schemaName: true },
       });
       if (!tenantRow) {
-        return { items: normalized, total };
+        const itemsAs: ReconciliationLogEnrichedItem[] = normalized.map(
+          (r) => ({
+            ...r,
+            entityDisplay: null,
+            entityCode: null,
+          }),
+        );
+        return { items: itemsAs, total };
       }
       const enriched = await this.enrichReconciliationLogItems(
         tenantRow.schemaName,
@@ -681,7 +703,20 @@ END $f$`);
       select: { schemaName: true },
     });
     if (!tenantRow) {
-      return { items, total };
+      const itemsAs: ReconciliationLogEnrichedItem[] = items.map((r) => ({
+        id: r.id,
+        runId: r.runId,
+        tenantId: r.tenantId,
+        type: r.type,
+        entityId: r.entityId,
+        severity: r.severity,
+        message: r.message,
+        metadata: r.metadata,
+        createdAt: r.createdAt,
+        entityDisplay: null,
+        entityCode: null,
+      }));
+      return { items: itemsAs, total };
     }
     const enriched = await this.enrichReconciliationLogItems(
       tenantRow.schemaName,
@@ -718,22 +753,7 @@ END $f$`);
       metadata: Prisma.JsonValue | null;
       createdAt: Date;
     }>,
-  ): Promise<
-    Array<{
-      id: string;
-      runId: string;
-      tenantId: string;
-      type: string;
-      entityId: string | null;
-      severity: string;
-      message: string;
-      metadata: Prisma.JsonValue | null;
-      createdAt: Date;
-      entityDisplay: string | null;
-      /** From metadata.entity_code at write time, or derived for legacy rows */
-      entityCode: string | null;
-    }>
-  > {
+  ): Promise<ReconciliationLogEnrichedItem[]> {
     const transferIds = new Set<string>();
     const journalIds = new Set<string>();
     const branchIds = new Set<string>();

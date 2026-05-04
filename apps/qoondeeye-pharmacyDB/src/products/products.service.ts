@@ -37,6 +37,29 @@ const productSelectJoined = `
            p.created_at AS "createdAt",
            c.name AS "categoryName"`;
 
+export interface ProductRow {
+  id: string;
+  branchId: string | null;
+  name: string;
+  genericName: string | null;
+  sku: string | null;
+  listPrice: number | string;
+  categoryId: string | null;
+  strength: string | null;
+  formulation: string | null;
+  unit: string | null;
+  description: string | null;
+  createdAt: Date;
+}
+
+export interface ProductJoinedRow extends ProductRow {
+  categoryName: string | null;
+}
+
+export interface ProductTransferCatalogRow extends ProductJoinedRow {
+  availableStock: number;
+}
+
 @Injectable()
 export class ProductsService {
   constructor(private readonly prisma: PrismaService) {}
@@ -56,7 +79,7 @@ export class ProductsService {
   async findAll(schemaName: string, allowedBranchIds: string[]) {
     const vis = this.branchVisibilityClause(allowedBranchIds);
     return this.prisma.withTenantSchema(schemaName, async (tx) => {
-      return tx.$queryRawUnsafe<any[]>(
+      return tx.$queryRawUnsafe<ProductRow[]>(
         `SELECT ${productSelect.replace(/\s+/g, ' ').trim()}
          FROM products
          WHERE ${vis.sql}
@@ -69,7 +92,7 @@ export class ProductsService {
   /** Full tenant catalog: global product visibility for every branch/user. */
   async findAllTenantCatalog(schemaName: string) {
     return this.prisma.withTenantSchema(schemaName, async (tx) => {
-      return tx.$queryRawUnsafe<any[]>(
+      return tx.$queryRawUnsafe<ProductJoinedRow[]>(
         `SELECT ${productSelectJoined.replace(/\s+/g, ' ').trim()}
          FROM products p
          LEFT JOIN product_categories c ON c.id = p.category_id
@@ -82,7 +105,7 @@ export class ProductsService {
   async findTransferCatalog(schemaName: string, allowedBranchIds: string[]) {
     if (!allowedBranchIds.length) return [];
     return this.prisma.withTenantSchema(schemaName, async (tx) => {
-      return tx.$queryRawUnsafe<any[]>(
+      return tx.$queryRawUnsafe<ProductTransferCatalogRow[]>(
         `SELECT
            ${productSelectJoined.replace(/\s+/g, ' ').trim()},
            COALESCE(SUM(i.quantity), 0)::int AS "availableStock"
@@ -104,7 +127,7 @@ export class ProductsService {
   async findOne(schemaName: string, id: string, allowedBranchIds: string[]) {
     const vis = this.branchVisibilityClause(allowedBranchIds, 2);
     return this.prisma.withTenantSchema(schemaName, async (tx) => {
-      const rows = await tx.$queryRawUnsafe<any[]>(
+      const rows = await tx.$queryRawUnsafe<ProductRow[]>(
         `SELECT ${productSelect.replace(/\s+/g, ' ').trim()}
          FROM products
          WHERE id = $1
@@ -123,7 +146,7 @@ export class ProductsService {
     schemaName: string,
     q: string,
     allowedBranchIds: string[],
-  ): Promise<{ matches: unknown[] }> {
+  ): Promise<{ matches: ProductRow[] }> {
     const trimmed = q?.trim() ?? '';
     if (!trimmed) {
       return { matches: [] };
@@ -153,7 +176,7 @@ export class ProductsService {
 
     return this.prisma.withTenantSchema(schemaName, async (tx) => {
       if (!allowedBranchIds.length) {
-        const rows = await tx.$queryRawUnsafe<any[]>(
+        const rows = await tx.$queryRawUnsafe<ProductRow[]>(
           `SELECT ${productSelect.replace(/\s+/g, ' ').trim()}
            FROM products
            WHERE branch_id IS NULL
@@ -165,7 +188,7 @@ export class ProductsService {
         return { matches: rows };
       }
       const vis = this.branchVisibilityClause(allowedBranchIds, 2);
-      const rows = await tx.$queryRawUnsafe<any[]>(
+      const rows = await tx.$queryRawUnsafe<ProductRow[]>(
         `SELECT ${productSelect.replace(/\s+/g, ' ').trim()}
          FROM products
          WHERE ${vis.sql}
@@ -190,7 +213,7 @@ export class ProductsService {
     }
     const vis = this.branchVisibilityClause(allowedBranchIds, 2);
     return this.prisma.withTenantSchema(schemaName, async (tx) => {
-      const rows = await tx.$queryRawUnsafe<any[]>(
+      const rows = await tx.$queryRawUnsafe<ProductRow[]>(
         `SELECT ${productSelect.replace(/\s+/g, ' ').trim()}
          FROM products
          WHERE barcode = $1
@@ -205,7 +228,7 @@ export class ProductsService {
   async create(schemaName: string, dto: CreateProductDto) {
     return this.prisma.withTenantSchema(schemaName, async (tx) => {
       try {
-        const [row] = await tx.$queryRawUnsafe<any[]>(
+        const [row] = await tx.$queryRawUnsafe<ProductRow[]>(
           `INSERT INTO products (branch_id, name, generic_name, barcode, list_price, strength, formulation, category_id, unit, description)
            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
            RETURNING ${productSelect.replace(/\s+/g, ' ').trim()}`,
@@ -258,7 +281,7 @@ export class ProductsService {
       const skipListPrice = dto.listPrice === undefined;
 
       try {
-        const [row] = await tx.$queryRawUnsafe<any[]>(
+        const [row] = await tx.$queryRawUnsafe<ProductRow[]>(
           `UPDATE products SET
            name = CASE WHEN $2::text IS NULL THEN name ELSE $2 END,
            generic_name = CASE WHEN $3::text IS NULL THEN generic_name ELSE $3 END,

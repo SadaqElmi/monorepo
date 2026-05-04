@@ -11,6 +11,91 @@ export type PurchaseMutationContext = {
   actorUserId?: string | null;
 };
 
+export interface PurchaseListRow {
+  id: string;
+  supplier_id: string | null;
+  branch_id: string;
+  invoice_number: string | null;
+  total_amount: number | string | null;
+  purchase_date: Date | string | null;
+  on_credit: boolean;
+  created_at: Date;
+  item_count: number;
+}
+
+export interface PurchaseRow {
+  id: string;
+  supplier_id: string | null;
+  branch_id: string;
+  invoice_number: string | null;
+  total_amount: number | string | null;
+  purchase_date: Date | string | null;
+  on_credit: boolean;
+  created_at: Date;
+}
+
+export interface PurchaseItemDetailRow {
+  id: string;
+  purchase_id: string;
+  branch_id: string;
+  product_id: string | null;
+  batch_id: string | null;
+  quantity: number | string;
+  cost_price: number | string | null;
+  selling_price: number | string | null;
+  expiry_date: Date | string | null;
+  batch_number: string | null;
+}
+
+export interface PurchaseBatchShortRow {
+  id: string;
+  branch_id: string;
+  product_id: string;
+  quantity: number | string;
+}
+
+export interface PurchaseUpdateRow {
+  id: string;
+  supplier_id: string | null;
+  branch_id: string;
+  invoice_number: string | null;
+  total_amount: number | string | null;
+  purchase_date: Date | string | null;
+  created_at: Date;
+}
+
+export interface PurchaseItemRevertRow {
+  id: string;
+  branch_id: string;
+  product_id: string | null;
+  batch_id: string | null;
+  quantity: number | string;
+  cost_price: number | string | null;
+}
+
+export interface BatchIdQtyLockRow {
+  id: string;
+  quantity: number | string;
+}
+
+export interface PurchaseRefundInsertRow {
+  id: string;
+  branch_id: string;
+  purchase_id: string;
+  amount: number | string;
+  refund_date: Date | string;
+  on_credit: boolean;
+  notes: string | null;
+  created_at: Date;
+}
+
+export interface PurchaseLockRow {
+  id: string;
+  branch_id: string;
+  purchase_date: Date | string | null;
+  created_at: Date;
+}
+
 @Injectable()
 export class PurchasesService {
   constructor(
@@ -25,7 +110,7 @@ export class PurchasesService {
   async findAll(schemaName: string, allowedBranchIds: string[]) {
     await this.tenantService.applyTenantSchemaPatches(schemaName);
     return this.prisma.withTenantSchema(schemaName, (tx) =>
-      tx.$queryRawUnsafe(
+      tx.$queryRawUnsafe<PurchaseListRow[]>(
         `SELECT p.id,
                 p.supplier_id,
                 p.branch_id,
@@ -90,7 +175,7 @@ export class PurchasesService {
   async findOne(schemaName: string, id: string, allowedBranchIds: string[]) {
     await this.tenantService.applyTenantSchemaPatches(schemaName);
     return this.prisma.withTenantSchema(schemaName, async (tx) => {
-      const [row] = await tx.$queryRawUnsafe<any[]>(
+      const [row] = await tx.$queryRawUnsafe<PurchaseRow[]>(
         `SELECT id, supplier_id, branch_id, invoice_number, total_amount, purchase_date, on_credit, created_at
          FROM purchases
          WHERE id = $1 AND branch_id = ANY($2::uuid[])`,
@@ -99,7 +184,7 @@ export class PurchasesService {
       );
       if (!row) return null;
 
-      const items = await tx.$queryRawUnsafe<any[]>(
+      const items = await tx.$queryRawUnsafe<PurchaseItemDetailRow[]>(
         `SELECT pi.id, pi.purchase_id, pi.branch_id, pi.product_id, pi.batch_id, pi.quantity, pi.cost_price, pi.selling_price, pi.expiry_date,
                 b.batch_number
          FROM purchase_items pi
@@ -151,7 +236,7 @@ export class PurchasesService {
         if (qty > 0 && cost > 0) computedTotal += qty * cost;
       }
 
-      const [row] = await tx.$queryRawUnsafe<any[]>(
+      const [row] = await tx.$queryRawUnsafe<PurchaseRow[]>(
         `INSERT INTO purchases (supplier_id, branch_id, invoice_number, total_amount, purchase_date, on_credit)
          VALUES ($1, $2, $3, $4, $5, COALESCE($6, FALSE))
          RETURNING id, supplier_id, branch_id, invoice_number, total_amount, purchase_date, on_credit, created_at`,
@@ -164,7 +249,7 @@ export class PurchasesService {
       );
 
       for (const item of dto.items) {
-        const [batch] = await tx.$queryRawUnsafe<any[]>(
+        const [batch] = await tx.$queryRawUnsafe<PurchaseBatchShortRow[]>(
           `INSERT INTO batches (branch_id, product_id, batch_number, expiry_date, quantity, cost_price, selling_price)
            VALUES ($1, $2, $3, $4, $5, $6, $7)
            RETURNING id, branch_id, product_id, quantity`,
@@ -290,7 +375,7 @@ export class PurchasesService {
         );
       }
 
-      const [row] = await tx.$queryRawUnsafe<any[]>(
+      const [row] = await tx.$queryRawUnsafe<PurchaseUpdateRow[]>(
         `UPDATE purchases
          SET supplier_id = COALESCE($2, supplier_id),
              branch_id = $3,
@@ -332,7 +417,7 @@ export class PurchasesService {
     ctx?: PurchaseMutationContext,
   ) {
     return this.prisma.withTenantSchema(schemaName, async (tx) => {
-      const [purchase] = await tx.$queryRawUnsafe<any[]>(
+      const [purchase] = await tx.$queryRawUnsafe<PurchaseRow[]>(
         `SELECT id, branch_id, supplier_id, total_amount, purchase_date, on_credit, created_at
          FROM purchases
          WHERE id = $1 AND branch_id = ANY($2::uuid[])`,
@@ -398,7 +483,7 @@ export class PurchasesService {
     tx: Prisma.TransactionClient,
     purchase: { id: string; branch_id: string },
   ): Promise<number> {
-    const items = await tx.$queryRawUnsafe<any[]>(
+    const items = await tx.$queryRawUnsafe<PurchaseItemRevertRow[]>(
       `SELECT id, branch_id, product_id, batch_id, quantity, cost_price
        FROM purchase_items
        WHERE purchase_id = $1
@@ -410,15 +495,17 @@ export class PurchasesService {
       return 0;
     }
 
-    const reversible = items.filter((row) => {
-      const q = Number(row.quantity ?? 0);
-      return Boolean(row.product_id) && q > 0;
-    });
+    const reversible = items.filter(
+      (row): row is PurchaseItemRevertRow & { product_id: string } => {
+        const q = Number(row.quantity ?? 0);
+        return row.product_id != null && row.product_id !== '' && q > 0;
+      },
+    );
 
     for (const item of reversible) {
       const qty = Number(item.quantity ?? 0);
       if (item.batch_id) {
-        const [batch] = await tx.$queryRawUnsafe<any[]>(
+        const [batch] = await tx.$queryRawUnsafe<BatchIdQtyLockRow[]>(
           `SELECT id, quantity
            FROM batches
            WHERE id = $1
@@ -497,7 +584,7 @@ export class PurchasesService {
       throw new BadRequestException('Refund amount must be greater than 0');
     }
     return this.prisma.withTenantSchema(schemaName, async (tx) => {
-      const [purchase] = await tx.$queryRawUnsafe<any[]>(
+      const [purchase] = await tx.$queryRawUnsafe<PurchaseRow[]>(
         `SELECT id, branch_id, supplier_id, total_amount, purchase_date, on_credit, created_at
          FROM purchases
          WHERE id = $1 AND branch_id = ANY($2::uuid[])`,
@@ -519,7 +606,7 @@ export class PurchasesService {
 
       await this.lockDates.assertDocumentDateOpen(tx, branchId, dateStr);
 
-      const [refundRow] = await tx.$queryRawUnsafe<any[]>(
+      const [refundRow] = await tx.$queryRawUnsafe<PurchaseRefundInsertRow[]>(
         `INSERT INTO purchase_refunds (
            branch_id, purchase_id, amount, refund_date, on_credit, notes
          )
@@ -566,7 +653,7 @@ export class PurchasesService {
     ctx?: PurchaseMutationContext,
   ) {
     return this.prisma.withTenantSchema(schemaName, async (tx) => {
-      const [purchase] = await tx.$queryRawUnsafe<any[]>(
+      const [purchase] = await tx.$queryRawUnsafe<PurchaseLockRow[]>(
         `SELECT id, branch_id, purchase_date, created_at
          FROM purchases
          WHERE id = $1 AND branch_id = ANY($2::uuid[])`,
@@ -587,7 +674,10 @@ export class PurchasesService {
         docDate,
       );
 
-      const count = await this.revertPurchaseItemsStock(tx, purchase);
+      const count = await this.revertPurchaseItemsStock(tx, {
+        id: purchase.id,
+        branch_id: purchase.branch_id,
+      });
       await tx.$queryRawUnsafe(
         `UPDATE purchases
          SET total_amount = 0

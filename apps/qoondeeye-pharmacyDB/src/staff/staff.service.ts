@@ -6,6 +6,20 @@ import {
   requiresAssignedBranch,
 } from '../common/security/branch-access.policy';
 
+export interface StaffTenantUserRow {
+  id: string;
+  name: string | null;
+  staff_id: string | null;
+  email: string | null;
+  role: string | null;
+  branch_id: string | null;
+  created_at: Date | null;
+}
+
+export interface StaffIdOnlyRow {
+  id: string;
+}
+
 @Injectable()
 export class StaffService {
   constructor(private readonly prisma: PrismaService) {}
@@ -226,9 +240,9 @@ export class StaffService {
       ? `u.${meta.createdAtColumn} AS created_at`
       : `NULL::timestamp AS created_at`;
 
-    let row: any = null;
+    let row: StaffTenantUserRow | undefined;
     if (meta.hasRoleId && roleTable) {
-      [row] = await this.prisma.queryRawUnsafe<any[]>(
+      [row] = await this.prisma.queryRawUnsafe<StaffTenantUserRow[]>(
         `SELECT u.id,
                 u.name,
                 u.staff_id,
@@ -242,7 +256,7 @@ export class StaffService {
         id,
       );
     } else if (meta.hasRoleText) {
-      [row] = await this.prisma.queryRawUnsafe<any[]>(
+      [row] = await this.prisma.queryRawUnsafe<StaffTenantUserRow[]>(
         `SELECT u.id,
                 u.name,
                 u.staff_id,
@@ -255,7 +269,7 @@ export class StaffService {
         id,
       );
     } else {
-      [row] = await this.prisma.queryRawUnsafe<any[]>(
+      [row] = await this.prisma.queryRawUnsafe<StaffTenantUserRow[]>(
         `SELECT u.id,
                 u.name,
                 u.staff_id,
@@ -335,7 +349,7 @@ export class StaffService {
       }
     }
 
-    let inserted: any = null;
+    let inserted: StaffIdOnlyRow | null = null;
 
     const targetBranchId =
       dto.branchId?.trim() ||
@@ -381,7 +395,7 @@ export class StaffService {
       }
 
       if (meta.hasPinHash) {
-        [inserted] = await this.prisma.queryRawUnsafe<any[]>(
+        [inserted] = await this.prisma.queryRawUnsafe<StaffIdOnlyRow[]>(
           `INSERT INTO ${userTable} (name, staff_id, email, password, role_id, pin_hash, branch_id)
            VALUES ($1, $2, $3, $4, $5::uuid, $6, $7::uuid)
            RETURNING id`,
@@ -394,7 +408,7 @@ export class StaffService {
           targetBranchId,
         );
       } else {
-        [inserted] = await this.prisma.queryRawUnsafe<any[]>(
+        [inserted] = await this.prisma.queryRawUnsafe<StaffIdOnlyRow[]>(
           `INSERT INTO ${userTable} (name, staff_id, email, password, role_id, branch_id)
            VALUES ($1, $2, $3, $4, $5::uuid, $6::uuid)
            RETURNING id`,
@@ -408,7 +422,7 @@ export class StaffService {
       }
     } else if (meta.hasRoleText) {
       if (meta.hasPinHash) {
-        [inserted] = await this.prisma.queryRawUnsafe<any[]>(
+        [inserted] = await this.prisma.queryRawUnsafe<StaffIdOnlyRow[]>(
           `INSERT INTO ${userTable} (name, staff_id, email, password, role, pin_hash, branch_id)
            VALUES ($1, $2, $3, $4, $5, $6, $7::uuid)
            RETURNING id`,
@@ -421,7 +435,7 @@ export class StaffService {
           targetBranchId,
         );
       } else {
-        [inserted] = await this.prisma.queryRawUnsafe<any[]>(
+        [inserted] = await this.prisma.queryRawUnsafe<StaffIdOnlyRow[]>(
           `INSERT INTO ${userTable} (name, staff_id, email, password, role, branch_id)
            VALUES ($1, $2, $3, $4, $5, $6::uuid)
            RETURNING id`,
@@ -435,7 +449,7 @@ export class StaffService {
       }
     } else {
       if (meta.hasPinHash) {
-        [inserted] = await this.prisma.queryRawUnsafe<any[]>(
+        [inserted] = await this.prisma.queryRawUnsafe<StaffIdOnlyRow[]>(
           `INSERT INTO ${userTable} (name, staff_id, email, password, pin_hash, branch_id)
            VALUES ($1, $2, $3, $4, $5, $6::uuid)
            RETURNING id`,
@@ -447,7 +461,7 @@ export class StaffService {
           targetBranchId,
         );
       } else {
-        [inserted] = await this.prisma.queryRawUnsafe<any[]>(
+        [inserted] = await this.prisma.queryRawUnsafe<StaffIdOnlyRow[]>(
           `INSERT INTO ${userTable} (name, staff_id, email, password, branch_id)
            VALUES ($1, $2, $3, $4, $5::uuid)
            RETURNING id`,
@@ -562,7 +576,7 @@ export class StaffService {
       );
     }
 
-    let updated: any = null;
+    let updated: StaffIdOnlyRow | null = null;
     if (meta.hasRoleId && roleTable) {
       let roleId: string | null | undefined = undefined;
       if (dto.role !== undefined) {
@@ -583,7 +597,7 @@ export class StaffService {
         }
       }
 
-      [updated] = await this.prisma.queryRawUnsafe<any[]>(
+      [updated] = await this.prisma.queryRawUnsafe<StaffIdOnlyRow[]>(
         `UPDATE ${userTable}
          SET name = COALESCE($2, name),
              staff_id = COALESCE($3, staff_id),
@@ -615,7 +629,7 @@ export class StaffService {
         dto.branchId ?? null,
       );
     } else if (meta.hasRoleText) {
-      [updated] = await this.prisma.queryRawUnsafe<any[]>(
+      [updated] = await this.prisma.queryRawUnsafe<StaffIdOnlyRow[]>(
         `UPDATE ${userTable}
          SET name = COALESCE($2, name),
              staff_id = COALESCE($3, staff_id),
@@ -638,7 +652,7 @@ export class StaffService {
         dto.branchId ?? null,
       );
     } else {
-      [updated] = await this.prisma.queryRawUnsafe<any[]>(
+      [updated] = await this.prisma.queryRawUnsafe<StaffIdOnlyRow[]>(
         `UPDATE ${userTable}
          SET name = COALESCE($2, name),
              staff_id = COALESCE($3, staff_id),

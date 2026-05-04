@@ -20,6 +20,33 @@ function round2(n: number): number {
   return Math.round((n + Number.EPSILON) * 100) / 100;
 }
 
+export interface PosSessionFullRow {
+  id: string;
+  branch_id: string;
+  device_id: string | null;
+  staff_user_id: string | null;
+  status: string;
+  opened_at: Date;
+  closed_at: Date | null;
+}
+
+export interface PosStatementLineRow {
+  id: string;
+  payment_bucket: string;
+  expected_amount: string;
+  actual_amount: string;
+  difference: string;
+}
+
+export interface PosStatementDetailRow {
+  id: string;
+  session_id: string;
+  status: string;
+  journal_entry_id: string | null;
+  created_at: Date;
+  posted_at: Date | null;
+}
+
 @Injectable()
 export class PosSessionsService {
   constructor(
@@ -103,7 +130,7 @@ export class PosSessionsService {
     this.ensureBranch(branchId, allowedBranchIds);
     await this.tenantService.applyTenantSchemaPatches(schemaName);
     return this.prisma.withTenantSchema(schemaName, async (tx) => {
-      const [session] = await tx.$queryRawUnsafe<any[]>(
+      const [session] = await tx.$queryRawUnsafe<PosSessionFullRow[]>(
         `SELECT id, branch_id, device_id, staff_user_id, status, opened_at, closed_at
          FROM pos_sessions
          WHERE branch_id = $1::uuid AND status = 'open'
@@ -426,7 +453,7 @@ export class PosSessionsService {
         };
       }
 
-      const lines = await tx.$queryRawUnsafe<any[]>(
+      const lines = await tx.$queryRawUnsafe<PosStatementLineRow[]>(
         `SELECT id, payment_bucket, expected_amount::text, actual_amount::text, difference::text
          FROM pos_statement_lines
          WHERE statement_id = $1::uuid
@@ -485,7 +512,7 @@ export class PosSessionsService {
         sessionId,
       );
 
-      const [row] = await tx.$queryRawUnsafe<any[]>(
+      const [row] = await tx.$queryRawUnsafe<PosSessionFullRow[]>(
         `SELECT id, branch_id, device_id, staff_user_id, status, opened_at, closed_at
          FROM pos_sessions WHERE id = $1::uuid`,
         sessionId,
@@ -574,13 +601,13 @@ export class PosSessionsService {
       closed_at: Date | null;
     },
   ) {
-    const [st] = await tx.$queryRawUnsafe<any[]>(
+    const [st] = await tx.$queryRawUnsafe<PosStatementDetailRow[]>(
       `SELECT id, session_id, status, journal_entry_id, created_at, posted_at
        FROM pos_statements WHERE id = $1::uuid`,
       statementId,
     );
 
-    const lines = await tx.$queryRawUnsafe<any[]>(
+    const lines = await tx.$queryRawUnsafe<PosStatementLineRow[]>(
       `SELECT id, payment_bucket, expected_amount::text, actual_amount::text, difference::text
        FROM pos_statement_lines
        WHERE statement_id = $1::uuid

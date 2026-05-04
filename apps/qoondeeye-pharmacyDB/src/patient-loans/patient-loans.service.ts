@@ -1,6 +1,61 @@
 import { Injectable } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 
+export interface PatientLoanListRow {
+  id: string;
+  customer_id: string;
+  branch_id: string;
+  sale_id: string | null;
+  total_amount: number | string;
+  amount_paid: number | string;
+  status: string;
+  due_date: Date | string | null;
+  created_at: Date;
+  customer_name: string | null;
+}
+
+export interface PatientLoanOutstandingRow {
+  name: string | null;
+  id: string;
+  total_amount: number | string;
+  amount_paid: number | string;
+  balance: number | string;
+}
+
+export interface PatientLoanPaymentListRow {
+  id: string;
+  loan_id: string;
+  amount: number | string;
+  payment_method: string | null;
+  payment_date: Date;
+  created_at: Date;
+}
+
+export interface PatientLoanCoreRow {
+  id: string;
+  customer_id: string;
+  branch_id: string;
+  sale_id: string | null;
+  total_amount: number | string;
+  amount_paid: number | string;
+  status: string;
+  due_date: Date | string | null;
+  created_at: Date;
+}
+
+export interface PatientLoanRow extends PatientLoanCoreRow {
+  customer_name: string | null;
+}
+
+export interface PatientLoanPaymentRow {
+  id: string;
+  loan_id: string;
+  amount: number | string;
+  payment_method: string | null;
+  payment_date: Date;
+  created_at: Date;
+}
+
 @Injectable()
 export class PatientLoansService {
   constructor(private readonly prisma: PrismaService) {}
@@ -30,13 +85,13 @@ export class PatientLoansService {
         query += ` AND pl.status = $${params.length}`;
       }
       query += ` ORDER BY pl.created_at DESC`;
-      return tx.$queryRawUnsafe<any[]>(query, ...params);
+      return tx.$queryRawUnsafe<PatientLoanListRow[]>(query, ...params);
     });
   }
 
   async findOutstanding(schemaName: string, allowedBranchIds: string[]) {
     return this.prisma.withTenantSchema(schemaName, async (tx) => {
-      return tx.$queryRawUnsafe<any[]>(
+      return tx.$queryRawUnsafe<PatientLoanOutstandingRow[]>(
         `SELECT c.name, pl.id, pl.total_amount, pl.amount_paid,
                 (pl.total_amount - pl.amount_paid) AS balance
          FROM patient_loans pl
@@ -51,7 +106,7 @@ export class PatientLoansService {
 
   async findOne(schemaName: string, id: string, allowedBranchIds: string[]) {
     return this.prisma.withTenantSchema(schemaName, async (tx) => {
-      const [row] = await tx.$queryRawUnsafe<any[]>(
+      const [row] = await tx.$queryRawUnsafe<PatientLoanRow[]>(
         `SELECT pl.id, pl.customer_id, pl.branch_id, pl.sale_id, pl.total_amount,
                 pl.amount_paid, pl.status, pl.due_date, pl.created_at,
                 c.name as customer_name
@@ -71,7 +126,7 @@ export class PatientLoansService {
     allowedBranchIds: string[],
   ) {
     return this.prisma.withTenantSchema(schemaName, async (tx) =>
-      tx.$queryRawUnsafe<any[]>(
+      tx.$queryRawUnsafe<PatientLoanPaymentListRow[]>(
         `SELECT p.id, p.loan_id, p.amount, p.payment_method, p.payment_date, p.created_at
          FROM patient_loan_payments p
          JOIN patient_loans pl ON pl.id = p.loan_id
@@ -97,7 +152,7 @@ export class PatientLoansService {
     },
   ) {
     return this.prisma.withTenantSchema(schemaName, async (tx) => {
-      const [row] = await tx.$queryRawUnsafe<any[]>(
+      const [row] = await tx.$queryRawUnsafe<PatientLoanCoreRow[]>(
         `INSERT INTO patient_loans (customer_id, branch_id, sale_id, total_amount, amount_paid, status, due_date)
          VALUES ($1, $2, $3, $4, COALESCE($5, 0), COALESCE($6, 'ongoing'), $7)
          RETURNING id, customer_id, branch_id, sale_id, total_amount, amount_paid, status, due_date, created_at`,
@@ -126,7 +181,7 @@ export class PatientLoansService {
     },
   ) {
     return this.prisma.withTenantSchema(schemaName, async (tx) => {
-      const [row] = await tx.$queryRawUnsafe<any[]>(
+      const [row] = await tx.$queryRawUnsafe<PatientLoanCoreRow[]>(
         `UPDATE patient_loans SET
            branch_id = $2,
            sale_id = COALESCE($3, sale_id),
@@ -155,7 +210,7 @@ export class PatientLoansService {
   ) {
     return this.prisma.withTenantSchema(schemaName, async (tx) => {
       // 1) Update the loan only if it belongs to the allowed branch scope.
-      const [loan] = await tx.$queryRawUnsafe<any[]>(
+      const [loan] = await tx.$queryRawUnsafe<PatientLoanCoreRow[]>(
         `UPDATE patient_loans SET
            amount_paid = amount_paid + $2,
            status = CASE
@@ -172,7 +227,7 @@ export class PatientLoansService {
       if (!loan) return null;
 
       // 2) Record the payment.
-      const [payment] = await tx.$queryRawUnsafe<any[]>(
+      const [payment] = await tx.$queryRawUnsafe<PatientLoanPaymentRow[]>(
         `INSERT INTO patient_loan_payments (loan_id, amount, payment_method)
          VALUES ($1, $2, $3)
          RETURNING id, loan_id, amount, payment_method, payment_date, created_at`,

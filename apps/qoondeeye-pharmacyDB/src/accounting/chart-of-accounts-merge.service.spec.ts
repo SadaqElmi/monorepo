@@ -118,9 +118,11 @@ describe('ChartOfAccountsMergeService.mergeDuplicatedAccounts', () => {
     expect(out.deletedAccountId).toBe(sourceId);
 
     expect(mockTx.$executeRawUnsafe).toHaveBeenCalledTimes(1);
-    expect(String(mockTx.$executeRawUnsafe.mock.calls[0][0])).toContain(
-      'DELETE FROM chart_of_accounts',
-    );
+    const firstExec = mockTx.$executeRawUnsafe.mock.calls[0] as unknown as [
+      string,
+      ...unknown[],
+    ];
+    expect(String(firstExec[0])).toContain('DELETE FROM chart_of_accounts');
   });
 
   it('throws when the two accounts are mutual parents', async () => {

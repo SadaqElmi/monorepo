@@ -9,6 +9,16 @@ import { queryInterbranchMismatches } from '../accounting/interbranch-report.uti
 import { PrismaService } from '../prisma/prisma.service';
 import { TenantService } from '../tenant/tenant.service';
 
+export interface BranchRow {
+  id: string;
+  name: string | null;
+  phone: string | null;
+  address: string | null;
+  /** Omitted on some INSERT … RETURNING projections; present on full row reads. */
+  accounting_lock_date?: Date | string | null;
+  created_at: Date;
+}
+
 @Injectable()
 export class BranchesService {
   constructor(
@@ -19,7 +29,7 @@ export class BranchesService {
   async findAll(schemaName: string) {
     await this.tenantService.applyTenantSchemaPatches(schemaName);
     return this.prisma.withTenantSchema(schemaName, (tx) =>
-      tx.$queryRawUnsafe(
+      tx.$queryRawUnsafe<BranchRow[]>(
         `SELECT id, name, phone, address, accounting_lock_date, created_at FROM branches ORDER BY name`,
       ),
     );
@@ -28,7 +38,7 @@ export class BranchesService {
   async findOne(schemaName: string, id: string) {
     await this.tenantService.applyTenantSchemaPatches(schemaName);
     return this.prisma.withTenantSchema(schemaName, async (tx) => {
-      const [row] = await tx.$queryRawUnsafe<any[]>(
+      const [row] = await tx.$queryRawUnsafe<BranchRow[]>(
         `SELECT id, name, phone, address, accounting_lock_date, created_at FROM branches WHERE id = $1`,
         id,
       );
@@ -42,7 +52,7 @@ export class BranchesService {
   ) {
     await this.tenantService.applyTenantSchemaPatches(schemaName);
     return this.prisma.withTenantSchema(schemaName, async (tx) => {
-      const [row] = await tx.$queryRawUnsafe<any[]>(
+      const [row] = await tx.$queryRawUnsafe<BranchRow[]>(
         `INSERT INTO branches (name, phone, address) VALUES ($1, $2, $3) RETURNING id, name, phone, address, created_at`,
         dto.name ?? null,
         dto.phone ?? null,
@@ -132,7 +142,7 @@ export class BranchesService {
           }
         }
       }
-      const [row] = await tx.$queryRawUnsafe<any[]>(
+      const [row] = await tx.$queryRawUnsafe<BranchRow[]>(
         `UPDATE branches SET
            name = COALESCE($2, name),
            phone = COALESCE($3, phone),

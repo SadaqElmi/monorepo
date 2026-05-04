@@ -1,21 +1,27 @@
 import { Injectable } from '@nestjs/common';
-import { Tenant } from '@prisma/client';
+import type { Tenant } from '@prisma/client';
 import { AsyncLocalStorage } from 'node:async_hooks';
+
+/** Fields required for request-scoped tenant routing (subset of Prisma `Tenant`). */
+export type TenantContextPayload = Pick<
+  Tenant,
+  'id' | 'name' | 'schemaName' | 'status'
+>;
 
 @Injectable()
 export class TenantContextService {
   private readonly als = new AsyncLocalStorage<{
-    tenant: Tenant | null;
+    tenant: TenantContextPayload | null;
     isSystem: boolean;
   }>();
 
   // Fallback for code paths outside a request context (e.g. startup scripts).
-  private fallbackTenant: Tenant | null = null;
+  private fallbackTenant: TenantContextPayload | null = null;
   private fallbackIsSystem = false;
 
   runWithContext<T>(
     fn: () => T,
-    initial: { tenant: Tenant | null; isSystem: boolean } = {
+    initial: { tenant: TenantContextPayload | null; isSystem: boolean } = {
       tenant: null,
       isSystem: false,
     },
@@ -27,7 +33,7 @@ export class TenantContextService {
     return this.als.getStore();
   }
 
-  setTenant(tenant: Tenant | null) {
+  setTenant(tenant: TenantContextPayload | null) {
     const store = this.store;
     if (store) {
       store.tenant = tenant;
@@ -38,7 +44,7 @@ export class TenantContextService {
     this.fallbackIsSystem = false;
   }
 
-  getTenant(): Tenant | null {
+  getTenant(): TenantContextPayload | null {
     return this.store?.tenant ?? this.fallbackTenant;
   }
 
