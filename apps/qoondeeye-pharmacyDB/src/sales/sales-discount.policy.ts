@@ -6,6 +6,7 @@ const POS_MAX_DISCOUNT_PCT_MANAGER_TIER = 10;
 /** Max discount as percent of line subtotal allowed for POS/API sale creation. */
 export function maxSaleDiscountPercentForRole(role?: string | null): number {
   const r = normalizeRole(role);
-  if (r === 'manager' || r === 'admin') return POS_MAX_DISCOUNT_PCT_MANAGER_TIER;
+  if (r === 'manager' || r === 'admin')
+    return POS_MAX_DISCOUNT_PCT_MANAGER_TIER;
   return POS_MAX_DISCOUNT_PCT_CASHIER_TIER;
 }

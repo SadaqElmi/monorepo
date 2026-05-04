@@ -1,4 +1,7 @@
-import { classifyPaymentMethod, type PaymentGlBucket } from './payment-method.util';
+import {
+  classifyPaymentMethod,
+  type PaymentGlBucket,
+} from './payment-method.util';
 
 export const STATEMENT_BUCKETS = ['cash', 'card', 'wallet'] as const;
 export type StatementPaymentBucket = (typeof STATEMENT_BUCKETS)[number];

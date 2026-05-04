@@ -85,7 +85,22 @@ export class AuditController {
     const schema = this.tenantContext.getSchemaName()!;
     await this.tenantService.applyTenantSchemaPatches(schema);
     const escapeCsv = (v: unknown): string => {
-      const s = String(v ?? '');
+      let s: string;
+      if (v === null || v === undefined) {
+        s = '';
+      } else if (typeof v === 'string') {
+        s = v;
+      } else if (
+        typeof v === 'number' ||
+        typeof v === 'boolean' ||
+        typeof v === 'bigint'
+      ) {
+        s = String(v);
+      } else if (v instanceof Date) {
+        s = v.toISOString();
+      } else {
+        s = JSON.stringify(v);
+      }
       if (s.includes(',') || s.includes('"') || s.includes('\n')) {
         return `"${s.replace(/"/g, '""')}"`;
       }

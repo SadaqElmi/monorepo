@@ -242,7 +242,7 @@ export class SalesService {
           if (!miscKinds.has(miscRaw)) {
             throw new BadRequestException('Invalid miscChargeKind');
           }
-          let unitPrice = Number(item.price ?? 0);
+          const unitPrice = Number(item.price ?? 0);
           if (!Number.isFinite(unitPrice) || unitPrice <= 0) {
             throw new BadRequestException(
               'Manual charge lines require a positive unit price',

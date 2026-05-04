@@ -152,7 +152,7 @@ export class ReconciliationController {
   }
 
   @Get('runs/latest')
-  async latestRun(@Req() req: Request) {
+  async latestRun() {
     this.ensureTenant();
     const tenant = this.tenantContext.getTenant()!;
     const run = await this.reconciliationService.findLatestCompletedRun(

@@ -556,11 +556,7 @@ export class StaffService {
         `Role "${nextRoleName ?? 'staff'}" requires a branch assignment`,
       );
     }
-    if (
-      nextRoleLower === 'cashier' &&
-      dto.staffId !== undefined &&
-      !staffId
-    ) {
+    if (nextRoleLower === 'cashier' && dto.staffId !== undefined && !staffId) {
       throw new BadRequestException(
         'Staff ID is required for cashier accounts',
       );

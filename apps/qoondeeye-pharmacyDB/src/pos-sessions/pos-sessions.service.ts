@@ -30,10 +30,7 @@ export class PosSessionsService {
     private readonly auditLog: AuditLogService,
   ) {}
 
-  private ensureBranch(
-    branchId: string,
-    allowedBranchIds: string[],
-  ): void {
+  private ensureBranch(branchId: string, allowedBranchIds: string[]): void {
     if (!allowedBranchIds.includes(branchId)) {
       throw new ForbiddenException('Access denied to this branch');
     }
@@ -155,12 +152,7 @@ export class PosSessionsService {
         session.id,
       );
       if (existingOpen) {
-        return this.getStatementById(
-          tx,
-          existingOpen.id,
-          branchId,
-          session,
-        );
+        return this.getStatementById(tx, existingOpen.id, branchId, session);
       }
 
       const agg = await tx.$queryRawUnsafe<
@@ -201,13 +193,13 @@ export class PosSessionsService {
           `INSERT INTO pos_statement_lines
              (statement_id, payment_bucket, expected_amount, actual_amount, difference)
            VALUES ($1::uuid, $2, $3::numeric, $3::numeric, 0::numeric)`,
-          st!.id,
+          st.id,
           bucket,
           exp,
         );
       }
 
-      return this.getStatementById(tx, st!.id, branchId, session);
+      return this.getStatementById(tx, st.id, branchId, session);
     });
   }
 
@@ -224,11 +216,17 @@ export class PosSessionsService {
 
     const amt = round2(Number(actualAmount));
     if (!Number.isFinite(amt) || amt < 0) {
-      throw new BadRequestException('actualAmount must be a non-negative number');
+      throw new BadRequestException(
+        'actualAmount must be a non-negative number',
+      );
     }
 
     return this.prisma.withTenantSchema(schemaName, async (tx) => {
-      const stmt = await this.loadStatementWithSession(tx, statementId, branchId);
+      const stmt = await this.loadStatementWithSession(
+        tx,
+        statementId,
+        branchId,
+      );
       if (stmt.status !== 'open') {
         throw new BadRequestException('Statement is already posted');
       }
@@ -277,7 +275,11 @@ export class PosSessionsService {
     await this.tenantService.applyTenantSchemaPatches(schemaName);
 
     return this.prisma.withTenantSchema(schemaName, async (tx) => {
-      const stmt = await this.loadStatementWithSession(tx, statementId, branchId);
+      const stmt = await this.loadStatementWithSession(
+        tx,
+        statementId,
+        branchId,
+      );
       const session = await this.loadSessionRow(tx, stmt.session_id, branchId);
       return this.getStatementById(tx, statementId, branchId, session);
     });
@@ -294,7 +296,11 @@ export class PosSessionsService {
     await this.tenantService.applyTenantSchemaPatches(schemaName);
 
     return this.prisma.withTenantSchema(schemaName, async (tx) => {
-      const stmt = await this.loadStatementWithSession(tx, statementId, branchId);
+      const stmt = await this.loadStatementWithSession(
+        tx,
+        statementId,
+        branchId,
+      );
       if (stmt.status === 'posted') {
         throw new BadRequestException('Statement already posted');
       }
@@ -326,15 +332,13 @@ export class PosSessionsService {
         difference: round2(Number(l.difference)),
       }));
 
-      const journal = await this.accountingPosting.postPosStatementVarianceJournal(
-        tx,
-        {
+      const journal =
+        await this.accountingPosting.postPosStatementVarianceJournal(tx, {
           branchId,
           statementId,
           lines: varianceLines,
           entryDate,
-        },
-      );
+        });
 
       let journalEntryId: string | null = null;
       if (journal?.id) {

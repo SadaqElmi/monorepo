@@ -98,7 +98,7 @@ describe('ChartOfAccountsMergeService.mergeDuplicatedAccounts', () => {
     };
 
     const prisma = {
-      withTenantSchema: async (_schema: string, fn: (tx: unknown) => unknown) =>
+      withTenantSchema: (_schema: string, fn: (tx: unknown) => unknown) =>
         fn(mockTx),
     } as unknown as import('../prisma/prisma.service').PrismaService;
 
@@ -134,7 +134,7 @@ describe('ChartOfAccountsMergeService.mergeDuplicatedAccounts', () => {
       $executeRawUnsafe: jest.fn(),
     };
     const prisma = {
-      withTenantSchema: async (_schema: string, fn: (tx: unknown) => unknown) =>
+      withTenantSchema: (_schema: string, fn: (tx: unknown) => unknown) =>
         fn(mockTx),
     } as unknown as import('../prisma/prisma.service').PrismaService;
 
@@ -150,7 +150,7 @@ describe('ChartOfAccountsMergeService.mergeDuplicatedAccounts', () => {
       $executeRawUnsafe: jest.fn(),
     };
     const prisma = {
-      withTenantSchema: async (_schema: string, fn: (tx: unknown) => unknown) =>
+      withTenantSchema: (_schema: string, fn: (tx: unknown) => unknown) =>
         fn(mockTx),
     } as unknown as import('../prisma/prisma.service').PrismaService;
 

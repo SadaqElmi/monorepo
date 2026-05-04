@@ -801,7 +801,8 @@ export class AccountingPostingService {
 
     const clearingForStatementBucket = (bucket: string): string => {
       const b = bucket.trim().toLowerCase();
-      if (b === 'card') return this.seed.resolvePaymentAccount(accounts, 'card');
+      if (b === 'card')
+        return this.seed.resolvePaymentAccount(accounts, 'card');
       if (b === 'wallet')
         return this.seed.resolvePaymentAccount(accounts, 'wallet');
       return this.seed.resolvePaymentAccount(accounts, 'cash');

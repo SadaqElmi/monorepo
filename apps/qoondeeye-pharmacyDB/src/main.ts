@@ -32,4 +32,4 @@ async function bootstrap() {
   );
   await app.listen(process.env.PORT ?? 5555);
 }
-bootstrap();
+void bootstrap();

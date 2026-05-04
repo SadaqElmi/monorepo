@@ -333,7 +333,7 @@ export class FinancialReportsService {
         input.scopeHash,
         input.periodKey,
       );
-      let priorPayload: unknown | undefined = sameDay[0]?.payload;
+      let priorPayload: unknown = sameDay[0]?.payload;
       if (priorPayload === undefined) {
         const priorRows = await tx.$queryRawUnsafe<Array<{ payload: unknown }>>(
           `SELECT payload

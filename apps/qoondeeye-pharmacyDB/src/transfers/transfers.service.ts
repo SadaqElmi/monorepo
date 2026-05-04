@@ -86,6 +86,44 @@ type LockAcquireResult = {
 };
 const EPSILON = 0.01;
 
+/** Row from raw SQL on `stock_transfer_events` (typed for `$queryRawUnsafe` + strict builds). */
+type StockTransferEventSqlRow = {
+  id: string;
+  type: string;
+  event_type: string;
+  created_at: Date;
+  actor_user_id: string | null;
+  branch_id: string | null;
+  message: string | null;
+  metadata: unknown;
+  payload: unknown;
+  aggregate_version: number;
+  schema_version: number;
+  correlation_id: string | null;
+  causation_id: string | null;
+  idempotency_key: string | null;
+};
+
+type TransferJournalCostLineRow = {
+  quantity: number;
+  unit_cost_snapshot: number | null;
+  line_cost_snapshot: number | null;
+};
+
+type TransferProductCostLineRow = {
+  product_id: string;
+  quantity: number;
+  unit_cost_snapshot: number | null;
+  line_cost_snapshot: number | null;
+};
+
+type TransferApprovalReplayEventRow = {
+  event_type: string;
+  metadata: Record<string, unknown> | null;
+};
+
+type TransferDetailLineForQty = { quantity: number };
+
 /**
  * Stock transfers: ship consumes FIFO batches at source; receive inserts a matching inbound batch
  * at destination (`xfer:<transferId>:<productId>`). Reversal removes that marker on receive undo.
@@ -106,6 +144,14 @@ export class TransfersService {
     private readonly monitoring: OpsMonitoringService,
     private readonly reconciliation: ReconciliationService,
   ) {}
+
+  /**
+   * Narrow `$queryRawUnsafe` / tenant transaction results: Prisma typings differ across
+   * TS versions, and some CI/Docker builds infer `unknown` instead of the generic row type.
+   */
+  private castSql<T>(v: unknown): T {
+    return v as T;
+  }
 
   /** Fire-and-forget scoped reconciliation after successful transfer mutations. */
   private scheduleReconciliationCheck(
@@ -516,9 +562,10 @@ export class TransfersService {
       throw new ForbiddenException('Access denied to this transfer');
     }
 
-    const items = await this.prisma.withTenantSchema(schema, (tx) =>
-      tx.$queryRawUnsafe<Record<string, unknown>[]>(
-        `SELECT
+    const items = this.castSql<Record<string, unknown>[]>(
+      await this.prisma.withTenantSchema(schema, (tx) =>
+        tx.$queryRawUnsafe<Record<string, unknown>[]>(
+          `SELECT
            sti.id,
            sti.product_id,
            sti.quantity,
@@ -532,11 +579,12 @@ export class TransfersService {
          LEFT JOIN products p ON p.id = sti.product_id
          WHERE sti.transfer_id = $1::uuid
          ORDER BY sti.id`,
-        id,
+          id,
+        ),
       ),
     );
 
-    const mappedItems = items.map((it) => ({
+    const mappedItems = items.map((it: Record<string, unknown>) => ({
       id: this.asText(it.id),
       product_id: it.product_id ? this.asText(it.product_id) : undefined,
       quantity: Number(it.quantity ?? 0),
@@ -558,7 +606,10 @@ export class TransfersService {
     const status = this.asText(row.status);
     let inTransitQty: number | null = null;
     if (status === 'shipped') {
-      inTransitQty = mappedItems.reduce((s, l) => s + l.quantity, 0);
+      inTransitQty = mappedItems.reduce(
+        (s: number, l: TransferDetailLineForQty) => s + l.quantity,
+        0,
+      );
     }
 
     return {
@@ -641,26 +692,9 @@ export class TransfersService {
 
   async getEvents(schema: string, id: string, allowedBranchIds: string[]) {
     await this.findOne(schema, id, allowedBranchIds);
-    return this.prisma
-      .withTenantSchema(schema, (tx) =>
-        tx.$queryRawUnsafe<
-          {
-            id: string;
-            type: string;
-            event_type: string;
-            created_at: Date;
-            actor_user_id: string | null;
-            branch_id: string | null;
-            message: string | null;
-            metadata: unknown;
-            payload: unknown;
-            aggregate_version: number;
-            schema_version: number;
-            correlation_id: string | null;
-            causation_id: string | null;
-            idempotency_key: string | null;
-          }[]
-        >(
+    const rows = this.castSql<StockTransferEventSqlRow[]>(
+      await this.prisma.withTenantSchema(schema, (tx) =>
+        tx.$queryRawUnsafe<StockTransferEventSqlRow[]>(
           `SELECT
            id,
            event_type AS type,
@@ -681,31 +715,30 @@ export class TransfersService {
          ORDER BY created_at ASC`,
           id,
         ),
-      )
-      .then((rows) =>
-        rows.map((r) => ({
-          id: String(r.id),
-          type: r.type,
-          event_type: r.event_type,
-          created_at: new Date(r.created_at).toISOString(),
-          actor_user_id: r.actor_user_id ? String(r.actor_user_id) : null,
-          branch_id: r.branch_id ? String(r.branch_id) : null,
-          message: r.message,
-          metadata:
-            r.metadata && typeof r.metadata === 'object'
-              ? (r.metadata as Record<string, unknown>)
-              : null,
-          payload:
-            r.payload && typeof r.payload === 'object'
-              ? (r.payload as Record<string, unknown>)
-              : null,
-          aggregate_version: Number(r.aggregate_version ?? 0),
-          schema_version: Number(r.schema_version ?? 1),
-          correlation_id: r.correlation_id ?? null,
-          causation_id: r.causation_id ?? null,
-          idempotency_key: r.idempotency_key ?? null,
-        })),
-      );
+      ),
+    );
+    return rows.map((r: StockTransferEventSqlRow) => ({
+      id: String(r.id),
+      type: r.type,
+      event_type: r.event_type,
+      created_at: new Date(r.created_at).toISOString(),
+      actor_user_id: r.actor_user_id ? String(r.actor_user_id) : null,
+      branch_id: r.branch_id ? String(r.branch_id) : null,
+      message: r.message,
+      metadata:
+        r.metadata && typeof r.metadata === 'object'
+          ? (r.metadata as Record<string, unknown>)
+          : null,
+      payload:
+        r.payload && typeof r.payload === 'object'
+          ? (r.payload as Record<string, unknown>)
+          : null,
+      aggregate_version: Number(r.aggregate_version ?? 0),
+      schema_version: Number(r.schema_version ?? 1),
+      correlation_id: r.correlation_id ?? null,
+      causation_id: r.causation_id ?? null,
+      idempotency_key: r.idempotency_key ?? null,
+    }));
   }
 
   private async insertEvent(
@@ -1293,17 +1326,19 @@ export class TransfersService {
     );
     if (!row) throw new NotFoundException('Transfer not found');
 
-    const items = await tx.$queryRawUnsafe<Record<string, unknown>[]>(
-      `SELECT
+    const items = this.castSql<Record<string, unknown>[]>(
+      await tx.$queryRawUnsafe<Record<string, unknown>[]>(
+        `SELECT
          sti.id, sti.product_id, sti.quantity, sti.received_quantity, sti.unit_cost_snapshot, sti.line_cost_snapshot,
          p.name AS prod_name, p.barcode AS prod_barcode, p.unit AS prod_unit
        FROM stock_transfer_items sti
        LEFT JOIN products p ON p.id = sti.product_id
        WHERE sti.transfer_id = $1::uuid ORDER BY sti.id`,
-      id,
+        id,
+      ),
     );
 
-    const mappedItems = items.map((it) => ({
+    const mappedItems = items.map((it: Record<string, unknown>) => ({
       id: this.asText(it.id),
       product_id: it.product_id ? this.asText(it.product_id) : undefined,
       quantity: Number(it.quantity ?? 0),
@@ -1325,7 +1360,10 @@ export class TransfersService {
     const status = this.asText(row.status);
     let inTransitQty: number | null = null;
     if (status === 'shipped') {
-      inTransitQty = mappedItems.reduce((s, l) => s + l.quantity, 0);
+      inTransitQty = mappedItems.reduce(
+        (s: number, l: TransferDetailLineForQty) => s + l.quantity,
+        0,
+      );
     }
 
     return {
@@ -1942,20 +1980,16 @@ export class TransfersService {
           });
         }
 
-        const linesForJournal = await tx.$queryRawUnsafe<
-          {
-            quantity: number;
-            unit_cost_snapshot: number | null;
-            line_cost_snapshot: number | null;
-          }[]
-        >(
-          `SELECT quantity, unit_cost_snapshot, line_cost_snapshot
+        const linesForJournal = this.castSql<TransferJournalCostLineRow[]>(
+          await tx.$queryRawUnsafe<TransferJournalCostLineRow[]>(
+            `SELECT quantity, unit_cost_snapshot, line_cost_snapshot
            FROM stock_transfer_items
            WHERE transfer_id = $1::uuid`,
-          id,
+            id,
+          ),
         );
         const journalAmount = this.transferAmountFromLines(
-          linesForJournal.map((line) => ({
+          linesForJournal.map((line: TransferJournalCostLineRow) => ({
             quantity: Number(line.quantity),
             unit_amount: Number(line.unit_cost_snapshot ?? 0),
             line_cost: Number(line.line_cost_snapshot ?? 0),
@@ -2162,20 +2196,18 @@ export class TransfersService {
           });
         }
 
-        const linesForReceiveJournal = await tx.$queryRawUnsafe<
-          {
-            quantity: number;
-            unit_cost_snapshot: number | null;
-            line_cost_snapshot: number | null;
-          }[]
+        const linesForReceiveJournal = this.castSql<
+          TransferJournalCostLineRow[]
         >(
-          `SELECT quantity, unit_cost_snapshot, line_cost_snapshot
+          await tx.$queryRawUnsafe<TransferJournalCostLineRow[]>(
+            `SELECT quantity, unit_cost_snapshot, line_cost_snapshot
            FROM stock_transfer_items
            WHERE transfer_id = $1::uuid`,
-          id,
+            id,
+          ),
         );
         const journalAmount = this.transferAmountFromLines(
-          linesForReceiveJournal.map((line) => ({
+          linesForReceiveJournal.map((line: TransferJournalCostLineRow) => ({
             quantity: Number(line.quantity),
             unit_amount: Number(line.unit_cost_snapshot ?? 0),
             line_cost: Number(line.line_cost_snapshot ?? 0),
@@ -2416,21 +2448,16 @@ export class TransfersService {
         }
 
         await this.ensureTransferCostSnapshot(tx, id, fromBranch);
-        const lines = await tx.$queryRawUnsafe<
-          {
-            product_id: string;
-            quantity: number;
-            unit_cost_snapshot: number | null;
-            line_cost_snapshot: number | null;
-          }[]
-        >(
-          `SELECT product_id, quantity, unit_cost_snapshot, line_cost_snapshot
+        const lines = this.castSql<TransferProductCostLineRow[]>(
+          await tx.$queryRawUnsafe<TransferProductCostLineRow[]>(
+            `SELECT product_id, quantity, unit_cost_snapshot, line_cost_snapshot
            FROM stock_transfer_items
            WHERE transfer_id = $1::uuid`,
-          id,
+            id,
+          ),
         );
         const amount = this.transferAmountFromLines(
-          lines.map((line) => ({
+          lines.map((line: TransferProductCostLineRow) => ({
             quantity: Number(line.quantity),
             unit_amount: Number(line.unit_cost_snapshot ?? 0),
             line_cost: Number(line.line_cost_snapshot ?? 0),
@@ -2845,17 +2872,17 @@ export class TransfersService {
         throw new BadRequestException('Cannot repair a reversed transfer');
       }
       const fromBranch = this.asText(row.from_branch_id);
-      const events = await tx.$queryRawUnsafe<
-        { event_type: string; metadata: Record<string, unknown> | null }[]
-      >(
-        `SELECT event_type, metadata
+      const events = this.castSql<TransferApprovalReplayEventRow[]>(
+        await tx.$queryRawUnsafe<TransferApprovalReplayEventRow[]>(
+          `SELECT event_type, metadata
          FROM stock_transfer_events
          WHERE transfer_id = $1::uuid
          ORDER BY aggregate_version ASC, created_at ASC`,
-        id,
+          id,
+        ),
       );
       const derived = deriveStateFromEvents(
-        events.map((e) => ({
+        events.map((e: TransferApprovalReplayEventRow) => ({
           type: e.event_type,
           metadata:
             e.metadata && typeof e.metadata === 'object' ? e.metadata : null,
@@ -2970,21 +2997,16 @@ export class TransfersService {
       }
 
       await this.ensureTransferCostSnapshot(tx, id, fromBranch);
-      const lines = await tx.$queryRawUnsafe<
-        {
-          product_id: string;
-          quantity: number;
-          unit_cost_snapshot: number | null;
-          line_cost_snapshot: number | null;
-        }[]
-      >(
-        `SELECT product_id, quantity, unit_cost_snapshot, line_cost_snapshot
+      const lines = this.castSql<TransferProductCostLineRow[]>(
+        await tx.$queryRawUnsafe<TransferProductCostLineRow[]>(
+          `SELECT product_id, quantity, unit_cost_snapshot, line_cost_snapshot
          FROM stock_transfer_items
          WHERE transfer_id = $1::uuid`,
-        id,
+          id,
+        ),
       );
       const journalAmount = this.transferAmountFromLines(
-        lines.map((line) => ({
+        lines.map((line: TransferProductCostLineRow) => ({
           quantity: Number(line.quantity),
           unit_amount: Number(line.unit_cost_snapshot ?? 0),
           line_cost: Number(line.line_cost_snapshot ?? 0),

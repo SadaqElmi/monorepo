@@ -20,7 +20,7 @@ function mockTxForInterbranchMismatches(opts: {
 }): Prisma.TransactionClient {
   let rawCall = 0;
   return {
-    $queryRawUnsafe: jest.fn(async (template: string, ...args: unknown[]) => {
+    $queryRawUnsafe: jest.fn((template: string, ...args: unknown[]) => {
       if (template.includes('FROM branches WHERE id IN')) {
         const ids = args as string[];
         return ids.map((id) => ({

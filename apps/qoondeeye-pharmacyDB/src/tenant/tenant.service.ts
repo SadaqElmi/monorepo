@@ -139,7 +139,9 @@ export class TenantService {
   private assertSafeTenantSchemaName(schemaName: string): void {
     const n = schemaName.trim().toLowerCase();
     if (!n || !/^[a-z][a-z0-9_]*$/.test(n)) {
-      throw new BadRequestException(`Invalid tenant schema name: ${schemaName}`);
+      throw new BadRequestException(
+        `Invalid tenant schema name: ${schemaName}`,
+      );
     }
     const reserved = new Set([
       'public',
