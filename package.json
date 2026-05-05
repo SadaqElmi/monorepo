@@ -11,7 +11,8 @@
     "format": "prettier --write \"**/*.{ts,tsx,md}\"",
     "check-types": "turbo run check-types",
     "typecheck:backend": "pnpm --filter backend exec tsc -p tsconfig.json --noEmit",
-    "lint:backend": "pnpm --filter backend exec eslint \"src/**/*.ts\" \"test/**/*.ts\" --max-warnings 0"
+    "lint:backend": "pnpm --filter backend exec eslint \"src/**/*.ts\" \"test/**/*.ts\" --max-warnings 0",
+    "start:backend": "node apps/qoondeeye-pharmacyDB/dist/main.js"
   },
   "devDependencies": {
     "prettier": "^3.7.4",
