@@ -42,7 +42,7 @@ CREATE INDEX IF NOT EXISTS "reconciliation_logs_tenant_id_type_idx"
 
 ALTER TABLE "public"."reconciliation_runs"
   ADD CONSTRAINT "reconciliation_runs_tenant_id_fkey"
-  FOREIGN KEY ("tenant_id") REFERENCES "public"."tenants"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+  FOREIGN KEY ("tenant_id") REFERENCES "public"."Tenant"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 
 ALTER TABLE "public"."reconciliation_logs"
   ADD CONSTRAINT "reconciliation_logs_run_id_fkey"
@@ -50,4 +50,4 @@ ALTER TABLE "public"."reconciliation_logs"
 
 ALTER TABLE "public"."reconciliation_logs"
   ADD CONSTRAINT "reconciliation_logs_tenant_id_fkey"
-  FOREIGN KEY ("tenant_id") REFERENCES "public"."tenants"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+  FOREIGN KEY ("tenant_id") REFERENCES "public"."Tenant"("id") ON DELETE CASCADE ON UPDATE CASCADE;

@@ -53,7 +53,8 @@ CREATE TABLE IF NOT EXISTS "tenant_template"."pos_statement_lines" (
     CONSTRAINT "pos_statement_lines_statement_bucket_unique" UNIQUE ("statement_id", "payment_bucket")
 );
 
-ALTER TABLE "tenant_template"."sales" ADD COLUMN IF NOT EXISTS "pos_session_id" UUID;
+-- Physical table is "Sale" (see 20260308120631_data); not lowercase "sales".
+ALTER TABLE "tenant_template"."Sale" ADD COLUMN IF NOT EXISTS "pos_session_id" UUID;
 
 DO $$
 BEGIN
@@ -61,11 +62,11 @@ BEGIN
     SELECT 1 FROM pg_constraint
     WHERE conname = 'sales_pos_session_id_fkey'
   ) THEN
-    ALTER TABLE "tenant_template"."sales"
+    ALTER TABLE "tenant_template"."Sale"
       ADD CONSTRAINT "sales_pos_session_id_fkey"
       FOREIGN KEY ("pos_session_id") REFERENCES "tenant_template"."pos_sessions"("id") ON DELETE SET NULL ON UPDATE CASCADE;
   END IF;
 END $$;
 
 CREATE INDEX IF NOT EXISTS "idx_sales_pos_session_id"
-  ON "tenant_template"."sales"("pos_session_id");
+  ON "tenant_template"."Sale"("pos_session_id");

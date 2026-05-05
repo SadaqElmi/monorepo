@@ -16,17 +16,14 @@ export class PrismaService
   private readonly logger = new Logger(PrismaService.name);
 
   constructor(config: ConfigService) {
-    const useLocal =
-      process.env.NODE_ENV !== 'production' &&
-      (config.get<string>('DATABASE_URL_LOCAL') ??
-        process.env.DATABASE_URL_LOCAL);
-    const url = useLocal
-      ? useLocal
-      : (config.get<string>('DATABASE_URL_STAGING') ??
-        process.env.DATABASE_URL_STAGING);
+    const url =
+      config.get<string>('DATABASE_URL_STAGING') ??
+      process.env.DATABASE_URL_STAGING ??
+      config.get<string>('DATABASE_URL_LOCAL') ??
+      process.env.DATABASE_URL_LOCAL;
     if (!url) {
       throw new Error(
-        'Database URL required: set DATABASE_URL_LOCAL (dev) or DATABASE_URL_STAGING',
+        'Database URL required: set DATABASE_URL_STAGING or DATABASE_URL_LOCAL',
       );
     }
     const adapter = new PrismaPg({ connectionString: url });

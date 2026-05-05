@@ -1,17 +1,17 @@
 -- Device-bound POS login foundation.
 
--- Some databases lack baseline public SaaS tables (init never applied). FK requires tenants.
-CREATE TABLE IF NOT EXISTS "public"."tenants" (
+-- Some databases lack baseline public SaaS tables (init never applied). FK requires Tenant (PascalCase; see 20260308120631_data).
+CREATE TABLE IF NOT EXISTS "public"."Tenant" (
   "id" UUID NOT NULL DEFAULT gen_random_uuid(),
   "name" VARCHAR(255) NOT NULL,
   "schema_name" VARCHAR(100) NOT NULL,
   "status" VARCHAR(20) NOT NULL DEFAULT 'active',
   "created_at" TIMESTAMP(6) NOT NULL DEFAULT CURRENT_TIMESTAMP,
-  CONSTRAINT "tenants_pkey" PRIMARY KEY ("id")
+  CONSTRAINT "Tenant_pkey" PRIMARY KEY ("id")
 );
 
-CREATE UNIQUE INDEX IF NOT EXISTS "tenants_schema_name_key"
-  ON "public"."tenants"("schema_name");
+CREATE UNIQUE INDEX IF NOT EXISTS "Tenant_schema_name_key"
+  ON "public"."Tenant"("schema_name");
 
 CREATE TABLE IF NOT EXISTS "public"."pos_devices" (
   "id" UUID NOT NULL DEFAULT gen_random_uuid(),
@@ -29,7 +29,7 @@ CREATE TABLE IF NOT EXISTS "public"."pos_devices" (
   CONSTRAINT "pos_devices_pkey" PRIMARY KEY ("id"),
   CONSTRAINT "pos_devices_tenant_id_fkey"
     FOREIGN KEY ("tenant_id")
-    REFERENCES "public"."tenants"("id")
+    REFERENCES "public"."Tenant"("id")
     ON DELETE CASCADE
     ON UPDATE CASCADE
 );
