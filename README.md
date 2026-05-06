@@ -2,6 +2,14 @@
 
 This monorepo uses [pnpm](https://pnpm.io) (`packageManager` is set in the root `package.json`). Install dependencies with `pnpm install` from the repository root.
 
+## Toolchain and dependency alignment
+
+- Use **Node.js** in the range declared in the root `package.json` `engines` field (currently `>=20 <23`). A `.nvmrc` file pins a recommended major version for local development.
+- Use the **pnpm** version from `packageManager` / `engines.pnpm`; [Corepack](https://nodejs.org/api/corepack.html) can enforce it (`corepack enable`).
+- Shared dependency versions are defined once under `catalog` in [`pnpm-workspace.yaml`](pnpm-workspace.yaml). Workspace packages reference them with the `catalog:` protocol in their `package.json` files (see [pnpm catalogs](https://pnpm.io/catalogs)).
+- Internal packages use `workspace:*` (for example `@repo/types`, `@repo/utils`, `@repo/eslint-config`).
+- Run **`pnpm deps:lint`** (syncpack) to catch unintended version drift across packages before merging.
+
 The notes below are based on the upstream Turborepo starter (maintained by the Turborepo core team).
 
 ## Using this example

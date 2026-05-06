@@ -1,29 +1,33 @@
 {
   "name": "pharmcare",
+  "dependencies": {
+    "date-fns": "catalog:"
+  },
+  "devDependencies": {
+    "prettier": "catalog:",
+    "syncpack": "^14.0.0",
+    "turbo": "catalog:",
+    "typescript": "catalog:"
+  },
+  "engines": {
+    "node": ">=20 <23",
+    "pnpm": ">=10.33.2 <11"
+  },
+  "packageManager": "pnpm@10.33.2",
   "private": true,
   "scripts": {
     "build": "turbo run build",
-    "dev": "turbo run dev",
-    "dev:web": "turbo run dev --filter=pharmacare",
-    "dev:pos": "turbo run dev --filter=pos",
-    "dev:backend": "turbo run dev --filter=backend",
-    "lint": "turbo run lint",
-    "format": "prettier --write \"**/*.{ts,tsx,md}\"",
     "check-types": "turbo run check-types",
-    "typecheck:backend": "pnpm --filter backend exec tsc -p tsconfig.json --noEmit",
+    "deps:fix": "syncpack fix-mismatches",
+    "deps:lint": "syncpack lint",
+    "dev": "turbo run dev",
+    "dev:backend": "turbo run dev --filter=backend",
+    "dev:pos": "turbo run dev --filter=pos",
+    "dev:web": "turbo run dev --filter=pharmacare",
+    "format": "prettier --write \"**/*.{ts,tsx,md}\"",
+    "lint": "turbo run lint",
     "lint:backend": "pnpm --filter backend exec eslint \"src/**/*.ts\" \"test/**/*.ts\" --max-warnings 0",
-     "start": "turbo run start --filter=qoondeeye-pharmacyDB"
-  },
-  "devDependencies": {
-    "prettier": "^3.7.4",
-    "turbo": "^2.9.6",
-    "typescript": "5.9.2"
-  },
-  "engines": {
-    "node": ">=18"
-  },
-  "packageManager": "pnpm@10.33.2",
-  "dependencies": {
-    "date-fns": "^4.1.0"
+    "start": "turbo run start --filter=qoondeeye-pharmacyDB",
+    "typecheck:backend": "pnpm --filter backend exec tsc -p tsconfig.json --noEmit"
   }
 }

@@ -1,0 +1,12 @@
+{
+  "$schema": "https://unpkg.com/syncpack@14/dist/schema.json",
+  "strict": false,
+  "semverGroups": [
+    {
+      "label": "Catalog-aligned deps use semver caret range",
+      "range": "^",
+      "dependencies": ["**"],
+      "packages": ["**"]
+    }
+  ]
+}

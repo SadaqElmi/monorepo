@@ -1,10 +1,8 @@
-import { defineConfig, globalIgnores } from "eslint/config";
-import nextVitals from "eslint-config-next/core-web-vitals";
-import nextTs from "eslint-config-next/typescript";
+import { defineConfig } from "eslint/config";
+import { nextJsConfig } from "@repo/eslint-config/next-js";
 
-const eslintConfig = defineConfig([
-  ...nextVitals,
-  ...nextTs,
+export default defineConfig([
+  ...nextJsConfig,
   {
     files: ["**/*.ts", "**/*.tsx"],
     rules: {
@@ -12,14 +10,4 @@ const eslintConfig = defineConfig([
       "react-hooks/purity": "off",
     },
   },
-  // Override default ignores of eslint-config-next.
-  globalIgnores([
-    // Default ignores of eslint-config-next:
-    ".next/**",
-    "out/**",
-    "build/**",
-    "next-env.d.ts",
-  ]),
 ]);
-
-export default eslintConfig;
