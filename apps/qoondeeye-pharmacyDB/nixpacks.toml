@@ -3,14 +3,11 @@ nixPkgs = ["nodejs_20", "pnpm"]
 
 [phases.install]
 cmds = [
-  "corepack enable",
-  "corepack prepare pnpm@10.33.2 --activate",
-  "pnpm install"
+  "pnpm install --ignore-scripts"
 ]
 
 [phases.build]
 cmds = [
-  "corepack prepare pnpm@10.33.2 --activate",
   "pnpm prisma generate",
   "pnpm prisma migrate deploy",
   "pnpm run build"
