@@ -2,4 +2,18 @@
 NIXPACKS_NODE_VERSION = "22"
 
 [phases.setup]
+nixPkgs = ["nodejs", "pnpm"]
 nixpkgsArchive = "51ad838b03a05b1de6f9f2a0fffecee64a9788ee"
+
+[phases.install]
+cmds = ["pnpm install"]
+
+[phases.build]
+cmds = [
+  "pnpm prisma generate",
+  "pnpm prisma migrate deploy",
+  "pnpm run build"
+]
+
+[start]
+cmd = "pnpm run start:prod"
