@@ -2,16 +2,14 @@
 nixPkgs = ["nodejs_22", "pnpm"]
 
 [phases.install]
-cmds = [
-  "pnpm install --filter ./apps/qoondeeye-pharmacyDB..."
-]
+cmds = ["pnpm install"]
 
 [phases.build]
 cmds = [
-  "pnpm --filter ./apps/qoondeeye-pharmacyDB prisma generate",
-  "pnpm --filter ./apps/qoondeeye-pharmacyDB prisma migrate deploy",
-  "pnpm --filter ./apps/qoondeeye-pharmacyDB run build"
+  "pnpm prisma generate",
+  "pnpm prisma migrate deploy",
+  "pnpm run build"
 ]
 
 [start]
-cmd = "pnpm --filter ./apps/qoondeeye-pharmacyDB run start:prod"
+cmd = "pnpm run start:prod"
