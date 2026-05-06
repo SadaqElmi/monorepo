@@ -17,6 +17,9 @@ export class TenantMiddleware implements NestMiddleware {
   ) {}
 
   async use(req: Request, res: Response, next: NextFunction) {
+    if ((req.method ?? '').toUpperCase() === 'OPTIONS') {
+      return next();
+    }
     // Skip tenant resolution for public routes (auth, tenants, system users)
     const path = expressRequestPathname(req);
     const isPublicRoute =

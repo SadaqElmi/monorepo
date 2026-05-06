@@ -1,0 +1,38 @@
+# Run from repo root:
+#   docker compose -f apps/qoondeeye-pharmacyDB/docker-compose.yml up --build
+#
+# Or from this directory:
+#   docker compose up --build
+
+services:
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: pharmcare
+      POSTGRES_PASSWORD: pharmcare
+      POSTGRES_DB: pharmcare
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U pharmcare -d pharmcare"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  api:
+    build:
+      context: ../..
+      dockerfile: apps/qoondeeye-pharmacyDB/Dockerfile
+    ports:
+      - "5555:5555"
+    environment:
+      DATABASE_URL: postgresql://pharmcare:pharmcare@db:5432/pharmcare
+      PORT: "5555"
+    depends_on:
+      db:
+        condition: service_healthy
+
+volumes:
+  pgdata:

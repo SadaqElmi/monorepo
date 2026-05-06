@@ -275,6 +275,9 @@ export class BranchMiddleware implements NestMiddleware {
   }
 
   async use(req: Request, res: Response, next: NextFunction) {
+    if ((req.method ?? '').toUpperCase() === 'OPTIONS') {
+      return next();
+    }
     // Keep these public routes branch-agnostic.
     const pathname = expressRequestPathname(req);
     const isPublicRoute =
