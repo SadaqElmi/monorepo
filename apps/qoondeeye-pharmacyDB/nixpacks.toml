@@ -2,7 +2,10 @@
 nixPkgs = ["nodejs_22", "pnpm"]
 
 [phases.install]
-cmds = ["pnpm install"]
+cmds = [
+  "rm -f pnpm-workspace.yaml",
+  "pnpm install --prod"
+]
 
 [phases.build]
 cmds = [
