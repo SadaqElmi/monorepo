@@ -66,6 +66,7 @@ async function bootstrap() {
       forbidNonWhitelisted: true,
     }),
   );
-  await app.listen(process.env.PORT ?? 5555);
+  await app.listen(process.env.PORT ?? 5555, '0.0.0.0');
+  console.log(`🚀 Server running on port ${process.env.PORT ?? 5555}`);
 }
 void bootstrap();
