@@ -6,7 +6,7 @@ NestJS backend for the PharmaCare multi-tenant Pharmacy SaaS.
 
 - **Database**: PostgreSQL
 - **ORM**: Prisma
-- **Multi-tenancy**: Schema-per-tenant (e.g. `pharmacy1`, `pharmacy2`)
+- **Multi-tenancy**: Schema-per-tenant (e.g. `pharmacy1`, `pharmacy2`)s
 
 ```
 Database
@@ -96,8 +96,8 @@ pnpm run start:dev
 
 ## Scripts
 
-| Script                          | Description             |
-| ------------------------------- | ----------------------- |
+| Script                           | Description             |
+| -------------------------------- | ----------------------- |
 | `pnpm run start:dev`             | Start with hot reload   |
 | `pnpm run build`                 | Build for production    |
 | `pnpm run prisma:generate`       | Generate Prisma client  |
