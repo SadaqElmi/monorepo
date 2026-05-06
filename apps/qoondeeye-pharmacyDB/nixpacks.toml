@@ -1,10 +1,10 @@
 [phases.setup]
-nixPkgs = ["nodejs_22", "pnpm"]
+nixPkgs = ["nodejs_20", "pnpm"]
 
 [phases.install]
 cmds = [
   "rm -f pnpm-workspace.yaml",
-  "pnpm install --prod"
+  "pnpm install --no-frozen-lockfile"
 ]
 
 [phases.build]
