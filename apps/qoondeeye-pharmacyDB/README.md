@@ -6,7 +6,7 @@ NestJS backend for the PharmaCare multi-tenant Pharmacy SaaS.
 
 - **Database**: PostgreSQL
 - **ORM**: Prisma
-- **Multi-tenancy**: Schema-per-tenant (e.g. `pharmacy1`, `pharmacy2`)s
+- **Multi-tenancy**: Schema-per-tenant (e.g. `pharmacy1`, `pharmacy2`)
 
 ```
 Database
