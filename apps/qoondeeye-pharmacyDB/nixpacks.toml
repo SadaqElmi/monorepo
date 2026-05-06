@@ -1,10 +1,8 @@
+[phases.setup]
 nixPkgs = ["nodejs_22", "pnpm"]
 
 [phases.install]
-cmds = [
-  "rm -f pnpm-workspace.yaml",
-  "pnpm install --prod"
-]
+cmds = ["pnpm install"]
 
 [phases.build]
 cmds = [
@@ -14,3 +12,4 @@ cmds = [
 ]
 
 [start]
+cmd = "pnpm run start:prod"
