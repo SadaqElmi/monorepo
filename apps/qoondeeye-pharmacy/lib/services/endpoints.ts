@@ -1,6 +1,6 @@
 /**
  * Centralized API endpoint prefixes for the frontend.
- * Configure `NEXT_PUBLIC_API_URL` in `.env.local` (e.g. http://localhost:3001).
+ * Frontend requests use same-origin `/api/*` paths.
  */
 
 export const getBaseUrl = () =>
@@ -43,7 +43,7 @@ export const AUDIT_PREFIX = `${API_BASE}/api/audit`;
  * Stock transfers (inter-branch). Expects Nest-style JSON: snake_case fields, X-Tenant + optional x-branch-id.
  *
  * If the server returns "Cannot GET /api/transfers", the route is missing or mounted elsewhere—set
- * `NEXT_PUBLIC_TRANSFERS_API_PATH` to match your controller (path only, relative to `NEXT_PUBLIC_API_URL`),
+ * `NEXT_PUBLIC_TRANSFERS_API_PATH` to match your controller (path only, relative to the app origin),
  * e.g. `api/inventory/transfers`.
  */
 export const TRANSFERS_PREFIX = apiUrl(
