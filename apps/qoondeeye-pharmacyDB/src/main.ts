@@ -12,7 +12,12 @@ function getCorsOrigins(): string[] {
       .map((o) => o.trim())
       .filter(Boolean);
   }
-  return ['http://localhost:3000', 'http://localhost:3001'];
+  return [
+    'http://localhost:3000',
+    'http://localhost:3001',
+    'https://monorepo-qoondeeye-pharmacy-2jed.vercel.app',
+    'https://monorepo-pos-bay.vercel.app',
+  ];
 }
 
 async function bootstrap() {
