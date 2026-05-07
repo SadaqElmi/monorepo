@@ -5,7 +5,7 @@
 
 export const getBaseUrl = () =>
   //process.env.NEXT_PUBLIC_API_URL_LOCAL ?? "http://localhost:5555";
-  process.env.NEXT_PUBLIC_API_URL ?? "http://api.qoondeeye.online";
+  process.env.NEXT_PUBLIC_API_URL ?? "https://api.qoondeeye.online/api";
 
 export const API_BASE = getBaseUrl();
 
