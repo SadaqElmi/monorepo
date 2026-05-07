@@ -17,6 +17,17 @@ function normalizeOriginHeader(origin: string): string {
   return origin.replace(/\/$/, '');
 }
 
+function isWildcardOrigin(origin: string): boolean {
+  return origin.includes('*');
+}
+
+function wildcardToRegExp(pattern: string): RegExp {
+  const escaped = pattern
+    .replace(/[.+?^${}()|[\]\\]/g, '\\$&')
+    .replace(/\*/g, '.*');
+  return new RegExp(`^${escaped}$`, 'i');
+}
+
 function buildCorsOptions(): CorsOptions {
   const raw = process.env.CORS_ORIGIN?.trim();
   const list = raw
@@ -25,14 +36,23 @@ function buildCorsOptions(): CorsOptions {
         .map((o) => o.trim())
         .filter(Boolean)
     : DEFAULT_CORS_ORIGINS;
-  const allowed = new Set(list.map(normalizeOriginHeader));
+  const normalized = list.map(normalizeOriginHeader);
+  const exactAllowed = new Set(
+    normalized.filter((origin) => !isWildcardOrigin(origin)),
+  );
+  const wildcardAllowed = normalized
+    .filter((origin) => isWildcardOrigin(origin))
+    .map(wildcardToRegExp);
 
   return {
     origin: (origin, callback) => {
       if (!origin) {
         return callback(null, true);
       }
-      const ok = allowed.has(normalizeOriginHeader(origin));
+      const normalizedOrigin = normalizeOriginHeader(origin);
+      const ok =
+        exactAllowed.has(normalizedOrigin) ||
+        wildcardAllowed.some((pattern) => pattern.test(normalizedOrigin));
       return callback(null, ok);
     },
     methods: ['GET', 'HEAD', 'PUT', 'PATCH', 'POST', 'DELETE', 'OPTIONS'],
