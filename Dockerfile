@@ -4,16 +4,16 @@ WORKDIR /app
 
 RUN corepack enable
 
+RUN apk add --no-cache openssl
+
 COPY . .
 
 RUN pnpm install
 
-RUN pnpm --filter backend prisma generate
-
-RUN apk add --no-cache openssl
+RUN pnpm --filter backend exec prisma generate
 
 RUN pnpm --filter backend build
 
-EXPOSE 5555
+EXPOSE 10000
 
 CMD ["pnpm", "--filter", "backend", "run", "start:prod"]
