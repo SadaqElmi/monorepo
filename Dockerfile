@@ -1,6 +1,6 @@
-# Build from the monorepo root, not from apps/qoondeeye-pharmacyDB.
-# Example: docker build -f Dockerfile.qoondeeye-pharmacyDB .
-# Dokploy: Docker context = repository root (.), Dockerfile path = Dockerfile.qoondeeye-pharmacyDB
+# Build from the monorepo root (clone root), not from apps/qoondeeye-pharmacyDB.
+# Example: docker build .
+# Dokploy: Docker File = Dockerfile (or leave default), Docker Context Path = .
 FROM node:22-alpine
 
 WORKDIR /app
