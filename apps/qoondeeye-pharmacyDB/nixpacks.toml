@@ -1,3 +1,6 @@
+[variables]
+PORT = "5555"
+
 [phases.setup]
 nixPkgs = ["nodejs_22", "pnpm"]
 
@@ -15,3 +18,5 @@ cmds = [
 
 [start]
 cmd = "pnpm run start:prod"
+
+[staticAssets]
