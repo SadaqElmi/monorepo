@@ -46,6 +46,38 @@ Set at least:
 - **`DATABASE_URL`** — PostgreSQL connection string for Prisma
 - **`JWT_SECRET`** (and any other secrets your deployment uses)
 - **`PORT`** — optional; defaults to **5555** in code if unset
-- **`CORS_ORIGIN`** — optional; comma-separated origins if not using defaults in code
+
+### CORS (`CORS_ORIGIN`)
+
+The API enables **credentialed** CORS (`Access-Control-Allow-Credentials: true`). Browser clients (main ERP app and standalone POS app) call `fetch` with `credentials: "include"`, so allowed origins must be **explicit** (not `*`).
+
+- **`CORS_ORIGIN`** — **Set this in any deployed environment** that serves a browser UI on a different origin than the API (e.g. Vercel → `api.qoondeeye.online`). Comma-separated list, no spaces required (spaces after commas are trimmed).
+
+  Example:
+
+  ```text
+  CORS_ORIGIN=https://your-erp.vercel.app,https://your-pos.vercel.app,https://app.example.com
+  ```
+
+  Include **every** origin users hit: production URL, custom domains, and each Vercel **preview** URL you care about (previews are separate origins unless you use a stable alias).
+
+- **When `CORS_ORIGIN` is unset** — the server falls back to local development only: `http://localhost:3000` (main Next app, default port) and `http://localhost:3001` (POS `next dev` script). That default is **not** suitable for production.
+
+At startup the process logs: `CORS allowed origins: …` so you can confirm the parsed list.
+
+**Redeploy or restart** the API after changing `CORS_ORIGIN`.
+
+### Verify CORS after deploy
+
+From a shell (use `curl.exe` on Windows so headers match real curl):
+
+```bash
+curl.exe -sI -X OPTIONS "https://api.qoondeeye.online/api/auth/login" \
+  -H "Origin: https://your-frontend.vercel.app" \
+  -H "Access-Control-Request-Method: POST" \
+  -H "Access-Control-Request-Headers: content-type"
+```
+
+Expect `204` or `200` and headers including `access-control-allow-origin` echoing that origin and `access-control-allow-credentials: true`.
 
 The container entrypoint is **`node dist/main.js`** (production). Run database migrations as a separate deploy step unless you add your own entrypoint script.
