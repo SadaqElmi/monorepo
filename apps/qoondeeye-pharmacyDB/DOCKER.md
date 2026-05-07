@@ -30,10 +30,10 @@ pnpm --filter ./apps/qoondeeye-pharmacyDB exec prisma migrate deploy
 
 | Setting | Value |
 | -------- | ----- |
-| Docker File | **`Dockerfile`** (recommended — matches Dokploy’s default when the field is empty on older installs) |
-| Docker Context Path | **`.`** |
+| Docker File | **`Dockerfile`** (default). If your app uses **Build path** = `apps/qoondeeye-pharmacyDB`, that path is also valid — the same image is defined in this folder. |
+| Docker Context Path | **`.`** (the **clone root**, so `pnpm-lock.yaml` and `apps/` are in the build context) |
 
-Git integration: leave **Build Path** empty so the clone root contains `pnpm-lock.yaml` and this `Dockerfile`.
+Git **Build path**: either **empty** (uses the root `Dockerfile`) or **`apps/qoondeeye-pharmacyDB`** (uses `apps/qoondeeye-pharmacyDB/Dockerfile`). In both cases, keep **Docker Context Path** = **`.`** so the context is the monorepo root, not the app directory alone.
 
 If you still see `docker buildx build requires 1 argument`, upgrade Dokploy (older releases mishandled an empty Dockerfile name) or ensure **Docker File** is not blank and **Build Path** is not set to a subdirectory unless you intentionally build from there.
 

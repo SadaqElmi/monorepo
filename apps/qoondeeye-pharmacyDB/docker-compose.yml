@@ -24,7 +24,7 @@ services:
   api:
     build:
       context: ../..
-      dockerfile: Dockerfile
+      dockerfile: apps/qoondeeye-pharmacyDB/Dockerfile
     ports:
       - "5555:5555"
     environment:
