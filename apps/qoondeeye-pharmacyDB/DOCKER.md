@@ -1,13 +1,13 @@
 # Docker and Dokploy (qoondeeye-pharmacyDB)
 
-The image is built with **pnpm** using the **repository root** lockfile (`pnpm-lock.yaml`). The Dockerfile lives under this app so paths stay easy to find, but Docker **build context** must be the monorepo root.
+The image is built with **pnpm** using the **repository root** lockfile (`pnpm-lock.yaml`). The Dockerfile is **`Dockerfile.qoondeeye-pharmacyDB`** at the repository root; Docker **build context** must be the monorepo root.
 
 ## Build locally
 
 From the **repository root**:
 
 ```bash
-docker build -f apps/qoondeeye-pharmacyDB/Dockerfile .
+docker build -f Dockerfile.qoondeeye-pharmacyDB .
 ```
 
 ## Run with Postgres (compose)
@@ -30,10 +30,10 @@ pnpm --filter ./apps/qoondeeye-pharmacyDB exec prisma migrate deploy
 
 | Setting | Value |
 | -------- | ----- |
-| Build path / context | **Repository root** (the folder that contains `pnpm-lock.yaml` and `pnpm-workspace.yaml`) |
-| Dockerfile path | **`apps/qoondeeye-pharmacyDB/Dockerfile`** |
+| Docker File | **`Dockerfile.qoondeeye-pharmacyDB`** |
+| Docker Context Path | **`.`** (type a single dot — do not leave empty; empty context breaks `docker buildx build` with “requires 1 argument”) |
 
-Do not set the build path to only `apps/qoondeeye-pharmacyDB` alone: the Dockerfile needs the root lockfile and workspace files copied into the image.
+The context must be the repository root (where `pnpm-lock.yaml` and `pnpm-workspace.yaml` live). Do not use only `apps/qoondeeye-pharmacyDB` as context.
 
 ## Runtime environment
 
