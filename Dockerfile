@@ -10,6 +10,8 @@ RUN pnpm install
 
 RUN pnpm --filter backend prisma generate
 
+RUN apk add --no-cache openssl
+
 RUN pnpm --filter backend build
 
 EXPOSE 5555
