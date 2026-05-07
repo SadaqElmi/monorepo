@@ -1,22 +1,17 @@
-# Build from the monorepo root (clone root), not from apps/qoondeeye-pharmacyDB.
-# Example: docker build .
-# Dokploy: Docker File = Dockerfile (or leave default), Docker Context Path = .
 FROM node:22-alpine
 
 WORKDIR /app
 
 RUN corepack enable
 
-COPY package.json pnpm-lock.yaml pnpm-workspace.yaml .npmrc ./
-COPY apps/qoondeeye-pharmacyDB ./apps/qoondeeye-pharmacyDB
+COPY . .
 
-RUN pnpm install --frozen-lockfile --filter backend...
+RUN pnpm install
 
-WORKDIR /app/apps/qoondeeye-pharmacyDB
+RUN pnpm --filter backend prisma generate
 
-RUN pnpm prisma generate
-RUN pnpm run build
+RUN pnpm --filter backend build
 
 EXPOSE 5555
 
-CMD ["pnpm", "run", "start:prod"]
+CMD ["pnpm", "--filter", "backend", "run", "start:prod"]
