@@ -2,13 +2,14 @@
  * Idempotent: upserts public.super_admins (SystemUser).
  * Requires SUPER_ADMIN_EMAIL and SUPER_ADMIN_PASSWORD (same DB URL vars as prisma.config).
  */
+
+//$env:SUPER_ADMIN_EMAIL="admin@gmail.com"; $env:SUPER_ADMIN_PASSWORD="admin123"; pnpm run db:ensure-super-admin
 import 'dotenv/config';
 import * as bcrypt from 'bcrypt';
 import { PrismaPg } from '@prisma/adapter-pg';
 import { PrismaClient } from '@prisma/client';
 
-const url =
-  process.env.DATABASE_URL_STAGING ?? process.env.DATABASE_URL_LOCAL;
+const url = process.env.DATABASE_URL_STAGING ?? process.env.DATABASE_URL_LOCAL;
 const email = process.env.SUPER_ADMIN_EMAIL?.trim();
 const password = process.env.SUPER_ADMIN_PASSWORD;
 

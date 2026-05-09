@@ -1,5 +1,10 @@
-import { BadRequestException, Injectable } from '@nestjs/common';
+import {
+  BadRequestException,
+  Injectable,
+  ServiceUnavailableException,
+} from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
+import { TenantService } from '../tenant/tenant.service';
 import {
   hasGlobalBranchAccess,
   normalizeRole,
@@ -20,11 +25,30 @@ export interface StaffIdOnlyRow {
   id: string;
 }
 
+export interface StaffTenantUserTableMeta {
+  userTable: string;
+  roleTable: string | null;
+  hasRoleId: boolean;
+  hasRoleText: boolean;
+  hasPinHash: boolean;
+  hasBranchId: boolean;
+  createdAtColumn: string | null;
+}
+
 @Injectable()
 export class StaffService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly tenantService: TenantService,
+  ) {}
 
-  private async resolveTenantUserTables(schemaName: string) {
+  private async ensureStaffTenantSchema(schemaName: string): Promise<void> {
+    await this.tenantService.applyTenantSchemaPatches(schemaName);
+  }
+
+  private async resolveTenantUserTables(
+    schemaName: string,
+  ): Promise<StaffTenantUserTableMeta> {
     const [schemaRow] = await this.prisma.queryRawUnsafe<{ ok: boolean }[]>(
       `
       SELECT EXISTS(
@@ -36,8 +60,8 @@ export class StaffService {
       schemaName,
     );
     if (!schemaRow?.ok) {
-      throw new Error(
-        `Tenant schema "${schemaName}" does not exist. Create/provision the tenant schema first.`,
+      throw new ServiceUnavailableException(
+        `Tenant schema "${schemaName}" is not provisioned. Create the tenant or run schema provisioning first.`,
       );
     }
 
@@ -82,8 +106,8 @@ export class StaffService {
 
     const userTable = userRow?.user_table ?? null;
     if (!userTable) {
-      throw new Error(
-        `Tenant schema "${schemaName}" has no users table. Expected "users" or "User".`,
+      throw new ServiceUnavailableException(
+        `Tenant "${schemaName}" has no staff users table (expected "users" or "User").`,
       );
     }
 
@@ -143,20 +167,44 @@ export class StaffService {
   /** Reject if another POS-eligible user in the tenant already uses this PIN. */
   private async assertPosPinUnique(
     schemaName: string,
+    meta: StaffTenantUserTableMeta,
     plainPin: string,
     excludeUserId?: string,
   ) {
+    const userTable = meta.userTable.startsWith('"')
+      ? `"${schemaName}".${meta.userTable}`
+      : `"${schemaName}".${meta.userTable}`;
+    const roleTable =
+      meta.roleTable &&
+      (meta.roleTable.startsWith('"')
+        ? `"${schemaName}".${meta.roleTable}`
+        : `"${schemaName}".${meta.roleTable}`);
+
+    const posRoles = `('cashier', 'manager', 'admin', 'pharmacist')`;
+    let sql: string;
+    if (meta.hasRoleId && roleTable) {
+      sql = `SELECT u.id, u.pin_hash
+       FROM ${userTable} u
+       INNER JOIN ${roleTable} r ON u.role_id = r.id
+       WHERE lower(r.name) IN ${posRoles}
+         AND u.pin_hash IS NOT NULL
+         AND ($1::uuid IS NULL OR u.id <> $1::uuid)`;
+    } else if (meta.hasRoleText) {
+      sql = `SELECT u.id, u.pin_hash
+       FROM ${userTable} u
+       WHERE lower(COALESCE(u.role, '')) IN ${posRoles}
+         AND u.pin_hash IS NOT NULL
+         AND ($1::uuid IS NULL OR u.id <> $1::uuid)`;
+    } else {
+      sql = `SELECT u.id, u.pin_hash
+       FROM ${userTable} u
+       WHERE u.pin_hash IS NOT NULL
+         AND ($1::uuid IS NULL OR u.id <> $1::uuid)`;
+    }
+
     const rows = await this.prisma.queryRawUnsafe<
       { id: string; pin_hash: string }[]
-    >(
-      `SELECT u.id, u.pin_hash
-       FROM "${schemaName}"."users" u
-       INNER JOIN "${schemaName}"."roles" r ON u.role_id = r.id
-       WHERE lower(r.name) IN ('cashier', 'manager', 'admin', 'pharmacist')
-         AND u.pin_hash IS NOT NULL
-         AND ($1::uuid IS NULL OR u.id <> $1::uuid)`,
-      excludeUserId ?? null,
-    );
+    >(sql, excludeUserId ?? null);
     const bcrypt = await import('bcrypt');
     for (const row of rows) {
       if (await bcrypt.compare(plainPin, row.pin_hash)) {
@@ -168,6 +216,7 @@ export class StaffService {
   }
 
   async findAll(schemaName: string) {
+    await this.ensureStaffTenantSchema(schemaName);
     const meta = await this.resolveTenantUserTables(schemaName);
     const userTable = meta.userTable.startsWith('"')
       ? `"${schemaName}".${meta.userTable}`
@@ -226,6 +275,7 @@ export class StaffService {
   }
 
   async findOne(schemaName: string, id: string) {
+    await this.ensureStaffTenantSchema(schemaName);
     const meta = await this.resolveTenantUserTables(schemaName);
     const userTable = meta.userTable.startsWith('"')
       ? `"${schemaName}".${meta.userTable}`
@@ -300,6 +350,7 @@ export class StaffService {
     allowedBranchIds: string[],
     actorRole?: string | null,
   ) {
+    await this.ensureStaffTenantSchema(schemaName);
     const meta = await this.resolveTenantUserTables(schemaName);
     if (!meta.hasBranchId) {
       throw new BadRequestException(
@@ -333,7 +384,7 @@ export class StaffService {
           'PIN can only be set for cashier, manager, admin, or pharmacist roles',
         );
       }
-      await this.assertPosPinUnique(schemaName, pinPlain);
+      await this.assertPosPinUnique(schemaName, meta, pinPlain);
       pinHash = await import('bcrypt').then((m) => m.hash(pinPlain, 10));
     } else if (
       meta.hasPinHash &&
@@ -344,7 +395,7 @@ export class StaffService {
       /** POS keypad login uses `pin_hash`; sync numeric web passwords when `pin` is omitted. */
       if (this.canUsePosPin(roleLower)) {
         const syncPin = dto.password.trim();
-        await this.assertPosPinUnique(schemaName, syncPin);
+        await this.assertPosPinUnique(schemaName, meta, syncPin);
         pinHash = await import('bcrypt').then((m) => m.hash(syncPin, 10));
       }
     }
@@ -497,6 +548,7 @@ export class StaffService {
     allowedBranchIds: string[],
     actorRole?: string | null,
   ) {
+    await this.ensureStaffTenantSchema(schemaName);
     const meta = await this.resolveTenantUserTables(schemaName);
     if (!meta.hasBranchId) {
       throw new BadRequestException(
@@ -702,7 +754,7 @@ export class StaffService {
             'PIN can only be set for cashier, manager, admin, or pharmacist roles',
           );
         }
-        await this.assertPosPinUnique(schemaName, pinPlain, id);
+        await this.assertPosPinUnique(schemaName, meta, pinPlain, id);
         const ph = await import('bcrypt').then((m) => m.hash(pinPlain, 10));
         await this.prisma.queryRawUnsafe(
           `UPDATE ${userTable} SET pin_hash = $2 WHERE id = $1`,
@@ -726,7 +778,7 @@ export class StaffService {
     ) {
       const syncPin = dto.password.trim();
       if (this.canUsePosPin(nextRoleLower)) {
-        await this.assertPosPinUnique(schemaName, syncPin, id);
+        await this.assertPosPinUnique(schemaName, meta, syncPin, id);
         const ph = await import('bcrypt').then((m) => m.hash(syncPin, 10));
         await this.prisma.queryRawUnsafe(
           `UPDATE ${userTable} SET pin_hash = $2 WHERE id = $1`,
@@ -740,6 +792,7 @@ export class StaffService {
   }
 
   async remove(schemaName: string, id: string) {
+    await this.ensureStaffTenantSchema(schemaName);
     const meta = await this.resolveTenantUserTables(schemaName);
     const userTable = meta.userTable.startsWith('"')
       ? `"${schemaName}".${meta.userTable}`
