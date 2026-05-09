@@ -56,6 +56,8 @@ pnpm run prisma:migrate
 
 This creates the `public` and `tenant_template` schemas.
 
+**Tenant DDL vs migrations:** Live tenant schemas (`pharmacy1`, …) are **not** created by rerunning Prisma migrations per tenant. New tenants get `provisionTenantSchema` plus idempotent **`TenantService.applyTenantSchemaPatches`**. Startup also runs patches for each active tenant (unless `TENANT_SCHEMA_SYNC_ON_BOOT=false`). When you change tenant data shapes, mirror them with new `ensure*` steps in [`applyTenantSchemaPatches`](src/tenant/tenant.service.ts)—do not rely on `prisma migrate deploy` alone for existing tenant schemas.
+
 ### 4. Generate Prisma client
 
 ```bash

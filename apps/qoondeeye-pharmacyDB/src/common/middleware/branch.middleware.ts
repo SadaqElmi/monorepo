@@ -323,8 +323,91 @@ export class BranchMiddleware implements NestMiddleware {
 
     const mutation = isMutationMethod(req.method);
 
-    // If the token belongs to a system user, skip branch enforcement.
-    if (payload.type === 'super_admin') return next();
+    /** Super-admin impersonation: resolve branch scope for `X-Tenant` requests (e.g. `/api/staff`). */
+    if (payload.type === 'super_admin') {
+      const superUserId = payload.sub;
+      const superRoleLower = normalizeRole(payload.role);
+      const path = tenantRequestPath(req);
+      const headerBranchValueRaw = req.headers['x-branch-id'];
+      const headerBranchValue =
+        typeof headerBranchValueRaw === 'string'
+          ? headerBranchValueRaw.trim()
+          : undefined;
+
+      const allBranchIds = await this.prisma
+        .withTenantSchema(schemaName, (tx) =>
+          tx.$queryRawUnsafe<{ id: string }[]>(
+            `SELECT id FROM branches ORDER BY name`,
+          ),
+        )
+        .then((rows) => (rows ?? []).map((r) => r.id));
+
+      if (allBranchIds.length === 0) {
+        await this.appendSecurityAudit(schemaName, {
+          userId: superUserId,
+          role: superRoleLower,
+          branchId: null,
+          reason: 'no_branches_available_super_admin',
+          path,
+          method: req.method ?? 'UNKNOWN',
+          sourceIp: req.ip ?? null,
+        });
+        throw new ForbiddenException('No branches available');
+      }
+
+      const isBranchSuperUser = true;
+      const defaultBranchId = allBranchIds[0]!;
+      const selectedBranchId = (() => {
+        if (!headerBranchValue) return defaultBranchId;
+        if (headerBranchValue.toLowerCase() === 'all') return defaultBranchId;
+        return headerBranchValue;
+      })();
+
+      const allowedAllBranchesHeader = isBranchSuperUser;
+      const viewAllRequested =
+        headerBranchValue?.toLowerCase() === 'all' &&
+        allowedAllBranchesHeader;
+
+      if (
+        headerBranchValue &&
+        headerBranchValue.toLowerCase() !== 'all' &&
+        !allBranchIds.includes(headerBranchValue)
+      ) {
+        await this.appendSecurityAudit(schemaName, {
+          userId: superUserId,
+          role: superRoleLower,
+          branchId: null,
+          reason: 'super_admin_requested_unknown_branch',
+          path,
+          method: req.method ?? 'UNKNOWN',
+          sourceIp: req.ip ?? null,
+        });
+        throw new ForbiddenException('Access denied to this branch');
+      }
+
+      const viewAllowedBranchIds = viewAllRequested
+        ? allBranchIds
+        : [selectedBranchId];
+      const mutationAllowedBranchIds = isBranchSuperUser
+        ? [selectedBranchId]
+        : [defaultBranchId];
+
+      req.branchId = mutationAllowedBranchIds[0]!;
+      req.allowedBranchIds = mutation
+        ? mutationAllowedBranchIds
+        : viewAllowedBranchIds;
+      req.branchReadScope = {
+        readBranchIds: [...viewAllowedBranchIds],
+        readAllBranches: !mutation && viewAllRequested,
+        mutationBranchId: mutationAllowedBranchIds[0],
+      };
+      req.userId = superUserId;
+      req.userRole = superRoleLower;
+      req.userCanViewAllBranches = true;
+      req.permissionCodes = [...ALL_ACCOUNTING_PERMISSIONS];
+
+      return next();
+    }
 
     // ------- Resolve user branch permissions -------
     const userId = payload.sub;

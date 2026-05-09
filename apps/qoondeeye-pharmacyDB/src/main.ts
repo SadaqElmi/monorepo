@@ -2,6 +2,7 @@ import 'dotenv/config';
 import { ValidationPipe } from '@nestjs/common';
 import { NestFactory } from '@nestjs/core';
 import { AppModule } from './app.module';
+import { AllExceptionsFilter } from './common/filters/all-exceptions.filter';
 
 /** Comma-separated list in `CORS_ORIGIN`. When unset, local Next apps (ERP :3000, POS :3001). */
 function getCorsOrigins(): string[] {
@@ -39,6 +40,7 @@ async function bootstrap() {
   });
   console.log(`CORS allowed origins: ${corsOrigins.join(', ')}`);
   app.setGlobalPrefix('api');
+  app.useGlobalFilters(new AllExceptionsFilter());
   app.useGlobalPipes(
     new ValidationPipe({
       whitelist: true,

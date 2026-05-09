@@ -599,7 +599,35 @@ export class TenantService {
 
     await this.applyTenantSchemaPatches(schemaName);
 
+    const provisionCheck = await this.verifyTenantCoreTablesPresent(schemaName);
+    if (!provisionCheck.ok) {
+      this.logger.error(
+        `provision verification failed for "${schemaName}": missing ${provisionCheck.missing.join(', ')}`,
+      );
+    }
+
     this.logger.log(`Schema "${schemaName}" provisioned with all tables`);
+  }
+
+  /** Sanity check after provision: base tables + staff table (users or User). */
+  private async verifyTenantCoreTablesPresent(schemaName: string): Promise<{
+    ok: boolean;
+    missing: string[];
+  }> {
+    const rows = await this.prisma.$queryRawUnsafe<{ table_name: string }[]>(
+      `SELECT table_name FROM information_schema.tables
+       WHERE table_schema = $1
+         AND table_name IN ('roles', 'batches', 'users', 'User')`,
+      schemaName,
+    );
+    const names = new Set(rows.map((r) => r.table_name));
+    const missing: string[] = [];
+    if (!names.has('roles')) missing.push('roles');
+    if (!names.has('batches')) missing.push('batches');
+    if (!names.has('users') && !names.has('User')) {
+      missing.push('users or User');
+    }
+    return { ok: missing.length === 0, missing };
   }
 
   /**
