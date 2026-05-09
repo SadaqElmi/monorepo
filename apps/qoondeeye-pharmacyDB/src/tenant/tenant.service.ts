@@ -95,16 +95,31 @@ export class TenantService {
       },
     });
 
-    if (allDomains.length) {
-      await this.prisma.domain.createMany({
-        data: allDomains.map((domain) => ({
-          tenantId: tenant.id,
-          domain: domain.trim().toLowerCase(),
-        })),
-      });
-    }
+    try {
+      if (allDomains.length) {
+        await this.prisma.domain.createMany({
+          data: allDomains.map((domain) => ({
+            tenantId: tenant.id,
+            domain: domain.trim().toLowerCase(),
+          })),
+        });
+      }
 
-    await this.provisionTenantSchema(schemaName);
+      await this.provisionTenantSchema(schemaName);
+    } catch (e) {
+      try {
+        await this.cleanupFailedTenantCreation(tenant.id, schemaName);
+      } catch (cleanupErr) {
+        this.logger.error(
+          `cleanupFailedTenantCreation failed for ${schemaName}: ${
+            cleanupErr instanceof Error
+              ? cleanupErr.message
+              : String(cleanupErr)
+          }`,
+        );
+      }
+      throw e;
+    }
 
     this.logger.log(`Tenant "${tenant.name}" (${schemaName}) provisioned`);
     return this.prisma.tenant.findUniqueOrThrow({
@@ -133,6 +148,27 @@ export class TenantService {
       await tx.tenant.delete({ where: { id } });
     });
     return { deleted: true };
+  }
+
+  /**
+   * Best-effort rollback when tenant row exists but provisioning failed.
+   * Same ordering as {@link remove}: drop schema, then delete public rows.
+   */
+  private async cleanupFailedTenantCreation(
+    tenantId: string,
+    schemaName: string,
+  ): Promise<void> {
+    await this.dropTenantPostgresSchema(schemaName);
+    await this.prisma.$transaction(async (tx) => {
+      await tx.reconciliationLog.deleteMany({ where: { tenantId } });
+      await tx.reconciliationRun.deleteMany({ where: { tenantId } });
+      await tx.domain.deleteMany({ where: { tenantId } });
+      await tx.posDevice.deleteMany({ where: { tenantId } });
+      await tx.tenant.delete({ where: { id: tenantId } });
+    });
+    this.logger.warn(
+      `Rolled back failed tenant creation: removed tenant ${tenantId}, dropped schema "${schemaName}"`,
+    );
   }
 
   /** Must never drop system/template schemas. Tenant slug is lowercase `[a-z0-9_]+`. */
@@ -218,8 +254,8 @@ export class TenantService {
   }
 
   /**
-   * Provision a new tenant schema (creates schema + all tables).
-   * If the schema already exists but has no "roles" table, creates missing tables (e.g. empty schema).
+   * Provision a new tenant schema (creates schema + all tables + patches).
+   * Uses `roles` + `batches` as the “base provisioned” signal; partial schemas are repaired idempotently.
    */
   async provisionTenantSchema(schemaName: string): Promise<void> {
     const schemas = await this.prisma.$queryRawUnsafe<
@@ -231,22 +267,32 @@ export class TenantService {
 
     const schemaExists = schemas.length > 0;
     if (schemaExists) {
-      const tablesExist = await this.prisma.$queryRawUnsafe<
+      const coreTables = await this.prisma.$queryRawUnsafe<
         { table_name: string }[]
       >(
-        `SELECT table_name FROM information_schema.tables WHERE table_schema = $1 AND table_name = 'roles'`,
+        `SELECT table_name FROM information_schema.tables
+         WHERE table_schema = $1 AND table_name IN ('roles', 'batches')`,
         schemaName,
       );
-      if (tablesExist.length > 0) {
+      const hasRoles = coreTables.some((r) => r.table_name === 'roles');
+      const hasBatches = coreTables.some((r) => r.table_name === 'batches');
+      if (hasRoles && hasBatches) {
         this.logger.warn(
-          `Schema "${schemaName}" already provisioned, skipping`,
+          `Schema "${schemaName}" base tables already exist; applying isolation + patches only`,
         );
         await this.ensureTenantBranchIsolationColumns(schemaName);
+        await this.applyTenantSchemaPatches(schemaName);
         return;
       }
-      this.logger.log(
-        `Schema "${schemaName}" exists but has no tables, provisioning...`,
-      );
+      if (hasRoles && !hasBatches) {
+        this.logger.warn(
+          `Schema "${schemaName}" partially provisioned (missing batches); completing base tables...`,
+        );
+      } else if (!hasRoles) {
+        this.logger.log(
+          `Schema "${schemaName}" exists but has no roles table; provisioning base tables...`,
+        );
+      }
     } else {
       await this.prisma.$executeRawUnsafe(
         `CREATE SCHEMA IF NOT EXISTS "${schemaName}"`,
@@ -254,22 +300,22 @@ export class TenantService {
     }
 
     const tables: string[] = [
-      `CREATE TABLE "${schemaName}"."roles" (
+      `CREATE TABLE IF NOT EXISTS "${schemaName}"."roles" (
         id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
         name VARCHAR(50) UNIQUE NOT NULL
       )`,
-      `CREATE TABLE "${schemaName}"."permissions" (
+      `CREATE TABLE IF NOT EXISTS "${schemaName}"."permissions" (
         id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
         name VARCHAR(100) UNIQUE
       )`,
-      `CREATE TABLE "${schemaName}"."branches" (
+      `CREATE TABLE IF NOT EXISTS "${schemaName}"."branches" (
         id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
         name VARCHAR(255),
         phone VARCHAR(50),
         address TEXT,
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
       )`,
-      `CREATE TABLE "${schemaName}"."users" (
+      `CREATE TABLE IF NOT EXISTS "${schemaName}"."users" (
         id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
         name VARCHAR(200),
         staff_id VARCHAR(120) UNIQUE,
@@ -280,11 +326,11 @@ export class TenantService {
         branch_id UUID REFERENCES "${schemaName}"."branches"(id),
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
       )`,
-      `CREATE TABLE "${schemaName}"."product_categories" (
+      `CREATE TABLE IF NOT EXISTS "${schemaName}"."product_categories" (
         id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
         name VARCHAR(255) NOT NULL
       )`,
-      `CREATE TABLE "${schemaName}"."products" (
+      `CREATE TABLE IF NOT EXISTS "${schemaName}"."products" (
         id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
         branch_id UUID REFERENCES "${schemaName}"."branches"(id) ON DELETE SET NULL,
         name VARCHAR(255) NOT NULL,
@@ -300,7 +346,7 @@ export class TenantService {
       )`,
       `CREATE UNIQUE INDEX IF NOT EXISTS products_barcode_unique_not_null ON "${schemaName}"."products"(barcode) WHERE barcode IS NOT NULL AND TRIM(barcode) <> ''`,
       `CREATE INDEX IF NOT EXISTS idx_products_barcode ON "${schemaName}"."products"(barcode)`,
-      `CREATE TABLE "${schemaName}"."suppliers" (
+      `CREATE TABLE IF NOT EXISTS "${schemaName}"."suppliers" (
         id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
         name VARCHAR(255),
         phone VARCHAR(50),
@@ -308,14 +354,14 @@ export class TenantService {
         address TEXT,
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
       )`,
-      `CREATE TABLE "${schemaName}"."customers" (
+      `CREATE TABLE IF NOT EXISTS "${schemaName}"."customers" (
         id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
         name VARCHAR(255),
         phone VARCHAR(50),
         address TEXT,
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
       )`,
-      `CREATE TABLE "${schemaName}"."purchases" (
+      `CREATE TABLE IF NOT EXISTS "${schemaName}"."purchases" (
         id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
         supplier_id UUID REFERENCES "${schemaName}"."suppliers"(id),
         branch_id UUID REFERENCES "${schemaName}"."branches"(id),
@@ -325,7 +371,7 @@ export class TenantService {
         on_credit BOOLEAN DEFAULT FALSE,
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
       )`,
-      `CREATE TABLE "${schemaName}"."supplier_payments" (
+      `CREATE TABLE IF NOT EXISTS "${schemaName}"."supplier_payments" (
         id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
         branch_id UUID NOT NULL REFERENCES "${schemaName}"."branches"(id),
         supplier_id UUID NOT NULL REFERENCES "${schemaName}"."suppliers"(id),
@@ -338,18 +384,7 @@ export class TenantService {
       )`,
       `CREATE INDEX IF NOT EXISTS idx_supplier_payments_branch ON "${schemaName}"."supplier_payments"(branch_id)`,
       `CREATE INDEX IF NOT EXISTS idx_supplier_payments_supplier ON "${schemaName}"."supplier_payments"(supplier_id)`,
-      `CREATE TABLE "${schemaName}"."purchase_items" (
-        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-        purchase_id UUID REFERENCES "${schemaName}"."purchases"(id) ON DELETE CASCADE,
-        branch_id UUID REFERENCES "${schemaName}"."branches"(id),
-        product_id UUID REFERENCES "${schemaName}"."products"(id),
-        batch_id UUID REFERENCES "${schemaName}"."batches"(id),
-        quantity INTEGER,
-        cost_price NUMERIC(10,2),
-        selling_price NUMERIC(10,2),
-        expiry_date DATE
-      )`,
-      `CREATE TABLE "${schemaName}"."batches" (
+      `CREATE TABLE IF NOT EXISTS "${schemaName}"."batches" (
         id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
         branch_id UUID REFERENCES "${schemaName}"."branches"(id),
         product_id UUID REFERENCES "${schemaName}"."products"(id),
@@ -362,7 +397,18 @@ export class TenantService {
       )`,
       `CREATE INDEX IF NOT EXISTS idx_batches_expiry ON "${schemaName}"."batches"(expiry_date)`,
       `CREATE INDEX IF NOT EXISTS idx_batches_fifo ON "${schemaName}"."batches"(branch_id, product_id, expiry_date, created_at)`,
-      `CREATE TABLE "${schemaName}"."inventory" (
+      `CREATE TABLE IF NOT EXISTS "${schemaName}"."purchase_items" (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        purchase_id UUID REFERENCES "${schemaName}"."purchases"(id) ON DELETE CASCADE,
+        branch_id UUID REFERENCES "${schemaName}"."branches"(id),
+        product_id UUID REFERENCES "${schemaName}"."products"(id),
+        batch_id UUID REFERENCES "${schemaName}"."batches"(id),
+        quantity INTEGER,
+        cost_price NUMERIC(10,2),
+        selling_price NUMERIC(10,2),
+        expiry_date DATE
+      )`,
+      `CREATE TABLE IF NOT EXISTS "${schemaName}"."inventory" (
         id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
         product_id UUID REFERENCES "${schemaName}"."products"(id),
         branch_id UUID REFERENCES "${schemaName}"."branches"(id),
@@ -372,7 +418,7 @@ export class TenantService {
       )`,
       `CREATE INDEX IF NOT EXISTS idx_inventory_product ON "${schemaName}"."inventory"(product_id)`,
       `CREATE UNIQUE INDEX IF NOT EXISTS idx_inventory_product_branch_unique ON "${schemaName}"."inventory"(product_id, branch_id)`,
-      `CREATE TABLE "${schemaName}"."sales" (
+      `CREATE TABLE IF NOT EXISTS "${schemaName}"."sales" (
         id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
         branch_id UUID REFERENCES "${schemaName}"."branches"(id),
         receipt_number VARCHAR(20),
@@ -384,7 +430,7 @@ export class TenantService {
       `CREATE UNIQUE INDEX IF NOT EXISTS sales_branch_receipt_unique ON "${schemaName}"."sales"(branch_id, receipt_number)`,
       `CREATE INDEX IF NOT EXISTS sales_branch_id_receipt_number_idx ON "${schemaName}"."sales"(branch_id, receipt_number)`,
       `CREATE INDEX IF NOT EXISTS idx_sales_date ON "${schemaName}"."sales"(sale_date)`,
-      `CREATE TABLE "${schemaName}"."sale_items" (
+      `CREATE TABLE IF NOT EXISTS "${schemaName}"."sale_items" (
         id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
         sale_id UUID REFERENCES "${schemaName}"."sales"(id) ON DELETE CASCADE,
         branch_id UUID REFERENCES "${schemaName}"."branches"(id),
@@ -394,7 +440,7 @@ export class TenantService {
         price NUMERIC(10,2),
         total NUMERIC(10,2)
       )`,
-      `CREATE TABLE "${schemaName}"."sale_returns" (
+      `CREATE TABLE IF NOT EXISTS "${schemaName}"."sale_returns" (
         id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
         sale_id UUID REFERENCES "${schemaName}"."sales"(id) ON DELETE CASCADE,
         branch_id UUID REFERENCES "${schemaName}"."branches"(id),
@@ -403,7 +449,7 @@ export class TenantService {
       )`,
       `CREATE INDEX IF NOT EXISTS idx_sale_returns_sale_id ON "${schemaName}"."sale_returns"(sale_id)`,
       `CREATE INDEX IF NOT EXISTS idx_sale_returns_date ON "${schemaName}"."sale_returns"(return_date)`,
-      `CREATE TABLE "${schemaName}"."sale_return_items" (
+      `CREATE TABLE IF NOT EXISTS "${schemaName}"."sale_return_items" (
         id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
         sale_return_id UUID REFERENCES "${schemaName}"."sale_returns"(id) ON DELETE CASCADE,
         product_id UUID REFERENCES "${schemaName}"."products"(id),
@@ -411,19 +457,19 @@ export class TenantService {
         sale_item_id UUID REFERENCES "${schemaName}"."sale_items"(id),
         quantity INTEGER NOT NULL
       )`,
-      `CREATE TABLE "${schemaName}"."payments" (
+      `CREATE TABLE IF NOT EXISTS "${schemaName}"."payments" (
         id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
         sale_id UUID REFERENCES "${schemaName}"."sales"(id),
         method VARCHAR(50),
         amount NUMERIC(10,2),
         paid_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
       )`,
-      `CREATE TABLE "${schemaName}"."expense_categories" (
+      `CREATE TABLE IF NOT EXISTS "${schemaName}"."expense_categories" (
         id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
         name VARCHAR(255),
         gl_account_key VARCHAR(50)
       )`,
-      `CREATE TABLE "${schemaName}"."expenses" (
+      `CREATE TABLE IF NOT EXISTS "${schemaName}"."expenses" (
         id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
         category_id UUID REFERENCES "${schemaName}"."expense_categories"(id),
         branch_id UUID REFERENCES "${schemaName}"."branches"(id),
@@ -432,13 +478,13 @@ export class TenantService {
         expense_date DATE,
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
       )`,
-      `CREATE TABLE "${schemaName}"."cash_accounts" (
+      `CREATE TABLE IF NOT EXISTS "${schemaName}"."cash_accounts" (
         id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
         name VARCHAR(255),
         type VARCHAR(50),
         balance NUMERIC(12,2) DEFAULT 0
       )`,
-      `CREATE TABLE "${schemaName}"."cash_transactions" (
+      `CREATE TABLE IF NOT EXISTS "${schemaName}"."cash_transactions" (
         id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
         branch_id UUID REFERENCES "${schemaName}"."branches"(id),
         account_id UUID REFERENCES "${schemaName}"."cash_accounts"(id),
@@ -447,7 +493,7 @@ export class TenantService {
         reference VARCHAR(255),
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
       )`,
-      `CREATE TABLE "${schemaName}"."chart_of_accounts" (
+      `CREATE TABLE IF NOT EXISTS "${schemaName}"."chart_of_accounts" (
         id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
         branch_id UUID NOT NULL REFERENCES "${schemaName}"."branches"(id) ON DELETE CASCADE,
         code VARCHAR(32),
@@ -461,7 +507,7 @@ export class TenantService {
         UNIQUE(branch_id, account_key)
       )`,
       `CREATE UNIQUE INDEX IF NOT EXISTS chart_of_accounts_branch_payment_key_uq ON "${schemaName}"."chart_of_accounts"(branch_id, payment_method_key) WHERE payment_method_key IS NOT NULL`,
-      `CREATE TABLE "${schemaName}"."journal_entries" (
+      `CREATE TABLE IF NOT EXISTS "${schemaName}"."journal_entries" (
         id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
         branch_id UUID NOT NULL REFERENCES "${schemaName}"."branches"(id),
         entry_date DATE NOT NULL DEFAULT CURRENT_DATE,
@@ -472,7 +518,7 @@ export class TenantService {
       )`,
       `CREATE UNIQUE INDEX IF NOT EXISTS journal_entries_source_uq ON "${schemaName}"."journal_entries"(branch_id, source_type, source_id) WHERE source_id IS NOT NULL`,
       `CREATE INDEX IF NOT EXISTS journal_entries_branch_date_idx ON "${schemaName}"."journal_entries"(branch_id, entry_date)`,
-      `CREATE TABLE "${schemaName}"."journal_lines" (
+      `CREATE TABLE IF NOT EXISTS "${schemaName}"."journal_lines" (
         id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
         journal_entry_id UUID NOT NULL REFERENCES "${schemaName}"."journal_entries"(id) ON DELETE CASCADE,
         account_id UUID NOT NULL REFERENCES "${schemaName}"."chart_of_accounts"(id),
@@ -484,7 +530,7 @@ export class TenantService {
       )`,
       `CREATE INDEX IF NOT EXISTS journal_lines_entry_idx ON "${schemaName}"."journal_lines"(journal_entry_id)`,
       `CREATE INDEX IF NOT EXISTS journal_lines_account_idx ON "${schemaName}"."journal_lines"(account_id)`,
-      `CREATE TABLE "${schemaName}"."patient_loans" (
+      `CREATE TABLE IF NOT EXISTS "${schemaName}"."patient_loans" (
         id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
         customer_id UUID NOT NULL REFERENCES "${schemaName}"."customers"(id) ON DELETE CASCADE,
         branch_id UUID REFERENCES "${schemaName}"."branches"(id),
@@ -495,7 +541,7 @@ export class TenantService {
         due_date DATE,
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
       )`,
-      `CREATE TABLE "${schemaName}"."patient_loan_payments" (
+      `CREATE TABLE IF NOT EXISTS "${schemaName}"."patient_loan_payments" (
         id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
         loan_id UUID NOT NULL REFERENCES "${schemaName}"."patient_loans"(id) ON DELETE CASCADE,
         amount NUMERIC(12,2) NOT NULL,
@@ -503,7 +549,7 @@ export class TenantService {
         payment_date TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
       )`,
-      `CREATE TABLE "${schemaName}"."notifications" (
+      `CREATE TABLE IF NOT EXISTS "${schemaName}"."notifications" (
         id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
         title VARCHAR(255),
         message TEXT,
@@ -511,7 +557,7 @@ export class TenantService {
         is_read BOOLEAN DEFAULT FALSE,
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
       )`,
-      `CREATE TABLE "${schemaName}"."role_permissions" (
+      `CREATE TABLE IF NOT EXISTS "${schemaName}"."role_permissions" (
         role_id UUID REFERENCES "${schemaName}"."roles"(id),
         permission_id UUID REFERENCES "${schemaName}"."permissions"(id),
         PRIMARY KEY(role_id, permission_id)
@@ -527,7 +573,8 @@ export class TenantService {
         ('admin'),
         ('manager'),
         ('pharmacist'),
-        ('cashier')`,
+        ('cashier')
+       ON CONFLICT (name) DO NOTHING`,
       `INSERT INTO "${schemaName}"."permissions" (name) VALUES
         ('create_product'),
         ('edit_product'),
@@ -536,17 +583,21 @@ export class TenantService {
         ('manage_users'),
         ('run_consolidation'),
         ('reverse_consolidation'),
-        ('view_consolidation_history')`,
+        ('view_consolidation_history')
+       ON CONFLICT (name) DO NOTHING`,
       `INSERT INTO "${schemaName}"."role_permissions" (role_id, permission_id)
         SELECT r.id, p.id
         FROM "${schemaName}"."roles" r
         CROSS JOIN "${schemaName}"."permissions" p
-        WHERE r.name = 'admin'`,
+        WHERE r.name = 'admin'
+        ON CONFLICT (role_id, permission_id) DO NOTHING`,
     ];
 
     for (const sql of seedSql) {
       await this.prisma.$executeRawUnsafe(sql);
     }
+
+    await this.applyTenantSchemaPatches(schemaName);
 
     this.logger.log(`Schema "${schemaName}" provisioned with all tables`);
   }
@@ -559,6 +610,7 @@ export class TenantService {
     await this.ensureTenantBranchIsolationColumns(schemaName);
     await this.ensureSaleItemsMiscChargeKindColumn(schemaName);
     await this.ensurePosSessionsAndStatements(schemaName);
+    await this.ensureInventoryTable(schemaName);
     await this.ensureInventoryMatrixCoverage(schemaName);
     await this.ensureStockTransfersTables(schemaName);
     await this.ensureReportSnapshotsTable(schemaName);
@@ -1099,6 +1151,29 @@ export class TenantService {
     await this.prisma.$executeRawUnsafe(
       `CREATE INDEX IF NOT EXISTS idx_journal_entries_branch_date_source
        ON "${schemaName}"."journal_entries"(branch_id, entry_date, source_type)`,
+    );
+  }
+
+  /**
+   * Legacy tenant schemas may exist without `inventory` (predates table or partial provision).
+   * Must run before {@link ensureInventoryMatrixCoverage}.
+   */
+  private async ensureInventoryTable(schemaName: string): Promise<void> {
+    await this.prisma.$executeRawUnsafe(
+      `CREATE TABLE IF NOT EXISTS "${schemaName}"."inventory" (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        product_id UUID REFERENCES "${schemaName}"."products"(id),
+        branch_id UUID REFERENCES "${schemaName}"."branches"(id),
+        quantity INTEGER DEFAULT 0,
+        reorder_level INTEGER DEFAULT 10,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      )`,
+    );
+    await this.prisma.$executeRawUnsafe(
+      `CREATE INDEX IF NOT EXISTS idx_inventory_product ON "${schemaName}"."inventory"(product_id)`,
+    );
+    await this.prisma.$executeRawUnsafe(
+      `CREATE UNIQUE INDEX IF NOT EXISTS idx_inventory_product_branch_unique ON "${schemaName}"."inventory"(product_id, branch_id)`,
     );
   }
 
