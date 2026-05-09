@@ -10,7 +10,7 @@ CREATE TABLE IF NOT EXISTS "tenant_template"."pos_sessions" (
     "closed_at" TIMESTAMP(6),
     CONSTRAINT "pos_sessions_pkey" PRIMARY KEY ("id"),
     CONSTRAINT "pos_sessions_branch_id_fkey" FOREIGN KEY ("branch_id") REFERENCES "tenant_template"."branches"("id") ON DELETE CASCADE ON UPDATE CASCADE,
-    CONSTRAINT "pos_sessions_staff_user_id_fkey" FOREIGN KEY ("staff_user_id") REFERENCES "tenant_template"."users"("id") ON DELETE SET NULL ON UPDATE CASCADE
+    CONSTRAINT "pos_sessions_staff_user_id_fkey" FOREIGN KEY ("staff_user_id") REFERENCES "tenant_template"."User"("id") ON DELETE SET NULL ON UPDATE CASCADE
 );
 
 CREATE INDEX IF NOT EXISTS "idx_pos_sessions_branch_status"
@@ -56,14 +56,23 @@ CREATE TABLE IF NOT EXISTS "tenant_template"."pos_statement_lines" (
 -- Physical table is "Sale" (see 20260308120631_data); not lowercase "sales".
 ALTER TABLE "tenant_template"."Sale" ADD COLUMN IF NOT EXISTS "pos_session_id" UUID;
 
+-- Drop legacy FK name only on this table (never use pg_constraint by name alone — names can repeat on other tables).
+ALTER TABLE "tenant_template"."Sale" DROP CONSTRAINT IF EXISTS "sales_pos_session_id_fkey";
+
 DO $$
 BEGIN
   IF NOT EXISTS (
-    SELECT 1 FROM pg_constraint
-    WHERE conname = 'sales_pos_session_id_fkey'
+    SELECT 1
+    FROM pg_constraint c
+    JOIN pg_class rel ON rel.oid = c.conrelid
+    JOIN pg_namespace n ON n.oid = rel.relnamespace
+    WHERE n.nspname = 'tenant_template'
+      AND rel.relname = 'Sale'
+      AND c.conname = 'Sale_pos_session_id_fkey'
+      AND c.contype = 'f'
   ) THEN
     ALTER TABLE "tenant_template"."Sale"
-      ADD CONSTRAINT "sales_pos_session_id_fkey"
+      ADD CONSTRAINT "Sale_pos_session_id_fkey"
       FOREIGN KEY ("pos_session_id") REFERENCES "tenant_template"."pos_sessions"("id") ON DELETE SET NULL ON UPDATE CASCADE;
   END IF;
 END $$;

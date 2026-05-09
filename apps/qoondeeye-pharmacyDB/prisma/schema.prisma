@@ -121,7 +121,7 @@ model ReconciliationLog {
 model User {
   id        String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
   name      String?  @db.VarChar(200)
-  staffId String?  @unique @map("staff_id") @db.VarChar(120)
+  staffId   String?  @map("staff_id") @db.VarChar(120)
   email     String?  @unique @db.VarChar(200)
   password  String?  @db.Text
   pinHash   String?  @map("pin_hash") @db.Text
@@ -133,6 +133,7 @@ model User {
   branch      Branch?      @relation(fields: [branchId], references: [id])
   posSessions PosSession[]
 
+  @@index([staffId])
   @@schema("tenant_template")
 }
 
