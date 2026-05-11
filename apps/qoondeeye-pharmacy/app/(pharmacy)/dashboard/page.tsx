@@ -1,6 +1,7 @@
 "use client";
 
 import * as React from "react";
+import { useQuery } from "@tanstack/react-query";
 import Link from "next/link";
 import { format, startOfDay, startOfMonth } from "date-fns";
 import { DateRange } from "react-day-picker";
@@ -55,6 +56,7 @@ import {
 } from "recharts";
 import { hasGlobalBranchAccess } from "@/lib/branch-access";
 import { getStoredUser } from "@/lib/auth-client";
+import { getBranchQueryKeyFacet } from "@/lib/query-branch-key";
 import {
   getBatches,
   getBranches,
@@ -66,12 +68,10 @@ import {
   getTopProducts,
   type Batch,
   type Branch,
-  type DashboardSeriesPoint,
   type InventoryEntry,
   type Product,
   type Purchase,
   type Sale,
-  type TopProductLine,
 } from "@/lib/api";
 
 function toNumber(v: number | string | null | undefined): number {
@@ -126,36 +126,17 @@ export default function DashboardPage() {
   const [tenantSlug] = React.useState(
     () => getStoredUser()?.tenantSlug ?? "pharmacy1",
   );
-  const [branchNonce, setBranchNonce] = React.useState(0);
 
-  React.useEffect(() => {
-    const handler = () => setBranchNonce((n) => n + 1);
-    window.addEventListener("activeBranchChanged", handler);
-    return () => window.removeEventListener("activeBranchChanged", handler);
-  }, []);
+  const [branchFacet, setBranchFacet] = React.useState(() =>
+    typeof window !== "undefined" ? getBranchQueryKeyFacet() : "",
+  );
 
   const [date, setDate] = React.useState<DateRange | undefined>(() => {
     const now = new Date();
     return { from: startOfMonth(now), to: now };
   });
 
-  const [sales, setSales] = React.useState<Sale[]>([]);
-  const [purchases, setPurchases] = React.useState<Purchase[]>([]);
-  const [inventory, setInventory] = React.useState<InventoryEntry[]>([]);
-  const [batches, setBatches] = React.useState<Batch[]>([]);
-  const [products, setProducts] = React.useState<Product[]>([]);
-  const [branches, setBranches] = React.useState<Branch[]>([]);
-  const [loading, setLoading] = React.useState(true);
-  const [error, setError] = React.useState<string | null>(null);
-  const [acctSeries, setAcctSeries] = React.useState<DashboardSeriesPoint[]>(
-    [],
-  );
-  const [acctLoading, setAcctLoading] = React.useState(false);
   const [branchId, setBranchId] = React.useState<string | null>(null);
-  const [topProductLines, setTopProductLines] = React.useState<
-    TopProductLine[]
-  >([]);
-  const [topProductsLoading, setTopProductsLoading] = React.useState(false);
 
   const syncBranchFromStorage = React.useCallback(() => {
     try {
@@ -189,44 +170,48 @@ export default function DashboardPage() {
   }, [syncBranchFromStorage]);
 
   React.useEffect(() => {
-    if (!tenantSlug) return;
-    let cancelled = false;
+    setBranchFacet(getBranchQueryKeyFacet());
+  }, [branchId]);
 
-    const load = async () => {
-      try {
-        setLoading(true);
-        setError(null);
-        const [s, p, inv, bat, prod, br] = await Promise.all([
-          getSales(tenantSlug),
-          getPurchases(tenantSlug),
-          getInventory(tenantSlug),
-          getBatches(tenantSlug),
-          getProducts(tenantSlug),
-          getBranches(tenantSlug),
-        ]);
-        if (cancelled) return;
-        setSales(s);
-        setPurchases(p);
-        setInventory(inv);
-        setBatches(bat);
-        setProducts(prod);
-        setBranches(br);
-      } catch (err) {
-        if (!cancelled) {
-          setError(
-            err instanceof Error ? err.message : "Failed to load dashboard",
-          );
-        }
-      } finally {
-        if (!cancelled) setLoading(false);
-      }
-    };
-
-    load();
+  React.useEffect(() => {
+    const sync = () => setBranchFacet(getBranchQueryKeyFacet());
+    window.addEventListener("storage", sync);
+    window.addEventListener("activeBranchChanged", sync as EventListener);
     return () => {
-      cancelled = true;
+      window.removeEventListener("storage", sync);
+      window.removeEventListener(
+        "activeBranchChanged",
+        sync as EventListener,
+      );
     };
-  }, [tenantSlug, branchNonce]);
+  }, []);
+
+  const bundleQuery = useQuery({
+    queryKey: ["erp", "dashboard", "bundle", tenantSlug, branchFacet],
+    enabled: Boolean(tenantSlug && branchFacet),
+    queryFn: async ({ signal }) => {
+      const [s, p, inv, bat, prod, br] = await Promise.all([
+        getSales(tenantSlug, { signal }),
+        getPurchases(tenantSlug, { signal }),
+        getInventory(tenantSlug, { signal }),
+        getBatches(tenantSlug, { signal }),
+        getProducts(tenantSlug, { signal }),
+        getBranches(tenantSlug, { signal }),
+      ]);
+      return {
+        sales: s,
+        purchases: p,
+        inventory: inv,
+        batches: bat,
+        products: prod,
+        branches: br,
+      };
+    },
+  });
+
+  const fromStr =
+    date?.from != null ? format(date.from, "yyyy-MM-dd") : "";
+  const toStr = date?.to != null ? format(date.to, "yyyy-MM-dd") : "";
 
   const acctAggregateAll = React.useMemo(() => {
     if (branchId !== null) return false;
@@ -236,62 +221,85 @@ export default function DashboardPage() {
     } catch {
       return false;
     }
-  }, [branchId, branchNonce]);
+  }, [branchId, branchFacet]);
 
-  React.useEffect(() => {
-    if (!tenantSlug || !date?.from || !date?.to) return;
-    let cancelled = false;
-    setAcctLoading(true);
-    void getDashboardSeries(
+  const seriesQuery = useQuery({
+    queryKey: [
+      "erp",
+      "dashboard",
+      "series",
       tenantSlug,
-      format(date.from, "yyyy-MM-dd"),
-      format(date.to, "yyyy-MM-dd"),
-      branchId ?? undefined,
+      branchFacet,
+      fromStr,
+      toStr,
+      branchId ?? "",
       acctAggregateAll,
-    )
-      .then((rows) => {
-        if (!cancelled) setAcctSeries(rows);
-      })
-      .catch(() => {
-        if (!cancelled) setAcctSeries([]);
-      })
-      .finally(() => {
-        if (!cancelled) setAcctLoading(false);
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [tenantSlug, date?.from, date?.to, branchId, branchNonce, acctAggregateAll]);
+    ],
+    enabled: Boolean(
+      tenantSlug && branchFacet && date?.from != null && date?.to != null,
+    ),
+    queryFn: ({ signal }) =>
+      getDashboardSeries(
+        tenantSlug,
+        fromStr,
+        toStr,
+        branchId ?? undefined,
+        acctAggregateAll,
+        { signal },
+      ),
+  });
 
-  React.useEffect(() => {
-    if (!tenantSlug || !date?.from || !date?.to || (!branchId && !acctAggregateAll)) {
-      setTopProductLines([]);
-      return;
-    }
-    let cancelled = false;
-    setTopProductsLoading(true);
-    void getTopProducts(
+  const topProductsQuery = useQuery({
+    queryKey: [
+      "erp",
+      "dashboard",
+      "topProducts",
       tenantSlug,
-      format(date.from, "yyyy-MM-dd"),
-      format(date.to, "yyyy-MM-dd"),
-      branchId ?? undefined,
-      8,
-      "revenue",
+      branchFacet,
+      fromStr,
+      toStr,
+      branchId ?? "",
       acctAggregateAll,
-    )
-      .then((res) => {
-        if (!cancelled) setTopProductLines(res.lines);
-      })
-      .catch(() => {
-        if (!cancelled) setTopProductLines([]);
-      })
-      .finally(() => {
-        if (!cancelled) setTopProductsLoading(false);
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [tenantSlug, date?.from, date?.to, branchId, branchNonce, acctAggregateAll]);
+    ],
+    enabled: Boolean(
+      tenantSlug &&
+        branchFacet &&
+        date?.from != null &&
+        date?.to != null &&
+        (Boolean(branchId) || acctAggregateAll),
+    ),
+    queryFn: ({ signal }) =>
+      getTopProducts(
+        tenantSlug,
+        fromStr,
+        toStr,
+        branchId ?? undefined,
+        8,
+        "revenue",
+        acctAggregateAll,
+        { signal },
+      ),
+  });
+
+  const sales = bundleQuery.data?.sales ?? [];
+  const purchases = bundleQuery.data?.purchases ?? [];
+  const inventory = bundleQuery.data?.inventory ?? [];
+  const batches = bundleQuery.data?.batches ?? [];
+  const products = bundleQuery.data?.products ?? [];
+  const branches = bundleQuery.data?.branches ?? [];
+
+  const loading = bundleQuery.isPending;
+  const error = bundleQuery.error
+    ? bundleQuery.error instanceof Error
+      ? bundleQuery.error.message
+      : "Failed to load dashboard"
+    : null;
+
+  const acctSeries = seriesQuery.data ?? [];
+  const acctLoading = seriesQuery.isFetching;
+
+  const topProductLines = topProductsQuery.data?.lines ?? [];
+  const topProductsLoading = topProductsQuery.isFetching;
 
   const acctChartData = React.useMemo(
     () =>

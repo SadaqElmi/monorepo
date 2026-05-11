@@ -657,6 +657,36 @@ export class TenantService {
     await this.ensureConsolidationBranch(schemaName);
     await this.ensureConsolidationPermissions(schemaName);
     await this.ensureAuditLogArchiveTable(schemaName);
+    await this.ensureTenantPerformanceIndexes(schemaName);
+  }
+
+  /**
+   * Mirrors prisma/migrations performance indexes for provisioned tenant schemas
+   * (lowercase table names). tenant_template is handled by `prisma migrate deploy`.
+   */
+  private async ensureTenantPerformanceIndexes(schemaName: string): Promise<void> {
+    const stmts = [
+      `CREATE INDEX IF NOT EXISTS idx_users_branch_id ON "${schemaName}"."users"(branch_id)`,
+      `CREATE INDEX IF NOT EXISTS idx_patient_loans_branch_id ON "${schemaName}"."patient_loans"(branch_id)`,
+      `CREATE INDEX IF NOT EXISTS idx_patient_loans_customer_id ON "${schemaName}"."patient_loans"(customer_id)`,
+      `CREATE INDEX IF NOT EXISTS idx_patient_loan_payments_loan_id ON "${schemaName}"."patient_loan_payments"(loan_id)`,
+      `CREATE INDEX IF NOT EXISTS idx_purchases_branch_id ON "${schemaName}"."purchases"(branch_id)`,
+      `CREATE INDEX IF NOT EXISTS idx_purchases_supplier_id ON "${schemaName}"."purchases"(supplier_id)`,
+      `CREATE INDEX IF NOT EXISTS idx_purchases_invoice_number ON "${schemaName}"."purchases"(invoice_number)`,
+      `CREATE INDEX IF NOT EXISTS idx_purchases_branch_created ON "${schemaName}"."purchases"(branch_id, created_at DESC)`,
+      `CREATE INDEX IF NOT EXISTS idx_purchase_items_purchase_id ON "${schemaName}"."purchase_items"(purchase_id)`,
+      `CREATE INDEX IF NOT EXISTS idx_purchase_items_product_id ON "${schemaName}"."purchase_items"(product_id)`,
+      `CREATE INDEX IF NOT EXISTS idx_purchase_items_branch_id ON "${schemaName}"."purchase_items"(branch_id)`,
+      `CREATE INDEX IF NOT EXISTS idx_sale_items_sale_id ON "${schemaName}"."sale_items"(sale_id)`,
+      `CREATE INDEX IF NOT EXISTS idx_sale_items_product_id ON "${schemaName}"."sale_items"(product_id)`,
+      `CREATE INDEX IF NOT EXISTS idx_sale_items_branch_id ON "${schemaName}"."sale_items"(branch_id)`,
+      `CREATE INDEX IF NOT EXISTS idx_payments_sale_id ON "${schemaName}"."payments"(sale_id)`,
+      `CREATE INDEX IF NOT EXISTS idx_expenses_branch_id ON "${schemaName}"."expenses"(branch_id)`,
+      `CREATE INDEX IF NOT EXISTS idx_expenses_created_at ON "${schemaName}"."expenses"(created_at DESC)`,
+    ];
+    for (const sql of stmts) {
+      await this.prisma.$executeRawUnsafe(sql);
+    }
   }
 
   private async ensureAuditLogArchiveTable(schemaName: string): Promise<void> {

@@ -17,6 +17,7 @@ import { SalesService } from './sales.service';
 import { CreateSaleDto } from './dto/create-sale.dto';
 import { UpdateSaleDto } from './dto/update-sale.dto';
 import type { Request } from 'express';
+import { parsePagedQueryParam } from '../common/pagination.util';
 
 @Controller('sales')
 export class SalesController {
@@ -34,11 +35,24 @@ export class SalesController {
   }
 
   @Get()
-  findAll(@Req() req: Request) {
+  findAll(
+    @Req() req: Request,
+    @Query('page') page?: string,
+    @Query('limit') limit?: string,
+  ) {
     this.ensureTenant();
     const allowedBranchIds = req.allowedBranchIds ?? [];
     if (!allowedBranchIds.length) {
       throw new ForbiddenException('Access denied to this branch');
+    }
+    const paged = parsePagedQueryParam(page, limit);
+    if (paged) {
+      return this.salesService.findAllPaged(
+        this.tenantContext.getSchemaName()!,
+        allowedBranchIds,
+        paged.skip,
+        paged.limit,
+      );
     }
     return this.salesService.findAll(
       this.tenantContext.getSchemaName()!,

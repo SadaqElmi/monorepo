@@ -52,14 +52,18 @@ export type LogsResponse = {
   total: number;
   limit: number;
   offset: number;
+  page: number;
+  totalPages: number;
 };
 
 export async function getLatestReconciliationRun(
   tenantSlug: string,
+  init?: Pick<RequestInit, "signal">,
 ): Promise<LatestRunResponse> {
   return jsonFetch<LatestRunResponse>(`${RECONCILIATION_PREFIX}/runs/latest`, {
     method: "GET",
     headers: { "X-Tenant": tenantSlug } as JsonHeaders,
+    signal: init?.signal,
   });
 }
 
@@ -71,7 +75,9 @@ export async function getReconciliationLogs(
     type?: string;
     limit?: number;
     offset?: number;
+    page?: number;
   },
+  init?: Pick<RequestInit, "signal">,
 ): Promise<LogsResponse> {
   const q = new URLSearchParams();
   if (opts?.runId) q.set("runId", opts.runId);
@@ -79,12 +85,14 @@ export async function getReconciliationLogs(
   if (opts?.type) q.set("type", opts.type);
   if (opts?.limit != null) q.set("limit", String(opts.limit));
   if (opts?.offset != null) q.set("offset", String(opts.offset));
+  if (opts?.page != null) q.set("page", String(opts.page));
   const qs = q.toString();
   return jsonFetch<LogsResponse>(
     `${RECONCILIATION_PREFIX}/logs${qs ? `?${qs}` : ""}`,
     {
       method: "GET",
       headers: { "X-Tenant": tenantSlug } as JsonHeaders,
+      signal: init?.signal,
     },
   );
 }

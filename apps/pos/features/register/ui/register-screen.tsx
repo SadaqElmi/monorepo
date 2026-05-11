@@ -3,7 +3,8 @@
 import * as React from "react";
 import { createPortal } from "react-dom";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
+import { useQuery } from "@tanstack/react-query";
 import { Calculator, ChevronDown, ChevronUp, Undo2 } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
@@ -33,7 +34,7 @@ import {
   getBatches,
   getCategories,
   getSaleById,
-  getSales,
+  getSalesPaged,
   getProductByBarcode,
   getProducts,
   type Batch,
@@ -55,10 +56,12 @@ import { saleToPosTransaction } from "../model/transactions";
 import type { PosCatalogProduct } from "../model/types";
 import { formatMoney } from "@/shared/lib";
 import { posToast } from "@/lib/pos-toast";
+import { getBranchQueryKeyFacet } from "@/lib/query-branch-key";
 import { isManagerTierRole } from "../model/discount-policy";
 
 export function RegisterScreen() {
   const router = useRouter();
+  const pathname = usePathname();
   const {
     mainTab,
     checkoutStep,
@@ -144,6 +147,50 @@ export function RegisterScreen() {
   const [forceBlankSelectionPanel, setForceBlankSelectionPanel] =
     React.useState(false);
 
+  const [branchKey, setBranchKey] = React.useState(() =>
+    typeof window !== "undefined" ? getBranchQueryKeyFacet() : "",
+  );
+
+  React.useEffect(() => {
+    setBranchKey(getBranchQueryKeyFacet());
+  }, [pathname, tenantSlug]);
+
+  React.useEffect(() => {
+    const sync = () => setBranchKey(getBranchQueryKeyFacet());
+    window.addEventListener("storage", sync);
+    window.addEventListener("activeBranchChanged", sync as EventListener);
+    return () => {
+      window.removeEventListener("storage", sync);
+      window.removeEventListener(
+        "activeBranchChanged",
+        sync as EventListener,
+      );
+    };
+  }, []);
+
+  const catalogQuery = useQuery({
+    queryKey: ["pos", "catalog", tenantSlug, branchKey],
+    enabled: Boolean(tenantSlug && branchKey),
+    queryFn: async ({ signal }) => {
+      const slug = tenantSlug!;
+      const [prods, batchesData, cats] = await Promise.all([
+        getProducts(slug, { signal }),
+        getBatches(slug, { signal }),
+        getCategories(slug, { signal }),
+      ]);
+      return { prods, batchesData, cats };
+    },
+  });
+
+  const salesQuery = useQuery({
+    queryKey: ["pos", "sales", tenantSlug, branchKey, 1, 200],
+    enabled: Boolean(tenantSlug && branchKey),
+    queryFn: async ({ signal }) => {
+      const res = await getSalesPaged(tenantSlug!, 1, 200, { signal });
+      return res.items;
+    },
+  });
+
   React.useEffect(() => {
     if (cart.length === 0) setForceBlankSelectionPanel(false);
   }, [cart.length]);
@@ -163,16 +210,20 @@ export function RegisterScreen() {
   }, []);
 
   React.useEffect(() => {
-    if (!tenantSlug) return;
-    let cancelled = false;
-    (async () => {
+    if (!tenantSlug || salesQuery.status !== "success" || !salesQuery.data) {
+      return;
+    }
+
+    const sales = salesQuery.data;
+    const ac = new AbortController();
+
+    void (async () => {
       try {
-        const sales = await getSales(tenantSlug);
-        if (cancelled) return;
         const next = sales
           .map((sale) => saleToPosTransaction(sale, productNameById))
           .sort((a, b) => b.createdAt - a.createdAt)
           .slice(0, 500);
+        if (ac.signal.aborted) return;
         setTransactions(next);
         persistPosTransactions(next);
         syncReceiptSeqFromTransactions();
@@ -180,13 +231,15 @@ export function RegisterScreen() {
         const missingLines = next
           .filter((tx) => tx.saleId && tx.lines.length === 0)
           .slice(0, 50);
-        if (missingLines.length === 0 || cancelled) return;
+        if (missingLines.length === 0 || ac.signal.aborted) return;
 
         const hydratedBySaleId = new Map<string, PosTransaction>();
         await Promise.all(
           missingLines.map(async (tx) => {
             try {
-              const sale = await getSaleById(tenantSlug, tx.saleId!);
+              const sale = await getSaleById(tenantSlug, tx.saleId!, {
+                signal: ac.signal,
+              });
               if (!sale) return;
               const hydrated = saleToPosTransaction(sale, productNameById);
               hydratedBySaleId.set(tx.saleId!, {
@@ -199,7 +252,7 @@ export function RegisterScreen() {
             }
           }),
         );
-        if (cancelled || hydratedBySaleId.size === 0) return;
+        if (ac.signal.aborted || hydratedBySaleId.size === 0) return;
 
         setTransactions((prev) => {
           const patched = prev.map((tx) => {
@@ -213,10 +266,15 @@ export function RegisterScreen() {
         // Keep local cache if server history cannot be loaded.
       }
     })();
-    return () => {
-      cancelled = true;
-    };
-  }, [tenantSlug, productNameById, setTransactions]);
+
+    return () => ac.abort();
+  }, [
+    tenantSlug,
+    salesQuery.status,
+    salesQuery.data,
+    productNameById,
+    setTransactions,
+  ]);
 
   React.useEffect(() => {
     if (catalogProducts.length === 0) return;
@@ -242,58 +300,54 @@ export function RegisterScreen() {
     if (!tenantSlug) {
       setCatalogProducts([]);
       setCategoryList([ALL_CATEGORIES_LABEL]);
+      setBatchesState([]);
       return;
     }
-    let cancelled = false;
-    (async () => {
-      try {
-        const [prods, batchesData, cats] = await Promise.all([
-          getProducts(tenantSlug),
-          getBatches(tenantSlug),
-          getCategories(tenantSlug),
-        ]);
-        if (cancelled) return;
-        setBatchesState(batchesData);
-        const catNames = new Map(cats.map((c) => [c.id, c.name]));
-        const mapped: PosCatalogProduct[] = prods.map((p) => {
-          const { sellingValue, listValue, showCompare } =
-            resolvePosCatalogPricing(p, batchesData, p.id);
-          return {
-            id: p.id,
-            sku: (p.sku ?? "").trim() || p.id.slice(0, 8),
-            name: p.name,
-            meta:
-              [p.genericName, p.strength, p.unit].filter(Boolean).join(" • ") ||
-              "Catalog item",
-            category:
-              (p.categoryId && catNames.get(p.categoryId)) || "Uncategorized",
-            price: formatMoney(sellingValue),
-            priceValue: sellingValue,
-            listPriceValue: showCompare ? listValue : undefined,
-            showCompare,
-            stock: "in" as const,
-            unitType: "PC" as UnitType,
-          };
-        });
-        if (mapped.length > 0) {
-          setCatalogProducts(mapped);
-          const uc = [...new Set(mapped.map((m) => m.category))].sort();
-          setCategoryList([ALL_CATEGORIES_LABEL, ...uc]);
-        } else {
-          setCatalogProducts([]);
-          setCategoryList([ALL_CATEGORIES_LABEL]);
-        }
-      } catch {
-        if (!cancelled) {
-          setCatalogProducts([]);
-          setCategoryList([ALL_CATEGORIES_LABEL]);
-        }
-      }
-    })();
-    return () => {
-      cancelled = true;
-    };
-  }, [tenantSlug]);
+
+    if (catalogQuery.isError) {
+      setCatalogProducts([]);
+      setCategoryList([ALL_CATEGORIES_LABEL]);
+      return;
+    }
+
+    const raw = catalogQuery.data;
+    if (!raw) return;
+
+    const { prods, batchesData, cats } = raw;
+    setBatchesState(batchesData);
+    const catNames = new Map(cats.map((c) => [c.id, c.name]));
+    const mapped: PosCatalogProduct[] = prods.map((p) => {
+      const { sellingValue, listValue, showCompare } = resolvePosCatalogPricing(
+        p,
+        batchesData,
+        p.id,
+      );
+      return {
+        id: p.id,
+        sku: (p.sku ?? "").trim() || p.id.slice(0, 8),
+        name: p.name,
+        meta:
+          [p.genericName, p.strength, p.unit].filter(Boolean).join(" • ") ||
+          "Catalog item",
+        category:
+          (p.categoryId && catNames.get(p.categoryId)) || "Uncategorized",
+        price: formatMoney(sellingValue),
+        priceValue: sellingValue,
+        listPriceValue: showCompare ? listValue : undefined,
+        showCompare,
+        stock: "in" as const,
+        unitType: "PC" as UnitType,
+      };
+    });
+    if (mapped.length > 0) {
+      setCatalogProducts(mapped);
+      const uc = [...new Set(mapped.map((m) => m.category))].sort();
+      setCategoryList([ALL_CATEGORIES_LABEL, ...uc]);
+    } else {
+      setCatalogProducts([]);
+      setCategoryList([ALL_CATEGORIES_LABEL]);
+    }
+  }, [tenantSlug, catalogQuery.data, catalogQuery.isError]);
 
   const addProductFromApi = React.useCallback(
     (p: {

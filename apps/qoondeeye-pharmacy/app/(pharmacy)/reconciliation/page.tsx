@@ -3,6 +3,12 @@
 import Link from "next/link";
 import * as React from "react";
 import {
+  keepPreviousData,
+  useMutation,
+  useQuery,
+  useQueryClient,
+} from "@tanstack/react-query";
+import {
   AlertTriangle,
   BookOpen,
   CheckCircle2,
@@ -47,6 +53,7 @@ import {
   getLatestReconciliationRun,
   getReconciliationLogs,
   runFullReconciliation,
+  type LogsResponse,
   type ReconciliationLogItem,
   type ReconciliationRunSummary,
 } from "@/lib/services/reconciliation";
@@ -56,6 +63,9 @@ import {
   repairTransferJournalLinks,
 } from "@/lib/services/transfer-repair";
 import { useReportBranchQuery } from "@/hooks/use-branch-for-reports";
+import { getBranchQueryKeyFacet } from "@/lib/query-branch-key";
+
+const LOG_PAGE_SIZE = 50;
 
 function formatDateTime(value: string | null | undefined): string {
   if (!value) return "—";
@@ -132,25 +142,67 @@ function TransferRepairMenu({
   tenantSlug,
   busy,
   onBusy,
-  onDone,
   onRepairError,
 }: {
   row: ReconciliationLogItem;
   tenantSlug: string;
   busy: boolean;
   onBusy: (id: string | null) => void;
-  onDone: () => void;
   onRepairError: (message: string | null) => void;
 }) {
+  const queryClient = useQueryClient();
+
+  const repairMutation = useMutation({
+    mutationFn: async (fn: () => Promise<unknown>) => {
+      await fn();
+    },
+    onMutate: async () => {
+      await queryClient.cancelQueries({ queryKey: ["erp", "reconciliation"] });
+      const snapshots = queryClient.getQueriesData({
+        queryKey: ["erp", "reconciliation"],
+      });
+      queryClient.setQueriesData(
+        { queryKey: ["erp", "reconciliation"], exact: false },
+        (old: unknown) => {
+          if (!old || typeof old !== "object") return old;
+          const o = old as {
+            logRes?: LogsResponse;
+            latest?: unknown;
+          };
+          if (!o.logRes?.items) return old;
+          const nextItems = o.logRes.items.filter((it) => it.id !== row.id);
+          return {
+            ...o,
+            logRes: {
+              ...o.logRes,
+              items: nextItems,
+              total: Math.max(0, o.logRes.total - 1),
+            },
+          };
+        },
+      );
+      return { snapshots };
+    },
+    onError: (err, _fn, ctx) => {
+      if (ctx?.snapshots) {
+        for (const [key, data] of ctx.snapshots) {
+          queryClient.setQueryData(key, data);
+        }
+      }
+      onRepairError(err instanceof Error ? err.message : "Repair failed");
+    },
+    onSuccess: () => {
+      onRepairError(null);
+      void queryClient.invalidateQueries({ queryKey: ["erp", "reconciliation"] });
+    },
+  });
+
   const transferId = row.entityId?.trim();
   if (!transferId) return <span className="text-muted-foreground">—</span>;
 
   const transferName = entityLabel(row);
 
-  const run = async (
-    label: string,
-    fn: () => Promise<unknown>,
-  ): Promise<void> => {
+  const run = (label: string, fn: () => Promise<unknown>): void => {
     if (
       !window.confirm(
         `${label} for “${transferName}”: this updates tenant data. Continue?`,
@@ -159,15 +211,11 @@ function TransferRepairMenu({
       return;
     }
     onBusy(transferId);
-    onRepairError(null);
-    try {
-      await fn();
-      await onDone();
-    } catch (e) {
-      onRepairError(e instanceof Error ? e.message : "Repair failed");
-    } finally {
-      onBusy(null);
-    }
+    repairMutation.mutate(fn, {
+      onSettled: () => {
+        onBusy(null);
+      },
+    });
   };
 
   return (
@@ -178,7 +226,7 @@ function TransferRepairMenu({
           variant="outline"
           size="sm"
           className="h-8 gap-1 px-2"
-          disabled={busy}
+          disabled={busy || repairMutation.isPending}
         >
           {busy ? (
             <Loader2 className="h-3.5 w-3.5 animate-spin" />
@@ -192,7 +240,7 @@ function TransferRepairMenu({
         <DropdownMenuItem
           onSelect={(e) => {
             e.preventDefault();
-            void run("Link orphan journals", () =>
+            run("Link orphan journals", () =>
               repairTransferJournalLinks(tenantSlug, transferId),
             );
           }}
@@ -202,7 +250,7 @@ function TransferRepairMenu({
         <DropdownMenuItem
           onSelect={(e) => {
             e.preventDefault();
-            void run("Sync approval from replay", () =>
+            run("Sync approval from replay", () =>
               repairTransferApprovalFromReplay(tenantSlug, transferId),
             );
           }}
@@ -212,7 +260,7 @@ function TransferRepairMenu({
         <DropdownMenuItem
           onSelect={(e) => {
             e.preventDefault();
-            void run("Recreate missing journals", () =>
+            run("Recreate missing journals", () =>
               recreateMissingTransferJournals(tenantSlug, transferId),
             );
           }}
@@ -327,21 +375,17 @@ function RelatedLink({ row }: { row: ReconciliationLogItem }) {
 }
 
 export default function ReconciliationPage() {
+  const queryClient = useQueryClient();
   const { branchId, aggregateAll } = useReportBranchQuery();
   const [tenantSlug, setTenantSlug] = React.useState<string | null>(null);
   const [user, setUser] = React.useState<StoredUser | null>(null);
-  const [latestSummary, setLatestSummary] =
-    React.useState<ReconciliationRunSummary | null>(null);
-  const [lastFinishedAt, setLastFinishedAt] = React.useState<string | null>(
-    null,
+  const [branchFacet, setBranchFacet] = React.useState(() =>
+    typeof window !== "undefined" ? getBranchQueryKeyFacet() : "",
   );
-  const [logs, setLogs] = React.useState<ReconciliationLogItem[]>([]);
-  const [totalLogs, setTotalLogs] = React.useState(0);
   const [severityFilter, setSeverityFilter] = React.useState<string>("all");
   const [typeFilter, setTypeFilter] = React.useState<string>("all");
-  const [loading, setLoading] = React.useState(true);
+  const [logsPage, setLogsPage] = React.useState(1);
   const [running, setRunning] = React.useState(false);
-  const [error, setError] = React.useState<string | null>(null);
   const [repairBusyTransferId, setRepairBusyTransferId] = React.useState<
     string | null
   >(null);
@@ -353,57 +397,101 @@ export default function ReconciliationPage() {
     setTenantSlug(u?.tenantSlug?.trim() || null);
   }, []);
 
-  const load = React.useCallback(async () => {
-    if (!tenantSlug) return;
-    if (!branchId) {
-      setLatestSummary(null);
-      setLastFinishedAt(null);
-      setLogs([]);
-      setTotalLogs(0);
-      setLoading(false);
-      return;
-    }
-    setLoading(true);
-    setError(null);
-    try {
-      const [latest, logRes] = await Promise.all([
-        getLatestReconciliationRun(tenantSlug),
-        getReconciliationLogs(tenantSlug, {
-          severity: severityFilter === "all" ? undefined : severityFilter,
-          type: typeFilter === "all" ? undefined : typeFilter,
-          limit: 100,
-          offset: 0,
-        }),
-      ]);
-      const s = latest.run?.summary as ReconciliationRunSummary | null;
-      setLatestSummary(s ?? null);
-      setLastFinishedAt(
-        latest.run?.finishedAt ?? latest.run?.startedAt ?? null,
+  React.useEffect(() => {
+    const sync = () => setBranchFacet(getBranchQueryKeyFacet());
+    window.addEventListener("storage", sync);
+    window.addEventListener("activeBranchChanged", sync as EventListener);
+    return () => {
+      window.removeEventListener("storage", sync);
+      window.removeEventListener(
+        "activeBranchChanged",
+        sync as EventListener,
       );
-      setLogs(logRes.items);
-      setTotalLogs(logRes.total);
-    } catch (e) {
-      setError(
-        e instanceof Error ? e.message : "Failed to load reconciliation",
-      );
-    } finally {
-      setLoading(false);
-    }
-  }, [tenantSlug, branchId, severityFilter, typeFilter]);
+    };
+  }, []);
 
   React.useEffect(() => {
-    void load();
-  }, [load]);
+    setLogsPage(1);
+  }, [severityFilter, typeFilter]);
+
+  const reconciliationQuery = useQuery({
+    queryKey: [
+      "erp",
+      "reconciliation",
+      tenantSlug,
+      branchId,
+      branchFacet,
+      aggregateAll,
+      severityFilter,
+      typeFilter,
+      logsPage,
+      LOG_PAGE_SIZE,
+    ],
+    enabled: Boolean(tenantSlug && branchId),
+    placeholderData: keepPreviousData,
+    queryFn: async ({ signal }) => {
+      const slug = tenantSlug!;
+      const [latest, logRes] = await Promise.all([
+        getLatestReconciliationRun(slug, { signal }),
+        getReconciliationLogs(
+          slug,
+          {
+            severity: severityFilter === "all" ? undefined : severityFilter,
+            type: typeFilter === "all" ? undefined : typeFilter,
+            limit: LOG_PAGE_SIZE,
+            page: logsPage,
+          },
+          { signal },
+        ),
+      ]);
+      return { latest, logRes };
+    },
+  });
+
+  const invalidateReconciliation = React.useCallback(() => {
+    void queryClient.invalidateQueries({ queryKey: ["erp", "reconciliation"] });
+  }, [queryClient]);
+
+  const runMutation = useMutation({
+    mutationFn: () => runFullReconciliation(tenantSlug!),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ["erp", "reconciliation"] });
+    },
+  });
+
+  const latestSummary =
+    (reconciliationQuery.data?.latest.run?.summary as
+      | ReconciliationRunSummary
+      | null) ?? null;
+  const lastFinishedAt =
+    reconciliationQuery.data?.latest.run?.finishedAt ??
+    reconciliationQuery.data?.latest.run?.startedAt ??
+    null;
+  const logs = reconciliationQuery.data?.logRes.items ?? [];
+  const totalLogs = reconciliationQuery.data?.logRes.total ?? 0;
+  const logTotalPages = reconciliationQuery.data?.logRes.totalPages ?? 1;
+  const loading =
+    Boolean(tenantSlug && branchId) &&
+    (reconciliationQuery.isPending || reconciliationQuery.isFetching);
+  const error = reconciliationQuery.error
+    ? reconciliationQuery.error instanceof Error
+      ? reconciliationQuery.error.message
+      : "Failed to load reconciliation"
+    : null;
+
+  const runError = runMutation.error
+    ? runMutation.error instanceof Error
+      ? runMutation.error.message
+      : "Run failed"
+    : null;
+
+  const displayError = error ?? runError;
 
   const onRun = async () => {
     if (!tenantSlug || !branchId) return;
     setRunning(true);
-    setError(null);
     try {
-      await runFullReconciliation(tenantSlug);
-      await load();
-    } catch (e) {
-      setError(e instanceof Error ? e.message : "Run failed");
+      await runMutation.mutateAsync();
     } finally {
       setRunning(false);
     }
@@ -476,10 +564,10 @@ export default function ReconciliationPage() {
         ) : null}
       </div>
 
-      {error ? (
+      {displayError ? (
         <Card className="border-destructive/40">
           <CardContent className="p-4 text-sm text-destructive">
-            {error}
+            {displayError}
           </CardContent>
         </Card>
       ) : null}
@@ -627,7 +715,7 @@ export default function ReconciliationPage() {
               variant="outline"
               size="sm"
               disabled={!branchId}
-              onClick={() => void load()}
+              onClick={() => void invalidateReconciliation()}
             >
               Refresh
             </Button>
@@ -694,7 +782,6 @@ export default function ReconciliationPage() {
                               tenantSlug={tenantSlug}
                               busy={repairBusyTransferId === row.entityId?.trim()}
                               onBusy={setRepairBusyTransferId}
-                              onDone={load}
                               onRepairError={(msg) => setRepairError(msg)}
                             />
                           ) : (
@@ -708,10 +795,35 @@ export default function ReconciliationPage() {
               </TableBody>
             </Table>
           )}
-          {!loading && totalLogs > logs.length ? (
-            <p className="mt-2 text-xs text-muted-foreground">
-              Showing {logs.length} of {totalLogs} matching rows (limit 100).
-            </p>
+          {!loading && totalLogs > 0 ? (
+            <div className="mt-4 flex flex-wrap items-center justify-between gap-2 text-xs text-muted-foreground">
+              <span>
+                Page {reconciliationQuery.data?.logRes.page ?? logsPage} of{" "}
+                {logTotalPages} — {totalLogs.toLocaleString()} rows total
+              </span>
+              <div className="flex gap-2">
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  disabled={logsPage <= 1 || loading}
+                  onClick={() => setLogsPage((p) => Math.max(1, p - 1))}
+                >
+                  Previous
+                </Button>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  disabled={logsPage >= logTotalPages || loading}
+                  onClick={() =>
+                    setLogsPage((p) => Math.min(logTotalPages, p + 1))
+                  }
+                >
+                  Next
+                </Button>
+              </div>
+            </div>
           ) : null}
         </CardContent>
       </Card>

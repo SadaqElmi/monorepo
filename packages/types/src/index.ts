@@ -264,3 +264,12 @@ export type PosHeldOrder = {
   /** Whether the synthetic VAT line should be shown when recalling this held order. */
   showVatLine?: boolean;
 };
+
+/** Nest list endpoints return this shape when the `page` query parameter is present. */
+export type PagedList<T> = {
+  items: T[];
+  total: number;
+  page: number;
+  limit: number;
+  totalPages: number;
+};

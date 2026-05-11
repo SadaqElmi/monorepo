@@ -1,3 +1,4 @@
+import type { PagedList } from "@repo/types";
 import { getClientBranchIdHeaderForApi } from "@/lib/branch-access";
 import { sanitizeBranchIdForQuery } from "@/lib/branch-scope";
 
@@ -57,7 +58,11 @@ export function invalidateReportCacheForBranch(branchId?: string): void {
   invalidateReportCache(computeReportScopeHash(undefined, true, true));
 }
 
-async function fetchReportGet<T>(tenantSlug: string, url: string): Promise<T> {
+async function fetchReportGet<T>(
+  tenantSlug: string,
+  url: string,
+  init?: Pick<RequestInit, "signal">,
+): Promise<T> {
   const cacheKey = `${tenantSlug}|${url}`;
   const now = Date.now();
   const hit = reportGetCache.get(cacheKey);
@@ -67,6 +72,7 @@ async function fetchReportGet<T>(tenantSlug: string, url: string): Promise<T> {
   const payload = await jsonFetch<T>(url, {
     method: "GET",
     headers: { "X-Tenant": tenantSlug } as JsonHeaders,
+    signal: init?.signal,
   });
   reportGetCache.set(cacheKey, {
     value: payload,
@@ -1141,12 +1147,14 @@ export async function getDashboardSeries(
   to: string,
   branchId?: string,
   aggregateAll?: boolean,
+  init?: Pick<RequestInit, "signal">,
 ): Promise<DashboardSeriesPoint[]> {
   const q = new URLSearchParams({ from, to });
   appendReportBranchQuery(q, branchId, aggregateAll);
   return fetchReportGet<DashboardSeriesPoint[]>(
     tenantSlug,
     `${REPORTS_PREFIX}/dashboard-series?${q}`,
+    init,
   );
 }
 
@@ -1276,6 +1284,7 @@ export async function getTopProducts(
   limit = 10,
   sort: "revenue" | "quantity" = "revenue",
   aggregateAll?: boolean,
+  init?: Pick<RequestInit, "signal">,
 ): Promise<TopProductsResult> {
   const q = new URLSearchParams({
     from,
@@ -1287,6 +1296,7 @@ export async function getTopProducts(
   return fetchReportGet<TopProductsResult>(
     tenantSlug,
     `${REPORTS_PREFIX}/top-products?${q}`,
+    init,
   );
 }
 
@@ -1473,6 +1483,7 @@ export async function getAuditTrail(
   tenantSlug: string,
   branchId: string,
   limit = 8,
+  init?: Pick<RequestInit, "signal">,
 ): Promise<AuditLogRow[]> {
   const q = new URLSearchParams({
     branchId,
@@ -1483,6 +1494,29 @@ export async function getAuditTrail(
     {
       method: "GET",
       headers: { "X-Tenant": tenantSlug } as JsonHeaders,
+      signal: init?.signal,
+    },
+  );
+}
+
+export async function getAuditTrailPaged(
+  tenantSlug: string,
+  branchId: string,
+  page: number,
+  limit: number,
+  init?: Pick<RequestInit, "signal">,
+): Promise<PagedList<AuditLogRow>> {
+  const q = new URLSearchParams({
+    branchId,
+    page: String(Math.max(1, page)),
+    limit: String(Math.min(500, Math.max(1, limit))),
+  });
+  return jsonFetch<PagedList<AuditLogRow>>(
+    `${ACCOUNTING_PREFIX}/audit-trail?${q}`,
+    {
+      method: "GET",
+      headers: { "X-Tenant": tenantSlug } as JsonHeaders,
+      signal: init?.signal,
     },
   );
 }

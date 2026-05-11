@@ -7,6 +7,7 @@
     "@radix-ui/react-dialog": "^1.1.15",
     "@repo/types": "workspace:*",
     "@repo/utils": "workspace:*",
+    "@tanstack/react-query": "^5.100.9",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
     "cmdk": "^1.1.1",

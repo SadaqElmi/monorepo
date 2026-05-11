@@ -17,6 +17,7 @@ import {
   type ReconciliationLogEnrichedItem,
 } from './reconciliation.service';
 import { RECONCILIATION_LOG_TYPES } from './reconciliation.types';
+import { parsePagedQueryParam } from '../common/pagination.util';
 
 function parseCookies(
   cookieHeader: string | undefined,
@@ -106,11 +107,20 @@ export class ReconciliationController {
     @Query('type') type?: string,
     @Query('limit') limitRaw?: string,
     @Query('offset') offsetRaw?: string,
+    @Query('page') pageRaw?: string,
   ) {
     this.ensureTenant();
     const tenant = this.tenantContext.getTenant()!;
-    const limit = Math.min(200, Math.max(1, Number(limitRaw ?? 50) || 50));
-    const offset = Math.max(0, Number(offsetRaw ?? 0) || 0);
+    const fromPage = parsePagedQueryParam(pageRaw, limitRaw, {
+      defaultLimit: 50,
+      maxLimit: 200,
+    });
+    const limit = fromPage
+      ? fromPage.limit
+      : Math.min(200, Math.max(1, Number(limitRaw ?? 50) || 50));
+    const offset = fromPage
+      ? fromPage.skip
+      : Math.max(0, Number(offsetRaw ?? 0) || 0);
 
     const severityNorm =
       severity &&
@@ -135,6 +145,11 @@ export class ReconciliationController {
         allowedBranchIds.length > 0 ? allowedBranchIds : undefined,
     });
 
+    const totalPages = Math.max(1, Math.ceil(total / limit) || 1);
+    const page =
+      fromPage?.page ??
+      (limit > 0 ? Math.floor(offset / limit) + 1 : 1);
+
     return {
       items: items.map((row: ReconciliationLogEnrichedItem) => ({
         id: row.id,
@@ -151,6 +166,8 @@ export class ReconciliationController {
       total,
       limit,
       offset,
+      page,
+      totalPages,
     };
   }
 

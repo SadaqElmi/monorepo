@@ -1,6 +1,7 @@
 "use client";
 
 import * as React from "react";
+import { keepPreviousData, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Loader2 } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
@@ -28,19 +29,22 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { getStoredUser } from "@/lib/auth-client";
-import { getAuditTrail, type AuditLogRow } from "@/lib/services/accounting";
+import { getBranchQueryKeyFacet } from "@/lib/query-branch-key";
+import { getAuditTrailPaged } from "@/lib/services/accounting";
 
 const LIMIT_OPTIONS = [50, 100, 200, 500] as const;
 
 export default function AuditTrailPage() {
+  const queryClient = useQueryClient();
   const [tenantSlug] = React.useState(
     () => getStoredUser()?.tenantSlug ?? "pharmacy1",
   );
   const [branchId, setBranchId] = React.useState<string | null>(null);
-  const [limit, setLimit] = React.useState<number>(200);
-  const [rows, setRows] = React.useState<AuditLogRow[]>([]);
-  const [loading, setLoading] = React.useState(false);
-  const [err, setErr] = React.useState<string | null>(null);
+  const [branchFacet, setBranchFacet] = React.useState(() =>
+    typeof window !== "undefined" ? getBranchQueryKeyFacet() : "",
+  );
+  const [limit, setLimit] = React.useState<number>(50);
+  const [page, setPage] = React.useState(1);
 
   const syncBranch = React.useCallback(() => {
     try {
@@ -66,27 +70,52 @@ export default function AuditTrailPage() {
     };
   }, [syncBranch]);
 
-  const load = React.useCallback(async () => {
-    if (!branchId) {
-      setRows([]);
-      return;
-    }
-    setLoading(true);
-    setErr(null);
-    try {
-      const data = await getAuditTrail(tenantSlug, branchId, limit);
-      setRows(data);
-    } catch (e: unknown) {
-      setErr(e instanceof Error ? e.message : "Failed to load audit trail");
-      setRows([]);
-    } finally {
-      setLoading(false);
-    }
-  }, [tenantSlug, branchId, limit]);
+  React.useEffect(() => {
+    setBranchFacet(getBranchQueryKeyFacet());
+  }, [branchId]);
 
   React.useEffect(() => {
-    void load();
-  }, [load]);
+    const sync = () => setBranchFacet(getBranchQueryKeyFacet());
+    window.addEventListener("storage", sync);
+    window.addEventListener("activeBranchChanged", sync as EventListener);
+    return () => {
+      window.removeEventListener("storage", sync);
+      window.removeEventListener(
+        "activeBranchChanged",
+        sync as EventListener,
+      );
+    };
+  }, []);
+
+  React.useEffect(() => {
+    setPage(1);
+  }, [limit, branchId]);
+
+  const auditQuery = useQuery({
+    queryKey: [
+      "erp",
+      "audit-trail",
+      tenantSlug,
+      branchId,
+      branchFacet,
+      page,
+      limit,
+    ],
+    enabled: Boolean(branchId),
+    placeholderData: keepPreviousData,
+    queryFn: ({ signal }) =>
+      getAuditTrailPaged(tenantSlug, branchId!, page, limit, { signal }),
+  });
+
+  const rows = auditQuery.data?.items ?? [];
+  const totalPages = auditQuery.data?.totalPages ?? 1;
+  const totalRows = auditQuery.data?.total ?? 0;
+  const loading = auditQuery.isFetching;
+  const err = auditQuery.error
+    ? auditQuery.error instanceof Error
+      ? auditQuery.error.message
+      : "Failed to load audit trail"
+    : null;
 
   return (
     <div className="space-y-4">
@@ -112,7 +141,7 @@ export default function AuditTrailPage() {
         <CardContent className="space-y-4">
           <div className="flex flex-wrap items-end gap-3">
             <div className="grid gap-2">
-              <Label>Rows</Label>
+              <Label>Page size</Label>
               <Select
                 value={String(limit)}
                 onValueChange={(v) => setLimit(Number(v))}
@@ -133,13 +162,40 @@ export default function AuditTrailPage() {
               type="button"
               variant="secondary"
               disabled={loading || !branchId}
-              onClick={() => void load()}
+              onClick={() =>
+                void queryClient.invalidateQueries({
+                  queryKey: ["erp", "audit-trail"],
+                })
+              }
             >
               {loading ? (
                 <Loader2 className="mr-2 h-4 w-4 animate-spin" />
               ) : null}
               Refresh
             </Button>
+            <div className="flex flex-wrap items-center gap-2 text-sm text-muted-foreground">
+              <span>
+                Page {page} of {totalPages} ({totalRows.toLocaleString()} rows)
+              </span>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                disabled={loading || page <= 1}
+                onClick={() => setPage((p) => Math.max(1, p - 1))}
+              >
+                Previous
+              </Button>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                disabled={loading || page >= totalPages}
+                onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+              >
+                Next
+              </Button>
+            </div>
           </div>
 
           {loading && !rows.length ? (

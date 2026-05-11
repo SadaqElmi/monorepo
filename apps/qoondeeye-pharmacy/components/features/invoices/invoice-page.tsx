@@ -67,6 +67,7 @@ import {
   getBranches,
   getProducts,
   getSales,
+  getSalesPaged,
   createSale,
   updateSale,
   deleteSale,
@@ -91,6 +92,9 @@ export default function CustomerInvoicesPage() {
   };
 
   const [salesRows, setSalesRows] = React.useState<SalesRow[]>([]);
+  /** Full list mapped rows for dashboard stats (separate from paged table). */
+  const [statsSalesRows, setStatsSalesRows] = React.useState<SalesRow[]>([]);
+  const [saleTotalCount, setSaleTotalCount] = React.useState(0);
 
   const [tenantSlug] = React.useState(
     () => getStoredUser()?.tenantSlug ?? "pharmacy1",
@@ -209,7 +213,8 @@ export default function CustomerInvoicesPage() {
     setLoading(true);
     setError(null);
 
-    const [salesData, branchesData, productsData] = await Promise.all([
+    const [pageRes, salesAll, branchesData, productsData] = await Promise.all([
+      getSalesPaged(tenantSlug, page, pageSize),
       getSales(tenantSlug),
       getBranches(tenantSlug),
       getProducts(tenantSlug),
@@ -217,8 +222,10 @@ export default function CustomerInvoicesPage() {
 
     setBranches(branchesData);
     setProducts(productsData);
-    setSalesRows(mapSalesRows(salesData, branchesData));
-  }, [tenantSlug, mapSalesRows]);
+    setSaleTotalCount(pageRes.total);
+    setSalesRows(mapSalesRows(pageRes.items, branchesData));
+    setStatsSalesRows(mapSalesRows(salesAll, branchesData));
+  }, [tenantSlug, mapSalesRows, page, pageSize]);
 
   React.useEffect(() => {
     if (!tenantSlug) return;
@@ -272,10 +279,7 @@ export default function CustomerInvoicesPage() {
     });
   }, [salesRows, query]);
 
-  const totalPages = Math.max(
-    1,
-    Math.ceil(filteredSalesRows.length / pageSize),
-  );
+  const totalPages = Math.max(1, Math.ceil(saleTotalCount / pageSize));
 
   React.useEffect(() => {
     setPage(1);
@@ -285,14 +289,11 @@ export default function CustomerInvoicesPage() {
     setPage((p) => Math.min(p, totalPages));
   }, [totalPages]);
 
-  const pagedSalesRows = React.useMemo(() => {
-    const start = (page - 1) * pageSize;
-    return filteredSalesRows.slice(start, start + pageSize);
-  }, [filteredSalesRows, page]);
+  const pagedSalesRows = filteredSalesRows;
 
   const showingStart =
-    filteredSalesRows.length === 0 ? 0 : (page - 1) * pageSize + 1;
-  const showingEnd = Math.min(page * pageSize, filteredSalesRows.length);
+    saleTotalCount === 0 ? 0 : (page - 1) * pageSize + 1;
+  const showingEnd = Math.min(page * pageSize, saleTotalCount);
 
   const dashboardStats = React.useMemo(() => {
     const now = new Date();
@@ -309,7 +310,7 @@ export default function CustomerInvoicesPage() {
       now.getDate() + 1,
     );
 
-    const rowsWithDate = salesRows
+    const rowsWithDate = statsSalesRows
       .map((row) => ({
         row,
         date: row.saleDateIso ? new Date(row.saleDateIso) : null,
@@ -336,12 +337,12 @@ export default function CustomerInvoicesPage() {
       0,
     );
     const averageTransaction =
-      salesRows.length > 0
-        ? salesRows.reduce((sum, row) => sum + row.totalAmount, 0) /
-          salesRows.length
+      statsSalesRows.length > 0
+        ? statsSalesRows.reduce((sum, row) => sum + row.totalAmount, 0) /
+          statsSalesRows.length
         : 0;
 
-    const topBranchEntry = salesRows.reduce<Record<string, number>>(
+    const topBranchEntry = statsSalesRows.reduce<Record<string, number>>(
       (acc, row) => {
         const key = row.branchId || "Unknown";
         acc[key] = (acc[key] ?? 0) + row.totalAmount;
@@ -359,10 +360,10 @@ export default function CustomerInvoicesPage() {
       averageTransaction,
       topBranch,
     };
-  }, [salesRows]);
+  }, [statsSalesRows]);
 
   const branchRevenueDistribution = React.useMemo(() => {
-    const totalsByBranch = salesRows.reduce<Record<string, number>>(
+    const totalsByBranch = statsSalesRows.reduce<Record<string, number>>(
       (acc, row) => {
         const key = row.branchId || "Unknown";
         acc[key] = (acc[key] ?? 0) + row.totalAmount;
@@ -383,7 +384,7 @@ export default function CustomerInvoicesPage() {
       }))
       .sort((a, b) => b.total - a.total)
       .slice(0, 3);
-  }, [salesRows]);
+  }, [statsSalesRows]);
 
   const refreshData = React.useCallback(async () => {
     if (!tenantSlug) return;
@@ -779,8 +780,8 @@ export default function CustomerInvoicesPage() {
 
           <div className="flex items-center justify-between px-6 py-4 border-t bg-muted/30">
             <p className="text-xs font-medium text-muted-foreground tracking-tight">
-              Showing {showingStart} to {showingEnd} of{" "}
-              {filteredSalesRows.length} sales
+              Showing {showingStart} to {showingEnd} of {saleTotalCount} sales
+              {query.trim() ? " (search filters this page only)" : ""}
             </p>
             <div className="flex items-center gap-1">
               <Button

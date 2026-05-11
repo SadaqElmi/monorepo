@@ -17,6 +17,7 @@ import { CreatePatientLoanDto } from './dto/create-patient-loan.dto';
 import { UpdatePatientLoanDto } from './dto/update-patient-loan.dto';
 import { CreatePatientLoanPaymentDto } from './dto/create-patient-loan-payment.dto';
 import type { Request } from 'express';
+import { parsePagedQueryParam } from '../common/pagination.util';
 
 @Controller('patient-loans')
 export class PatientLoansController {
@@ -34,11 +35,26 @@ export class PatientLoansController {
   }
 
   @Get()
-  findAll(@Query('status') status: string | undefined, @Req() req: Request) {
+  findAll(
+    @Query('status') status: string | undefined,
+    @Req() req: Request,
+    @Query('page') page?: string,
+    @Query('limit') limit?: string,
+  ) {
     this.ensureTenant();
     const allowedBranchIds = req.allowedBranchIds ?? [];
     if (!allowedBranchIds.length) {
       throw new ForbiddenException('Access denied to this branch');
+    }
+    const paged = parsePagedQueryParam(page, limit);
+    if (paged) {
+      return this.patientLoansService.findAllPaged(
+        this.tenantContext.getSchemaName()!,
+        status,
+        allowedBranchIds,
+        paged.skip,
+        paged.limit,
+      );
     }
     return this.patientLoansService.findAll(
       this.tenantContext.getSchemaName()!,

@@ -4,8 +4,8 @@
  */
 
 export const getBaseUrl = () =>
-  process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:5555";
-
+  process.env.NEXT_PUBLIC_API_URL_LOCAL ?? "http://localhost:5555";
+//process.env.NEXT_PUBLIC_API_URL ?? "https://api.qoondeeye.online";
 export const API_BASE = getBaseUrl();
 
 /** Join API host with a path segment (no leading/trailing slashes on segment). */

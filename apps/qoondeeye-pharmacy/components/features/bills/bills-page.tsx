@@ -44,7 +44,7 @@ import {
   getBranches,
   getInventoryStockByProduct,
   getProductsCatalog,
-  getPurchases,
+  getPurchasesPaged,
   getSuppliers,
   createPurchase,
   updatePurchase,
@@ -111,6 +111,7 @@ export default function PurchasesPage() {
   );
 
   const [purchases, setPurchases] = React.useState<Purchase[]>([]);
+  const [purchaseTotalCount, setPurchaseTotalCount] = React.useState(0);
   const [suppliers, setSuppliers] = React.useState<Supplier[]>([]);
   const [branches, setBranches] = React.useState<Branch[]>([]);
   const [products, setProducts] = React.useState<Product[]>([]);
@@ -166,16 +167,17 @@ export default function PurchasesPage() {
         setLoading(true);
         setError(null);
 
-        const [purchasesData, suppliersData, branchesData, productsData] =
+        const [pageRes, suppliersData, branchesData, productsData] =
           await Promise.all([
-            getPurchases(tenantSlug),
+            getPurchasesPaged(tenantSlug, page, pageSize),
             getSuppliers(tenantSlug),
             getBranches(tenantSlug),
             getProductsCatalog(tenantSlug),
           ]);
 
         if (cancelled) return;
-        setPurchases(purchasesData);
+        setPurchases(pageRes.items);
+        setPurchaseTotalCount(pageRes.total);
         setSuppliers(suppliersData);
         setBranches(branchesData);
         setProducts(productsData);
@@ -194,7 +196,7 @@ export default function PurchasesPage() {
     return () => {
       cancelled = true;
     };
-  }, [tenantSlug, branchKey]);
+  }, [tenantSlug, branchKey, page, pageSize]);
 
   const supplierMap = React.useMemo(
     () => new Map(suppliers.map((s) => [s.id, s])),
@@ -223,10 +225,7 @@ export default function PurchasesPage() {
     });
   }, [purchases, query, supplierMap, branchMap]);
 
-  const totalPages = Math.max(
-    1,
-    Math.ceil(filteredPurchases.length / pageSize),
-  );
+  const totalPages = Math.max(1, Math.ceil(purchaseTotalCount / pageSize));
 
   React.useEffect(() => {
     setPage(1);
@@ -236,14 +235,11 @@ export default function PurchasesPage() {
     setPage((p) => Math.min(p, totalPages));
   }, [totalPages]);
 
-  const pagedPurchases = React.useMemo(() => {
-    const start = (page - 1) * pageSize;
-    return filteredPurchases.slice(start, start + pageSize);
-  }, [filteredPurchases, page]);
+  const pagedPurchases = filteredPurchases;
 
   const showingStart =
-    filteredPurchases.length === 0 ? 0 : (page - 1) * pageSize + 1;
-  const showingEnd = Math.min(page * pageSize, filteredPurchases.length);
+    purchaseTotalCount === 0 ? 0 : (page - 1) * pageSize + 1;
+  const showingEnd = Math.min(page * pageSize, purchaseTotalCount);
 
   const syncBranchToSession = React.useCallback((branchId: string) => {
     if (!branchId) return;
@@ -504,7 +500,7 @@ export default function PurchasesPage() {
                 Total Purchases
               </p>
               <p className="text-2xl font-bold mt-1 text-primary">
-                {purchases.length.toLocaleString()}
+                {purchaseTotalCount.toLocaleString()}
               </p>
               <p className="mt-2 text-xs text-muted-foreground">
                 All purchase records
@@ -686,9 +682,10 @@ export default function PurchasesPage() {
                     Showing <span className="font-medium">{showingStart}</span>{" "}
                     to <span className="font-medium">{showingEnd}</span> of{" "}
                     <span className="font-medium">
-                      {filteredPurchases.length}
+                      {purchaseTotalCount}
                     </span>{" "}
                     purchases
+                    {query.trim() ? " (search filters this page only)" : ""}
                   </p>
                   <div className="flex items-center gap-2">
                     <Button

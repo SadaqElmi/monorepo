@@ -26,6 +26,14 @@ function readAllBranchesSelected(): boolean {
   }
 }
 
+export function getReportBranchSnapshot(): {
+  branchId: string | undefined;
+  aggregateAll: boolean;
+  branchName?: string;
+} {
+  return computeReportBranch();
+}
+
 function computeReportBranch(): {
   branchId: string | undefined;
   aggregateAll: boolean;

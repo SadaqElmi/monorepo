@@ -65,7 +65,16 @@ export class DomainsService {
 
     const record = await this.prisma.domain.findUnique({
       where: { domain: normalized },
-      include: { tenant: true },
+      select: {
+        tenant: {
+          select: {
+            id: true,
+            name: true,
+            schemaName: true,
+            status: true,
+          },
+        },
+      },
     });
 
     if (!record?.tenant) return null;

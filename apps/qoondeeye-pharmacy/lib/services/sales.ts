@@ -2,6 +2,7 @@ import { SALES_PREFIX } from "./endpoints";
 import { type JsonHeaders, jsonFetch } from "./http";
 import type {
   CreateSaleInput,
+  PagedList,
   Sale,
   SaleItem,
   UpdateSaleInput,
@@ -9,10 +10,32 @@ import type {
 
 export type { Sale, SaleItem, CreateSaleInput, UpdateSaleInput };
 
-export async function getSales(tenantSlug: string): Promise<Sale[]> {
+export async function getSales(
+  tenantSlug: string,
+  init?: Pick<RequestInit, "signal">,
+): Promise<Sale[]> {
   return jsonFetch<Sale[]>(SALES_PREFIX, {
     method: "GET",
     headers: { "X-Tenant": tenantSlug } as JsonHeaders,
+    signal: init?.signal,
+  });
+}
+
+/** Paginated sales (`page` enables server paging). */
+export async function getSalesPaged(
+  tenantSlug: string,
+  page: number,
+  limit: number,
+  init?: Pick<RequestInit, "signal">,
+): Promise<PagedList<Sale>> {
+  const q = new URLSearchParams({
+    page: String(Math.max(1, page)),
+    limit: String(Math.max(1, limit)),
+  });
+  return jsonFetch<PagedList<Sale>>(`${SALES_PREFIX}?${q}`, {
+    method: "GET",
+    headers: { "X-Tenant": tenantSlug } as JsonHeaders,
+    signal: init?.signal,
   });
 }
 

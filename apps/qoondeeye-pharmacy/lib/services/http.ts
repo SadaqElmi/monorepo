@@ -30,6 +30,7 @@ export async function jsonFetch<TResponse>(
     ...init,
     credentials: init?.credentials ?? "include",
     headers: mergedHeaders,
+    signal: init?.signal,
   });
   const data = await res.json().catch(() => ({}));
 

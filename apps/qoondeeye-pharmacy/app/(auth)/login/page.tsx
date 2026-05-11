@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 import { ArrowRight, Eye, EyeOff, Lock, Mail, Stethoscope } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
@@ -11,9 +12,11 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { setAuthToken, type StoredUser } from "@/lib/auth-client";
 import { login } from "@/lib/api";
+import { prefetchDashboardAfterLogin } from "@/lib/erp-query-prefetch";
 
 export default function LoginPage() {
   const router = useRouter();
+  const queryClient = useQueryClient();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
@@ -48,6 +51,10 @@ export default function LoginPage() {
         }
       } catch {
         // ignore
+      }
+      const slug = res.tenantSlug?.trim();
+      if (slug && res.userType !== "system") {
+        void prefetchDashboardAfterLogin(queryClient, slug);
       }
       if (res.userType === "system") {
         router.push("/admin");
