@@ -112,7 +112,8 @@ ALTER TABLE "tenant_template"."SaleReturn" ADD COLUMN     "refund_amount" DECIMA
 ADD COLUMN     "refund_method" VARCHAR(50);
 
 -- AlterTable
-ALTER TABLE "tenant_template"."User" ADD COLUMN     "pin_hash" TEXT;
+ALTER TABLE "tenant_template"."User" ADD COLUMN     "pin_hash" TEXT,
+ADD COLUMN     "staff_id" VARCHAR(120);
 
 -- DropTable
 DROP TABLE "tenant_template"."CashAccount";
