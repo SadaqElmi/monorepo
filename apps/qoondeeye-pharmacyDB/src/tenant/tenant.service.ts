@@ -1746,6 +1746,16 @@ export class TenantService {
     await this.prisma.$executeRawUnsafe(
       `CREATE INDEX IF NOT EXISTS idx_api_idempotency_expires_at ON "${schemaName}"."api_idempotency"(expires_at)`,
     );
+
+    await this.prisma.$executeRawUnsafe(
+      `CREATE INDEX IF NOT EXISTS idx_stock_transfers_from_shipped_at ON "${schemaName}"."stock_transfers"(from_branch_id, shipped_at DESC NULLS LAST)`,
+    );
+    await this.prisma.$executeRawUnsafe(
+      `CREATE INDEX IF NOT EXISTS idx_stock_transfers_to_received_at ON "${schemaName}"."stock_transfers"(to_branch_id, received_at DESC NULLS LAST)`,
+    );
+    await this.prisma.$executeRawUnsafe(
+      `CREATE INDEX IF NOT EXISTS idx_stock_transfers_reversal_timeline ON "${schemaName}"."stock_transfers"(is_reversed, received_at, from_branch_id, to_branch_id, reversed_at DESC NULLS LAST)`,
+    );
   }
 
   /**

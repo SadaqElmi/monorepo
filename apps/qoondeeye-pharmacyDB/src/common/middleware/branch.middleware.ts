@@ -96,7 +96,9 @@ function tenantRequestPath(req: Request): string {
 function isTenantWideReadAllBranchesRoute(fullPath: string): boolean {
   const p = fullPath.replace(/\/+$/, '') || '/';
   return (
-    p === '/api/inventory' || p === '/api/purchases/line-pricing-by-product'
+    p === '/api/inventory' ||
+    p === '/api/inventory/history' ||
+    p === '/api/purchases/line-pricing-by-product'
   );
 }
 

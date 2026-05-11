@@ -15,6 +15,7 @@ export const ROUTES = {
   inventory: {
     products: "/inventory/products",
     stock: "/inventory/stock",
+    history: "/inventory/history",
     batches: "/inventory/batches",
     categories: "/inventory/categories",
     branches: "/inventory/branches",

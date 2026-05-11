@@ -38,6 +38,7 @@ export const ERP_NAV_MODULES: ErpNavModule[] = [
       { label: "Items by location", href: "/items-locations" },
       { label: "Products", href: "/inventory/products" },
       { label: "Stock", href: "/inventory/stock" },
+      { label: "Inventory history", href: "/inventory/history" },
       { label: "Batches", href: "/inventory/batches" },
       { label: "Categories", href: "/inventory/categories" },
       { label: "Branches", href: "/inventory/branches" },
