@@ -38,10 +38,12 @@ import { IdempotencyInterceptor } from './common/interceptors/idempotency.interc
 import { OpsMonitoringService } from './common/services/ops-monitoring.service';
 import { ReconciliationModule } from './reconciliation/reconciliation.module';
 import { PosSessionsModule } from './pos-sessions/pos-sessions.module';
+import { AppCacheModule } from './cache/app-cache.module';
 
 @Module({
   imports: [
     ConfigModule.forRoot({ isGlobal: true }),
+    AppCacheModule,
     ScheduleModule.forRoot(),
     PrismaModule,
     TenantModule,

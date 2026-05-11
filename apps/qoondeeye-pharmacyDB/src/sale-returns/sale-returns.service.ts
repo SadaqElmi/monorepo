@@ -6,6 +6,7 @@ import { TenantService } from '../tenant/tenant.service';
 import { AccountingPostingService } from '../accounting/accounting-posting.service';
 import { AccountingLockDateService } from '../accounting/accounting-lock-date.service';
 import { AuditLogService } from '../accounting/audit-log.service';
+import { CacheInvalidationService } from '../cache/cache-invalidation.service';
 
 export type SaleReturnLineInput = {
   saleItemId: string;
@@ -83,6 +84,7 @@ export class SaleReturnsService {
     private readonly accountingPosting: AccountingPostingService,
     private readonly lockDates: AccountingLockDateService,
     private readonly auditLog: AuditLogService,
+    private readonly cacheInvalidation: CacheInvalidationService,
   ) {}
 
   async findAll(schemaName: string, allowedBranchIds: string[]) {
@@ -241,7 +243,9 @@ export class SaleReturnsService {
     ctx?: SaleReturnMutationContext,
   ) {
     await this.tenantService.applyTenantSchemaPatches(schemaName);
-    return this.prisma.withTenantSchema(schemaName, async (tx) => {
+    const saleReturn = await this.prisma.withTenantSchema(
+      schemaName,
+      async (tx) => {
       await this.lockDates.assertDocumentDateOpen(tx, branchId, new Date());
 
       const [sale] = await tx.$queryRawUnsafe<SaleForReturnRow[]>(
@@ -318,7 +322,13 @@ export class SaleReturnsService {
       });
 
       return saleReturn;
+      },
+    );
+    await this.cacheInvalidation.invalidateAfterLedgerOrInventoryMutation({
+      schemaName,
+      branchIds: [branchId],
     });
+    return saleReturn;
   }
 
   async update(
@@ -347,7 +357,7 @@ export class SaleReturnsService {
     allowedBranchIds: string[],
     ctx?: SaleReturnMutationContext,
   ) {
-    return this.prisma.withTenantSchema(schemaName, async (tx) => {
+    const out = await this.prisma.withTenantSchema(schemaName, async (tx) => {
       const [saleReturn] = await tx.$queryRawUnsafe<SaleReturnRemoveJoinRow[]>(
         `SELECT sr.id,
                 sr.branch_id,
@@ -364,7 +374,7 @@ export class SaleReturnsService {
         allowedBranchIds,
       );
       if (!saleReturn) {
-        return { deleted: false };
+        return { deleted: false as const, branch_id: null as string | null };
       }
 
       await this.lockDates.assertDocumentDateOpen(
@@ -467,7 +477,14 @@ export class SaleReturnsService {
         oldPayload: { return_date: saleReturn.return_date },
       });
 
-      return { deleted: true };
+      return { deleted: true as const, branch_id: saleReturn.branch_id };
     });
+    if (out.deleted && out.branch_id) {
+      await this.cacheInvalidation.invalidateAfterLedgerOrInventoryMutation({
+        schemaName,
+        branchIds: [out.branch_id],
+      });
+    }
+    return { deleted: out.deleted };
   }
 }

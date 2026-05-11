@@ -6,6 +6,7 @@ import { TenantService } from '../tenant/tenant.service';
 import { AccountingPostingService } from '../accounting/accounting-posting.service';
 import { AccountingLockDateService } from '../accounting/accounting-lock-date.service';
 import { AuditLogService } from '../accounting/audit-log.service';
+import { CacheInvalidationService } from '../cache/cache-invalidation.service';
 import { toPagedResult, type PagedResult } from '../common/pagination.util';
 
 export type PurchaseMutationContext = {
@@ -106,6 +107,7 @@ export class PurchasesService {
     private readonly accountingPosting: AccountingPostingService,
     private readonly lockDates: AccountingLockDateService,
     private readonly auditLog: AuditLogService,
+    private readonly cacheInvalidation: CacheInvalidationService,
   ) {}
 
   async findAll(schemaName: string, allowedBranchIds: string[]) {
@@ -260,7 +262,7 @@ export class PurchasesService {
     ctx?: PurchaseMutationContext,
   ) {
     await this.tenantService.applyTenantSchemaPatches(schemaName);
-    return this.prisma.withTenantSchema(schemaName, async (tx) => {
+    const row = await this.prisma.withTenantSchema(schemaName, async (tx) => {
       const pd = dto.purchaseDate?.trim();
       const effectiveDocDate =
         pd && pd.length >= 10 ? pd.slice(0, 10) : new Date();
@@ -352,6 +354,11 @@ export class PurchasesService {
 
       return row;
     });
+    await this.cacheInvalidation.invalidateAfterLedgerOrInventoryMutation({
+      schemaName,
+      branchIds: [branchId],
+    });
+    return row;
   }
 
   async update(
@@ -380,7 +387,9 @@ export class PurchasesService {
         'Editing purchase items is not allowed. Use a return/adjustment flow.',
       );
     }
-    return this.prisma.withTenantSchema(schemaName, async (tx) => {
+    const updatedPurchase = await this.prisma.withTenantSchema(
+      schemaName,
+      async (tx) => {
       const [existing] = await tx.$queryRawUnsafe<
         {
           id: string;
@@ -448,7 +457,15 @@ export class PurchasesService {
         });
       }
       return row ?? null;
-    });
+      },
+    );
+    if (updatedPurchase?.branch_id) {
+      await this.cacheInvalidation.invalidateAfterLedgerOrInventoryMutation({
+        schemaName,
+        branchIds: [updatedPurchase.branch_id],
+      });
+    }
+    return updatedPurchase;
   }
 
   async remove(
@@ -457,7 +474,7 @@ export class PurchasesService {
     allowedBranchIds: string[],
     ctx?: PurchaseMutationContext,
   ) {
-    return this.prisma.withTenantSchema(schemaName, async (tx) => {
+    const out = await this.prisma.withTenantSchema(schemaName, async (tx) => {
       const [purchase] = await tx.$queryRawUnsafe<PurchaseRow[]>(
         `SELECT id, branch_id, supplier_id, total_amount, purchase_date, on_credit, created_at
          FROM purchases
@@ -511,8 +528,13 @@ export class PurchasesService {
         oldPayload: { itemsReverted: itemCount },
       });
 
-      return { deleted: true, itemsReverted: itemCount };
+      return { deleted: true, itemsReverted: itemCount, branch_id: purchase.branch_id };
     });
+    await this.cacheInvalidation.invalidateAfterLedgerOrInventoryMutation({
+      schemaName,
+      branchIds: [out.branch_id],
+    });
+    return { deleted: out.deleted, itemsReverted: out.itemsReverted };
   }
 
   /**
@@ -624,7 +646,9 @@ export class PurchasesService {
     if (!Number.isFinite(amt) || amt <= 0) {
       throw new BadRequestException('Refund amount must be greater than 0');
     }
-    return this.prisma.withTenantSchema(schemaName, async (tx) => {
+    const refundRow = await this.prisma.withTenantSchema(
+      schemaName,
+      async (tx) => {
       const [purchase] = await tx.$queryRawUnsafe<PurchaseRow[]>(
         `SELECT id, branch_id, supplier_id, total_amount, purchase_date, on_credit, created_at
          FROM purchases
@@ -684,7 +708,13 @@ export class PurchasesService {
       });
 
       return refundRow;
+      },
+    );
+    await this.cacheInvalidation.invalidateAfterLedgerOrInventoryMutation({
+      schemaName,
+      branchIds: [branchId],
     });
+    return refundRow;
   }
 
   async removeItems(
@@ -693,7 +723,7 @@ export class PurchasesService {
     allowedBranchIds: string[],
     ctx?: PurchaseMutationContext,
   ) {
-    return this.prisma.withTenantSchema(schemaName, async (tx) => {
+    const out = await this.prisma.withTenantSchema(schemaName, async (tx) => {
       const [purchase] = await tx.$queryRawUnsafe<PurchaseLockRow[]>(
         `SELECT id, branch_id, purchase_date, created_at
          FROM purchases
@@ -735,7 +765,12 @@ export class PurchasesService {
         newPayload: { lines_removed: count },
       });
 
-      return { deleted: true, count };
+      return { deleted: true, count, branch_id: purchase.branch_id };
     });
+    await this.cacheInvalidation.invalidateAfterLedgerOrInventoryMutation({
+      schemaName,
+      branchIds: [out.branch_id],
+    });
+    return { deleted: out.deleted, count: out.count };
   }
 }

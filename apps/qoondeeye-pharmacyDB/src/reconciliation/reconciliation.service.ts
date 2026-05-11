@@ -38,6 +38,10 @@ import {
   type ReconciliationLogType,
   type ReconciliationSeverity,
 } from './reconciliation.types';
+import { TaggedCacheService } from '../cache/tagged-cache.service';
+import { reconciliationTenantTags } from '../cache/cache-tags';
+import { stableCacheKeySegment } from '../cache/cache-keys';
+import { CacheInvalidationService } from '../cache/cache-invalidation.service';
 
 /** Row returned from `findLogs` after enrichment (entity labels for UI). */
 export type ReconciliationLogEnrichedItem = {
@@ -89,6 +93,7 @@ export class ReconciliationService implements OnModuleInit {
    * Does not coordinate across multiple Node processes; use DB advisory locks for that.
    */
   private readonly fullRunLocks = new Map<string, Promise<void>>();
+  private readonly cacheTtlMs = 60_000;
 
   constructor(
     private readonly prisma: PrismaService,
@@ -96,6 +101,8 @@ export class ReconciliationService implements OnModuleInit {
     private readonly journals: JournalService,
     private readonly financialReports: FinancialReportsService,
     private readonly auditLog: AuditLogService,
+    private readonly taggedCache: TaggedCacheService,
+    private readonly cacheInvalidation: CacheInvalidationService,
   ) {}
 
   /** Public-schema CRUD (`reconciliation_*`, `tenant`). */
@@ -564,6 +571,23 @@ END $f$`);
           summary: summary as unknown as Prisma.InputJsonValue,
         },
       });
+      const branchIdsForCache = await this.prisma
+        .withTenantSchema(schemaName, async (tx) => {
+          const [r] = await tx.$queryRawUnsafe<
+            { from_branch_id: string; to_branch_id: string }[]
+          >(
+            `SELECT from_branch_id::text, to_branch_id::text FROM stock_transfers WHERE id = $1::uuid`,
+            transferId,
+          );
+          if (!r) return [] as string[];
+          return [r.from_branch_id, r.to_branch_id];
+        })
+        .catch(() => [] as string[]);
+      await this.cacheInvalidation.invalidateAfterLedgerOrInventoryMutation({
+        schemaName,
+        branchIds: branchIdsForCache,
+        tenantId,
+      });
     } catch (err) {
       await this.prismaPublic.reconciliationRun.update({
         where: { id: run.id },
@@ -940,13 +964,49 @@ END $f$`);
   }
 
   async findLatestCompletedRun(tenantId: string) {
-    return this.prismaPublic.reconciliationRun.findFirst({
-      where: { tenantId, status: 'completed' },
-      orderBy: { finishedAt: 'desc' },
-    });
+    const key = stableCacheKeySegment([
+      'reconciliation',
+      'latest_completed_run',
+      tenantId,
+    ]);
+    return this.taggedCache.getOrSet(
+      key,
+      reconciliationTenantTags(tenantId),
+      this.cacheTtlMs,
+      () =>
+        this.prismaPublic.reconciliationRun.findFirst({
+          where: { tenantId, status: 'completed' },
+          orderBy: { finishedAt: 'desc' },
+        }),
+    );
   }
 
   async listHealthSnapshots(params: {
+    tenantId: string;
+    fromTs?: string;
+    toTs?: string;
+    checkKey?: string;
+    limit: number;
+  }) {
+    const lim = Math.min(500, Math.max(1, params.limit));
+    const key = stableCacheKeySegment([
+      'reconciliation',
+      'health_snapshots',
+      params.tenantId,
+      params.fromTs?.trim() ?? '',
+      params.toTs?.trim() ?? '',
+      params.checkKey?.trim() ?? '',
+      String(lim),
+    ]);
+    return this.taggedCache.getOrSet(
+      key,
+      reconciliationTenantTags(params.tenantId),
+      this.cacheTtlMs,
+      () => this.queryHealthSnapshotsUncached({ ...params, limit: lim }),
+    );
+  }
+
+  private async queryHealthSnapshotsUncached(params: {
     tenantId: string;
     fromTs?: string;
     toTs?: string;
@@ -974,7 +1034,7 @@ END $f$`);
       params.fromTs?.trim() ? params.fromTs.trim() : null,
       params.toTs?.trim() ? params.toTs.trim() : null,
       params.checkKey?.trim() ? params.checkKey.trim() : null,
-      Math.min(500, Math.max(1, params.limit)),
+      params.limit,
     );
   }
 
@@ -1100,6 +1160,14 @@ END $f$`);
           summary: summary,
         },
       });
+
+      await this.cacheInvalidation.invalidateReconciliationForTenant(tenantId);
+      if (allowedBranchIds?.length) {
+        await this.cacheInvalidation.invalidateFinancialForBranches(
+          schemaName,
+          allowedBranchIds,
+        );
+      }
 
       this.logger.log(
         `Reconciliation completed for ${schemaName} run ${run.id}`,
