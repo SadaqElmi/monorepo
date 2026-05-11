@@ -451,6 +451,7 @@ model Sale {
 
   @@unique([branchId, receiptNumber], map: "sales_branch_receipt_unique")
   @@index([saleDate])
+  @@index([branchId, saleDate(sort: Desc)])
   @@index([branchId, receiptNumber])
   @@index([posSessionId])
   @@schema("tenant_template")
@@ -477,6 +478,7 @@ model SaleItem {
   @@index([saleId])
   @@index([productId])
   @@index([branchId])
+  @@index([branchId, productId])
   @@schema("tenant_template")
 }
 
@@ -496,6 +498,7 @@ model SaleReturn {
 
   @@index([saleId])
   @@index([returnDate])
+  @@index([branchId, returnDate(sort: Desc)])
   @@schema("tenant_template")
 }
 

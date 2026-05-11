@@ -31,6 +31,28 @@ export type PosDeviceEnrollmentResponse = {
   deviceCredential: string;
 };
 
+/**
+ * Email/password sign-in for managers from the POS terminal. The backend resolves
+ * tenant/role; pass the tenant slug when known so cross-tenant accounts pick the
+ * correct pharmacy.
+ */
+export async function login(
+  email: string,
+  password: string,
+  tenant?: string,
+): Promise<LoginResponse> {
+  const slug = tenant?.trim();
+  return jsonFetch<LoginResponse>(`${AUTH_PREFIX}/login`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      email,
+      password,
+      ...(slug ? { tenant: slug } : {}),
+    }),
+  });
+}
+
 /** PIN-only POS sign-in (pharmacy slug). Optional staffId scopes login to that staff row. */
 export async function pinLogin(
   pin: string,

@@ -16,10 +16,14 @@ export async function getProducts(
 }
 
 /** Full tenant product list (all branches + global). Use for purchases and stock. */
-export async function getProductsCatalog(tenantSlug: string): Promise<Product[]> {
+export async function getProductsCatalog(
+  tenantSlug: string,
+  init?: Pick<RequestInit, "signal">,
+): Promise<Product[]> {
   return jsonFetch<Product[]>(`${PRODUCTS_PREFIX}/catalog`, {
     method: "GET",
     headers: { "X-Tenant": tenantSlug } as JsonHeaders,
+    signal: init?.signal,
   });
 }
 

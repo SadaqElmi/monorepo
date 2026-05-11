@@ -64,6 +64,7 @@ const pharmacyNavMain = [
     icon: Warehouse,
     items: [
       { title: "Stock", url: "/inventory/stock" },
+      { title: "Inventory history", url: "/inventory/history" },
       { title: "Batches", url: "/inventory/batches" },
       { title: "Branches", url: "/inventory/branches" },
     ],
