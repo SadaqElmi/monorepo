@@ -47,6 +47,36 @@ DATABASE_URL_LOCAL="postgresql://USER:PASSWORD@localhost:5432/pharmacare?schema=
 
 The API uses a single `pg` pool with **`max: 10`**, **`idleTimeoutMillis: 30000`**, **`connectionTimeoutMillis: 20000`** ([`src/prisma/create-pg-adapter.ts`](src/prisma/create-pg-adapter.ts)).
 
+### Redis (optional cache)
+
+The API uses **`@nestjs/cache-manager`** with **`cache-manager-redis-yet`** when `REDIS_URL` is set. If Redis is missing or fails to connect, the server **still starts** and uses an **in-memory** cache (per process only).
+
+```env
+# Upstash / Render / any TLS or plain Redis URL (same format as redis-cli -u)
+REDIS_URL="rediss://default:TOKEN@HOST:6379"
+
+# Default TTL for cached API payloads (milliseconds). Falls back to 60_000.
+CACHE_DEFAULT_TTL_MS=60000
+```
+
+**Render:** add `REDIS_URL` (and optionally `CACHE_DEFAULT_TTL_MS`) in the service **Environment** tab. Do not commit secrets; use the dashboard or secret files.
+
+**Upstash:** create a Redis database, copy the **Redis** connection string (TLS uses `rediss://`), and set it as `REDIS_URL`. REST URL/token (`UPSTASH_REDIS_REST_*`) are for HTTP clients only; this Nest stack uses the **TCP** URL for `cache-manager-redis-yet`.
+
+**Local:** install Redis locally or use Upstash; omit `REDIS_URL` to run without Redis during development.
+
+**What is cached (initial rollout):**
+
+- Dashboard-style reads: executive summary, fiscal report, dashboard series, top products, P&amp;L / balance sheet / cash flow (see [`financial-reports.service.ts`](src/accounting/financial-reports.service.ts)).
+- Reconciliation: latest completed run, health snapshots (see [`reconciliation.service.ts`](src/reconciliation/reconciliation.service.ts)).
+- Branch security metrics: branch access denied rollups (see [`branch-security-metrics.service.ts`](src/accounting/branch-security-metrics.service.ts)).
+
+**Multi-tenant safety:** every cache key and invalidation **tag** includes tenant schema and branch scope (normalized sorted branch ids). Keys look like `income|{schema}|{branchScope}|…` and tags like `financial:{schema}:branch:{branchId}`.
+
+**Invalidation:** targeted only — no `FLUSHDB`. Tag sets (`pharmcare:v1:cache-tag:*`) track which keys belong to `financial:*`, `reconciliation:*`, `branch-stats:*`, etc. Mutations (sales, purchases, transfers + reconciliation runs) call [`CacheInvalidationService`](src/cache/cache-invalidation.service.ts) to drop affected tags.
+
+**Future use:** the shared Redis client and `src/cache/` layout are intended to later add rate limiting, session storage, BullMQ, WebSocket pub/sub, and POS sync — keep new Redis usage behind small services in that folder.
+
 Device-bound POS rollout flags:
 
 ```env

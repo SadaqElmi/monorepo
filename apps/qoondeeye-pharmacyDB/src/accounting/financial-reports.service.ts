@@ -13,11 +13,9 @@ import {
 } from './interbranch-report.util';
 import { computeSnapshotDiff } from './report-snapshot-diff.util';
 import { severityInventoryGlMismatch } from '../reconciliation/reconciliation-severity.policy';
-
-type ReportCacheEntry<T> = {
-  expiresAt: number;
-  value: T;
-};
+import { TaggedCacheService } from '../cache/tagged-cache.service';
+import { financialBranchTags } from '../cache/cache-tags';
+import { normalizeBranchScope } from '../cache/cache-keys';
 
 export type ReportStatus = 'CLEAN' | 'WARNING' | 'CRITICAL';
 
@@ -230,14 +228,22 @@ export type ExplainNumberResult = {
 @Injectable()
 export class FinancialReportsService {
   private readonly logger = new Logger(FinancialReportsService.name);
-  private readonly reportCache = new Map<string, ReportCacheEntry<unknown>>();
-  private readonly reportCacheTtlMs: number;
+  /** Redis-backed cache TTL (ms). Default 60s; override with CACHE_DEFAULT_TTL_MS or REPORT_CACHE_TTL_MS. */
+  private readonly cacheTtlMs: number;
 
-  constructor(private readonly prisma: PrismaService) {
-    const raw = Number(process.env.REPORT_CACHE_TTL_MS);
-    /** Default 45s: consolidated reports run heavier SQL (breakdown joins). */
-    const ms = Number.isFinite(raw) && raw > 0 ? raw : 45_000;
-    this.reportCacheTtlMs = Math.min(120_000, Math.max(5_000, ms));
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly taggedCache: TaggedCacheService,
+  ) {
+    const rawDefault = Number(process.env.CACHE_DEFAULT_TTL_MS);
+    const rawReport = Number(process.env.REPORT_CACHE_TTL_MS);
+    const pick =
+      Number.isFinite(rawDefault) && rawDefault > 0
+        ? rawDefault
+        : Number.isFinite(rawReport) && rawReport > 0
+          ? rawReport
+          : 60_000;
+    this.cacheTtlMs = Math.min(600_000, Math.max(5_000, pick));
   }
 
   /** When true, P&amp;L excludes rows on `chart_of_accounts.is_interbranch` (future intercompany P&amp;L). */
@@ -253,24 +259,6 @@ export class FinancialReportsService {
     parts: Array<string | number | boolean | null>,
   ) {
     return `${name}|${parts.map((p) => String(p ?? '')).join('|')}`;
-  }
-
-  private getCached<T>(key: string): T | null {
-    const now = Date.now();
-    const hit = this.reportCache.get(key);
-    if (!hit) return null;
-    if (hit.expiresAt <= now) {
-      this.reportCache.delete(key);
-      return null;
-    }
-    return hit.value as T;
-  }
-
-  private setCached<T>(key: string, value: T) {
-    this.reportCache.set(key, {
-      value,
-      expiresAt: Date.now() + this.reportCacheTtlMs,
-    });
   }
 
   private async compareDrilldownByAccount(
@@ -508,18 +496,21 @@ export class FinancialReportsService {
       : '';
     const cacheKey = this.cacheKey('income', [
       schemaName,
-      branchIds.join(','),
+      normalizeBranchScope(branchIds),
       fromDate,
       toDate,
       opts?.monthlyBreakdown ?? false,
       opts?.drilldownPath ?? '',
       excludeInterbranchPnl ? 'ix:1' : 'ix:0',
     ]);
-    const cached = this.getCached<IncomeStatementReport>(cacheKey);
-    if (cached) return cached;
-
-    const startedAt = Date.now();
-    return this.prisma.withTenantSchema(schemaName, async (tx) => {
+    const tags = financialBranchTags(schemaName, branchIds);
+    return this.taggedCache.getOrSet(
+      cacheKey,
+      tags,
+      this.cacheTtlMs,
+      async () => {
+        const startedAt = Date.now();
+        return this.prisma.withTenantSchema(schemaName, async (tx) => {
       const { sql: branchWhere, branchParams } = branchColumnPredicate(
         'je.branch_id',
         branchIds,
@@ -718,9 +709,10 @@ export class FinancialReportsService {
         mismatches: consistency.mismatches,
         isConsistent: consistency.isConsistent,
       };
-      this.setCached(cacheKey, payload);
       return payload;
-    });
+        });
+      },
+    );
   }
 
   async balanceSheet(
@@ -732,16 +724,19 @@ export class FinancialReportsService {
     const consolidated = Boolean(opts?.consolidated);
     const cacheKey = this.cacheKey('balance_sheet', [
       schemaName,
-      branchIds.join(','),
+      normalizeBranchScope(branchIds),
       asOfDate,
       opts?.drilldownPath ?? '',
       consolidated ? 'c:1' : 'c:0',
     ]);
-    const cached = this.getCached<BalanceSheetReport>(cacheKey);
-    if (cached) return cached;
-
-    const startedAt = Date.now();
-    return this.prisma.withTenantSchema(schemaName, async (tx) => {
+    const tags = financialBranchTags(schemaName, branchIds);
+    return this.taggedCache.getOrSet(
+      cacheKey,
+      tags,
+      this.cacheTtlMs,
+      async () => {
+        const startedAt = Date.now();
+        return this.prisma.withTenantSchema(schemaName, async (tx) => {
       const { sql: branchWhere, branchParams } = branchColumnPredicate(
         'je.branch_id',
         branchIds,
@@ -881,9 +876,10 @@ export class FinancialReportsService {
           transferBreakdown,
         });
       }
-      this.setCached(cacheKey, finalPayload);
       return finalPayload;
-    });
+        });
+      },
+    );
   }
 
   /** Read-only: stock transfers with inter-branch / journal issues (scoped branches). */
@@ -1647,16 +1643,28 @@ export class FinancialReportsService {
     fromDate: string,
     toDate: string,
   ) {
-    return this.prisma.withTenantSchema(schemaName, async (tx) => {
-      const { sql: branchWhere, branchParams } = branchColumnPredicate(
-        'je.branch_id',
-        branchIds,
-        1,
-      );
-      const daily = await tx.$queryRawUnsafe<
-        { d: string; sales: string; expenses: string }[]
-      >(
-        `WITH days AS (
+    const cacheKey = this.cacheKey('dashboard_series', [
+      schemaName,
+      normalizeBranchScope(branchIds),
+      fromDate,
+      toDate,
+    ]);
+    const tags = financialBranchTags(schemaName, branchIds);
+    return this.taggedCache.getOrSet(
+      cacheKey,
+      tags,
+      this.cacheTtlMs,
+      async () => {
+        return this.prisma.withTenantSchema(schemaName, async (tx) => {
+          const { sql: branchWhere, branchParams } = branchColumnPredicate(
+            'je.branch_id',
+            branchIds,
+            1,
+          );
+          const daily = await tx.$queryRawUnsafe<
+            { d: string; sales: string; expenses: string }[]
+          >(
+            `WITH days AS (
            SELECT je.entry_date AS d,
                   SUM(CASE WHEN coa.account_key = 'sales_revenue' THEN jl.credit - jl.debit ELSE 0 END)::numeric(14,2) AS sales,
                   SUM(CASE WHEN coa.account_type = 'expense' THEN jl.debit - jl.credit ELSE 0 END)::numeric(14,2) AS expenses
@@ -1670,21 +1678,23 @@ export class FinancialReportsService {
            ORDER BY je.entry_date
          )
          SELECT d::text, sales::text, expenses::text FROM days`,
-        ...branchParams,
-        fromDate,
-        toDate,
-      );
-      return daily.map((row) => {
-        const sales = Number(row.sales);
-        const expenses = Number(row.expenses);
-        return {
-          date: row.d,
-          sales,
-          expenses,
-          profit: sales - expenses,
-        };
-      });
-    });
+            ...branchParams,
+            fromDate,
+            toDate,
+          );
+          return daily.map((row) => {
+            const sales = Number(row.sales);
+            const expenses = Number(row.expenses);
+            return {
+              date: row.d,
+              sales,
+              expenses,
+              profit: sales - expenses,
+            };
+          });
+        });
+      },
+    );
   }
 
   /**
@@ -1783,21 +1793,35 @@ export class FinancialReportsService {
         ? `quantity_sold DESC NULLS LAST, revenue DESC NULLS LAST`
         : `revenue DESC NULLS LAST, quantity_sold DESC NULLS LAST`;
 
-    return this.prisma.withTenantSchema(schemaName, async (tx) => {
-      const { sql: branchWhere, branchParams } = branchColumnPredicate(
-        'si.branch_id',
-        branchIds,
-        1,
-      );
-      const rows = await tx.$queryRawUnsafe<
-        {
-          product_id: string;
-          product_name: string | null;
-          quantity_sold: string;
-          revenue: string;
-        }[]
-      >(
-        `SELECT si.product_id,
+    const cacheKey = this.cacheKey('top_products', [
+      schemaName,
+      normalizeBranchScope(branchIds),
+      fromDate,
+      toDate,
+      take,
+      sort,
+    ]);
+    const tags = financialBranchTags(schemaName, branchIds);
+    return this.taggedCache.getOrSet(
+      cacheKey,
+      tags,
+      this.cacheTtlMs,
+      async () => {
+        return this.prisma.withTenantSchema(schemaName, async (tx) => {
+          const { sql: branchWhere, branchParams } = branchColumnPredicate(
+            'si.branch_id',
+            branchIds,
+            1,
+          );
+          const rows = await tx.$queryRawUnsafe<
+            {
+              product_id: string;
+              product_name: string | null;
+              quantity_sold: string;
+              revenue: string;
+            }[]
+          >(
+            `SELECT si.product_id,
                 p.name AS product_name,
                 SUM(si.quantity)::text AS quantity_sold,
                 SUM(COALESCE(si.total, 0))::numeric(14,2)::text AS revenue
@@ -1810,24 +1834,26 @@ export class FinancialReportsService {
          GROUP BY si.product_id, p.name
          ORDER BY ${orderSql}
          LIMIT $4`,
-        ...branchParams,
-        fromDate,
-        toDate,
-        take,
-      );
+            ...branchParams,
+            fromDate,
+            toDate,
+            take,
+          );
 
-      return {
-        sort,
-        fromDate,
-        toDate,
-        lines: rows.map((r) => ({
-          productId: r.product_id,
-          productName: r.product_name,
-          quantitySold: Number(r.quantity_sold),
-          revenue: Number(r.revenue),
-        })),
-      };
-    });
+          return {
+            sort,
+            fromDate,
+            toDate,
+            lines: rows.map((r) => ({
+              productId: r.product_id,
+              productName: r.product_name,
+              quantitySold: Number(r.quantity_sold),
+              revenue: Number(r.revenue),
+            })),
+          };
+        });
+      },
+    );
   }
 
   /**
@@ -1894,29 +1920,32 @@ export class FinancialReportsService {
   ): Promise<CashFlowReport> {
     const cacheKey = this.cacheKey('cash_flow', [
       schemaName,
-      branchIds.join(','),
+      normalizeBranchScope(branchIds),
       fromDate,
       toDate,
     ]);
-    const cached = this.getCached<CashFlowReport>(cacheKey);
-    if (cached) return cached;
-
-    const startedAt = Date.now();
-    return this.prisma.withTenantSchema(schemaName, async (tx) => {
-      const { sql: branchWhere, branchParams } = branchColumnPredicate(
-        'je.branch_id',
-        branchIds,
-        1,
-      );
-      const rows = await tx.$queryRawUnsafe<
-        {
-          source_type: string;
-          account_key: string;
-          name: string;
-          net_cash: string;
-        }[]
-      >(
-        `SELECT je.source_type,
+    const tags = financialBranchTags(schemaName, branchIds);
+    return this.taggedCache.getOrSet(
+      cacheKey,
+      tags,
+      this.cacheTtlMs,
+      async () => {
+        const startedAt = Date.now();
+        return this.prisma.withTenantSchema(schemaName, async (tx) => {
+          const { sql: branchWhere, branchParams } = branchColumnPredicate(
+            'je.branch_id',
+            branchIds,
+            1,
+          );
+          const rows = await tx.$queryRawUnsafe<
+            {
+              source_type: string;
+              account_key: string;
+              name: string;
+              net_cash: string;
+            }[]
+          >(
+            `SELECT je.source_type,
                 coa.account_key,
                 coa.name,
                 SUM(jl.debit - jl.credit)::numeric(14,2)::text AS net_cash
@@ -1929,74 +1958,75 @@ export class FinancialReportsService {
            AND coa.account_key IN ('cash', 'bank', 'card_clearing')
          GROUP BY je.source_type, coa.id, coa.account_key, coa.name
          ORDER BY je.source_type, coa.account_key`,
-        ...branchParams,
-        fromDate,
-        toDate,
-      );
-      const sourceToSection = (sourceType: string) => {
-        const t = sourceType.toLowerCase().trim();
-        if (
-          t.includes('purchase_asset') ||
-          t.includes('asset') ||
-          t.includes('equipment')
-        ) {
-          return 'investing' as const;
-        }
-        if (
-          t.includes('loan') ||
-          t.includes('capital') ||
-          t.includes('equity') ||
-          t.includes('financing')
-        ) {
-          return 'financing' as const;
-        }
-        return 'operating' as const;
-      };
-      const lines = rows.map((r) => ({
-        section: sourceToSection(r.source_type),
-        sourceType: r.source_type,
-        accountKey: r.account_key,
-        name: r.name,
-        netMovement: Number(r.net_cash),
-      }));
-      const bySection = {
-        operating: [] as typeof lines,
-        investing: [] as typeof lines,
-        financing: [] as typeof lines,
-      };
-      for (const line of lines) bySection[line.section].push(line);
+            ...branchParams,
+            fromDate,
+            toDate,
+          );
+          const sourceToSection = (sourceType: string) => {
+            const t = sourceType.toLowerCase().trim();
+            if (
+              t.includes('purchase_asset') ||
+              t.includes('asset') ||
+              t.includes('equipment')
+            ) {
+              return 'investing' as const;
+            }
+            if (
+              t.includes('loan') ||
+              t.includes('capital') ||
+              t.includes('equity') ||
+              t.includes('financing')
+            ) {
+              return 'financing' as const;
+            }
+            return 'operating' as const;
+          };
+          const lines = rows.map((r) => ({
+            section: sourceToSection(r.source_type),
+            sourceType: r.source_type,
+            accountKey: r.account_key,
+            name: r.name,
+            netMovement: Number(r.net_cash),
+          }));
+          const bySection = {
+            operating: [] as typeof lines,
+            investing: [] as typeof lines,
+            financing: [] as typeof lines,
+          };
+          for (const line of lines) bySection[line.section].push(line);
 
-      const total = (items: Array<{ netMovement: number }>) =>
-        Math.round(
-          (items.reduce((s, item) => s + item.netMovement, 0) +
-            Number.EPSILON) *
-            100,
-        ) / 100;
-      const sectionTotals = {
-        operating: total(bySection.operating),
-        investing: total(bySection.investing),
-        financing: total(bySection.financing),
-      };
-      const payload = {
-        fromDate,
-        toDate,
-        sections: {
-          operating: bySection.operating,
-          investing: bySection.investing,
-          financing: bySection.financing,
-        },
-        sectionTotals,
-        lines,
-        netCashMovement:
-          sectionTotals.operating +
-          sectionTotals.investing +
-          sectionTotals.financing,
-        generatedAt: new Date().toISOString(),
-        elapsedMs: Date.now() - startedAt,
-      };
-      this.setCached(cacheKey, payload);
-      return payload;
-    });
+          const total = (items: Array<{ netMovement: number }>) =>
+            Math.round(
+              (items.reduce((s, item) => s + item.netMovement, 0) +
+                Number.EPSILON) *
+                100,
+            ) / 100;
+          const sectionTotals = {
+            operating: total(bySection.operating),
+            investing: total(bySection.investing),
+            financing: total(bySection.financing),
+          };
+          const payload = {
+            fromDate,
+            toDate,
+            sections: {
+              operating: bySection.operating,
+              investing: bySection.investing,
+              financing: bySection.financing,
+            },
+            sectionTotals,
+            lines,
+            netCashMovement:
+              sectionTotals.operating +
+              sectionTotals.investing +
+              sectionTotals.financing,
+            generatedAt: new Date().toISOString(),
+            elapsedMs: Date.now() - startedAt,
+          };
+          return payload;
+        });
+      },
+    );
   }
 
   async partnerLedger(
@@ -2205,21 +2235,35 @@ export class FinancialReportsService {
     fromDate: string,
     toDate: string,
   ) {
-    const pnl = await this.incomeStatement(
+    const cacheKey = this.cacheKey('fiscal_report', [
       schemaName,
-      branchIds,
+      normalizeBranchScope(branchIds),
       fromDate,
       toDate,
+    ]);
+    const tags = financialBranchTags(schemaName, branchIds);
+    return this.taggedCache.getOrSet(
+      cacheKey,
+      tags,
+      this.cacheTtlMs,
+      async () => {
+        const pnl = await this.incomeStatement(
+          schemaName,
+          branchIds,
+          fromDate,
+          toDate,
+        );
+        const bs = await this.balanceSheet(schemaName, branchIds, toDate);
+        return {
+          fromDate,
+          toDate,
+          netIncome: pnl.netIncome,
+          totalAssets: bs.totals.assets,
+          totalLiabilities: bs.totals.liabilities,
+          totalEquity: bs.totals.totalEquity,
+        };
+      },
     );
-    const bs = await this.balanceSheet(schemaName, branchIds, toDate);
-    return {
-      fromDate,
-      toDate,
-      netIncome: pnl.netIncome,
-      totalAssets: bs.totals.assets,
-      totalLiabilities: bs.totals.liabilities,
-      totalEquity: bs.totals.totalEquity,
-    };
   }
 
   async executiveSummary(
@@ -2228,33 +2272,48 @@ export class FinancialReportsService {
     fromDate: string,
     toDate: string,
   ) {
-    const pnl = await this.incomeStatement(
+    const cacheKey = this.cacheKey('executive_summary', [
       schemaName,
-      branchIds,
+      normalizeBranchScope(branchIds),
       fromDate,
       toDate,
+    ]);
+    const tags = financialBranchTags(schemaName, branchIds);
+    return this.taggedCache.getOrSet(
+      cacheKey,
+      tags,
+      this.cacheTtlMs,
+      async () => {
+        const pnl = await this.incomeStatement(
+          schemaName,
+          branchIds,
+          fromDate,
+          toDate,
+        );
+        const series = await this.dashboardSeries(
+          schemaName,
+          branchIds,
+          fromDate,
+          toDate,
+        );
+        const ar = await this.agedReceivable(schemaName, branchIds, toDate);
+        const ap = await this.agedPayable(schemaName, branchIds, toDate);
+        const arTotal = ar.lines.reduce((s, l) => s + Math.max(0, l.balance), 0);
+        const apTotal = ap.lines.reduce((s, l) => s + Math.max(0, l.balance), 0);
+        return {
+          fromDate,
+          toDate,
+          revenue: pnl.totalRevenue,
+          netIncome: pnl.netIncome,
+          grossProfit: pnl.grossProfit,
+          outstandingReceivables:
+            Math.round((arTotal + Number.EPSILON) * 100) / 100,
+          outstandingPayables:
+            Math.round((apTotal + Number.EPSILON) * 100) / 100,
+          dailyProfitPoints: series.length,
+        };
+      },
     );
-    const series = await this.dashboardSeries(
-      schemaName,
-      branchIds,
-      fromDate,
-      toDate,
-    );
-    const ar = await this.agedReceivable(schemaName, branchIds, toDate);
-    const ap = await this.agedPayable(schemaName, branchIds, toDate);
-    const arTotal = ar.lines.reduce((s, l) => s + Math.max(0, l.balance), 0);
-    const apTotal = ap.lines.reduce((s, l) => s + Math.max(0, l.balance), 0);
-    return {
-      fromDate,
-      toDate,
-      revenue: pnl.totalRevenue,
-      netIncome: pnl.netIncome,
-      grossProfit: pnl.grossProfit,
-      outstandingReceivables:
-        Math.round((arTotal + Number.EPSILON) * 100) / 100,
-      outstandingPayables: Math.round((apTotal + Number.EPSILON) * 100) / 100,
-      dailyProfitPoints: series.length,
-    };
   }
 
   async invoiceAnalysis(

@@ -8,6 +8,7 @@ import { AccountingLockDateService } from '../accounting/accounting-lock-date.se
 import { AuditLogService } from '../accounting/audit-log.service';
 import { maxSaleDiscountPercentForRole } from './sales-discount.policy';
 import { toPagedResult, type PagedResult } from '../common/pagination.util';
+import { CacheInvalidationService } from '../cache/cache-invalidation.service';
 
 export type SalesMutationContext = {
   actorUserId?: string | null;
@@ -73,6 +74,7 @@ export class SalesService {
     private readonly accountingPosting: AccountingPostingService,
     private readonly lockDates: AccountingLockDateService,
     private readonly auditLog: AuditLogService,
+    private readonly cacheInvalidation: CacheInvalidationService,
   ) {}
 
   async findAll(schemaName: string, allowedBranchIds: string[]) {
@@ -244,7 +246,7 @@ export class SalesService {
       }
     }
 
-    return this.prisma.withTenantSchema(schemaName, async (tx) => {
+    const result = await this.prisma.withTenantSchema(schemaName, async (tx) => {
       await this.lockDates.assertDocumentDateOpen(tx, branchId, new Date());
       const onAccount = Boolean(dto.onAccount);
       if (onAccount) {
@@ -469,6 +471,11 @@ export class SalesService {
 
       return { ...updatedSale, items, payment_method: paymentMethodOut };
     });
+    await this.cacheInvalidation.invalidateAfterLedgerOrInventoryMutation({
+      schemaName,
+      branchIds: [branchId],
+    });
+    return result;
   }
 
   async update(
@@ -493,7 +500,7 @@ export class SalesService {
         'Editing sale items is not allowed. Use returns to adjust stock.',
       );
     }
-    return this.prisma.withTenantSchema(schemaName, async (tx) => {
+    const updated = await this.prisma.withTenantSchema(schemaName, async (tx) => {
       const [existing] = await tx.$queryRawUnsafe<
         { id: string; sale_date: Date | string; branch_id: string }[]
       >(
@@ -543,6 +550,13 @@ export class SalesService {
       }
       return row ?? null;
     });
+    if (updated?.branch_id) {
+      await this.cacheInvalidation.invalidateAfterLedgerOrInventoryMutation({
+        schemaName,
+        branchIds: [updated.branch_id],
+      });
+    }
+    return updated;
   }
 
   async remove(
@@ -551,7 +565,7 @@ export class SalesService {
     allowedBranchIds: string[],
     ctx?: SalesMutationContext,
   ) {
-    return this.prisma.withTenantSchema(schemaName, async (tx) => {
+    const out = await this.prisma.withTenantSchema(schemaName, async (tx) => {
       const [sale] = await tx.$queryRawUnsafe<
         {
           id: string;
@@ -565,7 +579,7 @@ export class SalesService {
         allowedBranchIds,
       );
       if (!sale) {
-        return { deleted: false };
+        return { deleted: false as const, branch_id: null as string | null };
       }
       await this.lockDates.assertDocumentDateOpen(
         tx,
@@ -613,7 +627,14 @@ export class SalesService {
         action: 'remove',
         oldPayload: { sale_date: sale.sale_date },
       });
-      return { deleted: true };
+      return { deleted: true as const, branch_id: sale.branch_id };
     });
+    if (out.deleted && out.branch_id) {
+      await this.cacheInvalidation.invalidateAfterLedgerOrInventoryMutation({
+        schemaName,
+        branchIds: [out.branch_id],
+      });
+    }
+    return { deleted: out.deleted };
   }
 }

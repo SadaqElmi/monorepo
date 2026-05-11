@@ -31,6 +31,7 @@ import { CreatePaymentTermDto } from './dto/create-payment-term.dto';
 import { CreateFollowUpLevelDto } from './dto/create-follow-up-level.dto';
 import { MergeChartOfAccountsDto } from './dto/merge-chart-of-accounts.dto';
 import { ChartOfAccountsMergeService } from './chart-of-accounts-merge.service';
+import { BranchSecurityMetricsService } from './branch-security-metrics.service';
 import { isGlobalBranchRole } from '../common/branch-scope/branch-scope.util';
 import {
   parsePagedQueryParam,
@@ -101,6 +102,7 @@ export class AccountingController {
     private readonly journalBooks: JournalBooksSeedService,
     private readonly financialReports: FinancialReportsService,
     private readonly chartOfAccountsMerge: ChartOfAccountsMergeService,
+    private readonly branchSecurityMetrics: BranchSecurityMetricsService,
   ) {}
 
   private ensureTenant() {
@@ -794,65 +796,12 @@ export class AccountingController {
 
     const schema = this.tenantContext.getSchemaName()!;
     await this.tenantService.applyTenantSchemaPatches(schema);
-    return this.prisma.withTenantSchema(schema, async (tx) => {
-      const totals = await tx.$queryRawUnsafe<
-        Array<{ reason: string | null; count: number }>
-      >(
-        `SELECT
-           COALESCE(new_payload->>'reason', 'unknown') AS reason,
-           COUNT(*)::int AS count
-         FROM audit_logs
-         WHERE table_name = 'security_branch'
-           AND action = 'branch_access_denied'
-           AND (
-             branch_id IS NULL OR branch_id = ANY($1::uuid[])
-           )
-           AND created_at >= $2::date
-           AND created_at <= ($3::date + interval '1 day')
-         GROUP BY COALESCE(new_payload->>'reason', 'unknown')
-         ORDER BY count DESC`,
-        queryBranchIds,
-        fromDate,
-        toDate,
-      );
-      const byReason = Object.fromEntries(
-        totals.map((row) => [row.reason ?? 'unknown', Number(row.count) || 0]),
-      );
-      const totalDenied = Object.values(byReason).reduce(
-        (sum, current) => sum + current,
-        0,
-      );
-
-      const privilegedCountRows = await tx.$queryRawUnsafe<
-        Array<{ c: number }>
-      >(
-        `SELECT COUNT(*)::int AS c
-         FROM audit_logs
-         WHERE table_name = 'security_branch'
-           AND action = 'branch_access_denied'
-           AND (
-             branch_id IS NULL OR branch_id = ANY($1::uuid[])
-           )
-           AND created_at >= $2::date
-           AND created_at <= ($3::date + interval '1 day')
-           AND COALESCE(new_payload->>'role', '') IN ('admin', 'owner')`,
-        queryBranchIds,
-        fromDate,
-        toDate,
-      );
-
-      return {
-        branchScope: target && target !== 'all' ? target : 'allowed',
-        from: fromDate,
-        to: toDate,
-        totalDenied,
-        byReason,
-        blockedCrossBranchAttempts:
-          (byReason.branch_header_mismatch ?? 0) +
-          (byReason.non_admin_requested_all_branches ?? 0),
-        branchMismatchRejections: byReason.branch_header_mismatch ?? 0,
-        privilegedMultiBranchUsage: Number(privilegedCountRows[0]?.c ?? 0),
-      };
+    return this.branchSecurityMetrics.getBranchAccessMetrics({
+      schemaName: schema,
+      queryBranchIds,
+      fromDate,
+      toDate,
+      branchScopeLabel: target && target !== 'all' ? target : 'allowed',
     });
   }
 }

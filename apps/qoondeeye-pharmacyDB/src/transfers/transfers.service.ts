@@ -14,6 +14,7 @@ import { OpsMonitoringService } from '../common/services/ops-monitoring.service'
 import { InventoryService } from '../inventory/inventory.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { ReconciliationService } from '../reconciliation/reconciliation.service';
+import { CacheInvalidationService } from '../cache/cache-invalidation.service';
 import { TenantService } from '../tenant/tenant.service';
 import type { TransferRepairConfirmDto } from './dto/transfer-repair-confirm.dto';
 import type { CreateTransferDto } from './dto/create-transfer.dto';
@@ -146,6 +147,7 @@ export class TransfersService {
     private readonly auditLog: AuditLogService,
     private readonly monitoring: OpsMonitoringService,
     private readonly reconciliation: ReconciliationService,
+    private readonly cacheInvalidation: CacheInvalidationService,
   ) {}
 
   /**
@@ -163,8 +165,31 @@ export class TransfersService {
   ): void {
     void this.tenantService
       .findBySchemaName(schema)
-      .then((tenant) => {
+      .then(async (tenant) => {
         if (!tenant) return;
+        try {
+          const branchIds = await this.prisma
+            .withTenantSchema(schema, async (tx) => {
+              const [r] = await tx.$queryRawUnsafe<
+                { from_branch_id: string; to_branch_id: string }[]
+              >(
+                `SELECT from_branch_id::text, to_branch_id::text FROM stock_transfers WHERE id = $1::uuid`,
+                transferId,
+              );
+              if (!r) return [] as string[];
+              return [r.from_branch_id, r.to_branch_id];
+            })
+            .catch(() => [] as string[]);
+          await this.cacheInvalidation.invalidateAfterLedgerOrInventoryMutation({
+            schemaName: schema,
+            branchIds,
+            tenantId: tenant.id,
+          });
+        } catch (e) {
+          this.logger.warn(
+            `Post-transfer cache invalidation: ${e instanceof Error ? e.message : String(e)}`,
+          );
+        }
         return this.reconciliation.runTransferScopeChecks(
           tenant.id,
           schema,

@@ -23,6 +23,7 @@ import { EntityHierarchyService } from './entity-hierarchy.service';
 import { ConsolidationEnterpriseService } from './consolidation-enterprise.service';
 import { PermissionGuard } from '../common/security/permission.guard';
 import { AuditLogArchiveJob } from './audit-log-archive.job';
+import { BranchSecurityMetricsService } from './branch-security-metrics.service';
 
 @Module({
   imports: [PrismaModule, TenantModule, NotificationsModule],
@@ -50,6 +51,7 @@ import { AuditLogArchiveJob } from './audit-log-archive.job';
     ConsolidationEnterpriseService,
     PermissionGuard,
     AuditLogArchiveJob,
+    BranchSecurityMetricsService,
   ],
   exports: [
     ChartOfAccountsMergeService,
@@ -65,6 +67,7 @@ import { AuditLogArchiveJob } from './audit-log-archive.job';
     ConsolidationEngineService,
     EntityHierarchyService,
     ConsolidationEnterpriseService,
+    BranchSecurityMetricsService,
   ],
 })
 export class AccountingModule {}
