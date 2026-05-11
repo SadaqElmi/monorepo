@@ -67,6 +67,7 @@ import {
   deletePatientLoan,
   getCustomers,
   getPatientLoans,
+  getPatientLoansPaged,
   getPatientLoanPayments,
   updatePatientLoan,
   type Customer,
@@ -131,6 +132,9 @@ function StatusBadge({ status }: { status: LoanStatus }) {
 
 export default function PatientLoansPage() {
   const [loans, setLoans] = useState<LoanRow[]>([]);
+  /** Full list for KPI cards (same filters as status pills). */
+  const [kpiLoans, setKpiLoans] = useState<LoanRow[]>([]);
+  const [loanTotalCount, setLoanTotalCount] = useState(0);
   const [createOpen, setCreateOpen] = useState(false);
   const [createError, setCreateError] = useState<string | null>(null);
 
@@ -207,14 +211,7 @@ export default function PatientLoansPage() {
       return "ongoing";
     };
 
-    const [loansData, customersData] = await Promise.all([
-      getPatientLoans(tenantSlug),
-      getCustomers(tenantSlug),
-    ]);
-
-    setCustomerOptions(customersData);
-
-    const rows: LoanRow[] = loansData.map((l) => ({
+    const mapLoanRow = (l: PatientLoan): LoanRow => ({
       id: l.id,
       customerId: l.customer_id ?? null,
       customerName: l.customer_name ?? "Unnamed customer",
@@ -225,16 +222,34 @@ export default function PatientLoansPage() {
       amountPaid: toNumber(l.amount_paid),
       dueDate: l.due_date ?? new Date().toISOString().slice(0, 10),
       status: mapStatus(l.status),
-    }));
+    });
 
-    setLoans(rows);
+    const apiStatus =
+      statusFilter === "all" ? undefined : statusFilter;
 
-    // Compute KPI "Collected today" from backend payments.
+    const [pageRes, kpiData, customersData] = await Promise.all([
+      getPatientLoansPaged(
+        tenantSlug,
+        page,
+        pageSize,
+        apiStatus,
+      ),
+      getPatientLoans(tenantSlug, apiStatus),
+      getCustomers(tenantSlug),
+    ]);
+
+    setCustomerOptions(customersData);
+    setLoans(pageRes.items.map(mapLoanRow));
+    setLoanTotalCount(pageRes.total);
+    setKpiLoans(kpiData.map(mapLoanRow));
+
+    // Compute KPI "Collected today" from backend payments (scoped loans for KPI).
     const todayKey = new Date().toISOString().slice(0, 10);
     setPaymentsTodayByLoanId({});
     try {
+      const kpiRows = kpiData.map(mapLoanRow);
       const entries = await Promise.all(
-        rows.map(async (loan) => {
+        kpiRows.map(async (loan) => {
           const payments = await getPatientLoanPayments(tenantSlug, loan.id);
 
           const sum = payments.reduce((acc, p) => {
@@ -253,10 +268,13 @@ export default function PatientLoansPage() {
 
       setPaymentsTodayByLoanId(Object.fromEntries(entries));
     } catch {
-      // If payment lookup fails, KPI will fallback to 0.
       setPaymentsTodayByLoanId({});
     }
-  }, [tenantSlug]);
+  }, [tenantSlug, page, pageSize, statusFilter]);
+
+  useEffect(() => {
+    setPage(1);
+  }, [statusFilter]);
 
   useEffect(() => {
     void refreshLoans().catch(() => {
@@ -267,9 +285,6 @@ export default function PatientLoansPage() {
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
     let rows = loans.slice();
-    if (statusFilter !== "all") {
-      rows = rows.filter((r) => r.status === statusFilter);
-    }
     if (q) {
       rows = rows.filter(
         (r) =>
@@ -282,33 +297,33 @@ export default function PatientLoansPage() {
       if (sortBy === "amount") return b.totalAmount - a.totalAmount;
       if (sortBy === "dueDate")
         return new Date(a.dueDate).getTime() - new Date(b.dueDate).getTime();
-      // newest (by due date fallback for demo)
       return new Date(b.dueDate).getTime() - new Date(a.dueDate).getTime();
     });
 
     return rows;
-  }, [loans, query, sortBy, statusFilter]);
+  }, [loans, query, sortBy]);
 
   const totals = useMemo(() => {
-    const outstanding = filtered
+    const outstanding = kpiLoans
       .filter((r) => r.status !== "paid")
       .reduce((sum, r) => sum + (r.totalAmount - r.amountPaid), 0);
-    const overdue = filtered
+    const overdue = kpiLoans
       .filter((r) => r.status === "overdue")
       .reduce((sum, r) => sum + (r.totalAmount - r.amountPaid), 0);
-    const collectedToday = filtered.reduce(
+    const collectedToday = kpiLoans.reduce(
       (sum, r) => sum + (paymentsTodayByLoanId[r.id] ?? 0),
       0,
     );
-    const customers = new Set(filtered.map((r) => r.customerName)).size;
+    const customers = new Set(kpiLoans.map((r) => r.customerName)).size;
     return { outstanding, overdue, collectedToday, customers };
-  }, [filtered, paymentsTodayByLoanId]);
+  }, [kpiLoans, paymentsTodayByLoanId]);
 
-  const totalEntries = filtered.length;
-  const totalPages = Math.max(1, Math.ceil(totalEntries / pageSize));
+  const totalPages = Math.max(1, Math.ceil(loanTotalCount / pageSize));
   const safePage = Math.min(page, totalPages);
-  const start = (safePage - 1) * pageSize;
-  const paged = filtered.slice(start, start + pageSize);
+  const paged = filtered;
+  const rangeStart =
+    loanTotalCount === 0 ? 0 : (safePage - 1) * pageSize + 1;
+  const rangeEnd = Math.min(safePage * pageSize, loanTotalCount);
 
   const openCreate = () => {
     setFormMode("create");
@@ -798,9 +813,10 @@ export default function PatientLoansPage() {
 
             <div className="flex flex-col gap-3 border-t p-4 sm:flex-row sm:items-center sm:justify-between">
               <p className="text-xs text-muted-foreground">
-                Showing {totalEntries === 0 ? 0 : start + 1} to{" "}
-                {Math.min(start + pageSize, totalEntries)} of {totalEntries}{" "}
-                entries
+                Showing {rangeStart} to {rangeEnd} of {loanTotalCount} loans
+                {query.trim()
+                  ? " (search applies to the current page only)"
+                  : ""}
               </p>
               <div className="flex items-center gap-1">
                 <Button

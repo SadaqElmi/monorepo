@@ -2,6 +2,7 @@
 
 import * as React from "react";
 import { useRouter } from "next/navigation";
+import { useQueryClient } from "@tanstack/react-query";
 
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -13,6 +14,7 @@ import { setAuthToken, type StoredUser } from "@/lib/auth-client";
 import { usePos } from "@/components/pos-context";
 import { getPosDeviceCredential } from "@/lib/device-client";
 import { staffLogin, pinLogin } from "@/lib/services/auth";
+import { prefetchPosRegisterData } from "@/lib/prefetch-register-data";
 
 const POS_LOGIN_MODE = (
   process.env.NEXT_PUBLIC_POS_DEVICE_LOGIN_MODE ?? "dual"
@@ -20,6 +22,7 @@ const POS_LOGIN_MODE = (
 
 export default function StaffLoginPage() {
   const router = useRouter();
+  const queryClient = useQueryClient();
   const { setManagerPrivilegesSuspended } = usePos();
 
   const [staffId, setStaffId] = React.useState("");
@@ -119,6 +122,11 @@ export default function StaffLoginPage() {
         }
       } catch {
         /* ignore */
+      }
+
+      const slug = res.tenantSlug?.trim();
+      if (slug) {
+        prefetchPosRegisterData(queryClient, slug);
       }
 
       router.push("/");

@@ -17,6 +17,7 @@ export const metadata: Metadata = {
 };
 
 import { PosProvider } from "@/components/pos-context";
+import { QueryClientProvider } from "@/components/query-provider";
 import { Toaster } from "@/components/ui/sonner";
 import { cn } from "@/lib/utils";
 
@@ -28,11 +29,13 @@ export default function RootLayout({
   return (
     <html lang="en" className={cn("h-full", "font-sans", geist.variable)}>
       <body className={`${geist.variable} ${geistMono.variable} h-full flex flex-col overflow-hidden`}>
-        <PosProvider>
-          <TooltipProvider>{children}</TooltipProvider>
-          <Footer />
-          <Toaster position="top-center" />
-        </PosProvider>
+        <QueryClientProvider>
+          <PosProvider>
+            <TooltipProvider>{children}</TooltipProvider>
+            <Footer />
+            <Toaster position="top-center" />
+          </PosProvider>
+        </QueryClientProvider>
       </body>
     </html>
   );

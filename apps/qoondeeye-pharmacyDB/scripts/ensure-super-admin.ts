@@ -6,17 +6,21 @@
 //$env:SUPER_ADMIN_EMAIL="admin@gmail.com"; $env:SUPER_ADMIN_PASSWORD="admin123"; pnpm run db:ensure-super-admin
 import 'dotenv/config';
 import * as bcrypt from 'bcrypt';
-import { PrismaPg } from '@prisma/adapter-pg';
 import { PrismaClient } from '@prisma/client';
+import {
+  createPgPool,
+  createPrismaPgFromPool,
+  resolveDatabaseUrl,
+} from '../src/prisma/create-pg-adapter';
 
-const url = process.env.DATABASE_URL_STAGING ?? process.env.DATABASE_URL_LOCAL;
+const url = resolveDatabaseUrl();
 const email = process.env.SUPER_ADMIN_EMAIL?.trim();
 const password = process.env.SUPER_ADMIN_PASSWORD;
 
 async function main() {
   if (!url) {
     throw new Error(
-      'Set DATABASE_URL_STAGING or DATABASE_URL_LOCAL (see prisma.config.ts)',
+      'Set DATABASE_URL or DATABASE_URL_STAGING / DATABASE_URL_LOCAL (see prisma.config.ts)',
     );
   }
   if (!email || !password) {
@@ -25,7 +29,8 @@ async function main() {
     );
   }
 
-  const adapter = new PrismaPg({ connectionString: url });
+  const pool = createPgPool(url);
+  const adapter = createPrismaPgFromPool(pool);
   const prisma = new PrismaClient({ adapter, log: ['error', 'warn'] });
   const hash = await bcrypt.hash(password, 10);
   try {
@@ -44,6 +49,7 @@ async function main() {
     console.log('Super admin upserted:', user.email, user.id);
   } finally {
     await prisma.$disconnect();
+    await pool.end();
   }
 }
 

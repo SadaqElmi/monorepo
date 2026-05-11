@@ -6,6 +6,7 @@ import { TenantService } from '../tenant/tenant.service';
 import { AccountingPostingService } from '../accounting/accounting-posting.service';
 import { AccountingLockDateService } from '../accounting/accounting-lock-date.service';
 import { AuditLogService } from '../accounting/audit-log.service';
+import { toPagedResult, type PagedResult } from '../common/pagination.util';
 
 export type PurchaseMutationContext = {
   actorUserId?: string | null;
@@ -130,6 +131,46 @@ export class PurchasesService {
         allowedBranchIds,
       ),
     );
+  }
+
+  async findAllPaged(
+    schemaName: string,
+    allowedBranchIds: string[],
+    skip: number,
+    take: number,
+  ): Promise<PagedResult<PurchaseListRow>> {
+    await this.tenantService.applyTenantSchemaPatches(schemaName);
+    return this.prisma.withTenantSchema(schemaName, async (tx) => {
+      const [countRow] = await tx.$queryRawUnsafe<{ c: bigint }[]>(
+        `SELECT COUNT(*)::bigint AS c FROM purchases p WHERE p.branch_id = ANY($1::uuid[])`,
+        allowedBranchIds,
+      );
+      const total = Number(countRow?.c ?? 0);
+      const items = await tx.$queryRawUnsafe<PurchaseListRow[]>(
+        `SELECT p.id,
+                p.supplier_id,
+                p.branch_id,
+                p.invoice_number,
+                p.total_amount,
+                p.purchase_date,
+                p.on_credit,
+                p.created_at,
+                (
+                  SELECT COUNT(*)::int
+                  FROM purchase_items pi
+                  WHERE pi.purchase_id = p.id
+                ) AS item_count
+         FROM purchases p
+         WHERE p.branch_id = ANY($1::uuid[])
+         ORDER BY p.purchase_date DESC
+         LIMIT $2 OFFSET $3`,
+        allowedBranchIds,
+        take,
+        skip,
+      );
+      const page = Math.floor(skip / take) + 1;
+      return toPagedResult(items, total, page, take);
+    });
   }
 
   /**

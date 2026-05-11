@@ -18,6 +18,7 @@ import { TenantService } from '../tenant/tenant.service';
 import type { TransferRepairConfirmDto } from './dto/transfer-repair-confirm.dto';
 import type { CreateTransferDto } from './dto/create-transfer.dto';
 import { deriveStateFromEvents } from './replay/transfer-replay.util';
+import { toPagedResult, type PagedResult } from '../common/pagination.util';
 import type { UpdateTransferDto } from './dto/update-transfer.dto';
 
 export type ListTransfersQuery = {
@@ -25,6 +26,8 @@ export type ListTransfersQuery = {
   from_branch_id?: string;
   to_branch_id?: string;
   approval_state?: string;
+  /** Either endpoint: from OR to equals this branch (UI branch scope). */
+  branch_id?: string;
 };
 
 export type TransferRepairAction =
@@ -222,6 +225,13 @@ export class TransfersService {
       vals.push(query.approval_state);
       n++;
     }
+    if (query?.branch_id?.trim()) {
+      parts.push(
+        `(t.from_branch_id = $${n}::uuid OR t.to_branch_id = $${n}::uuid)`,
+      );
+      vals.push(query.branch_id.trim());
+      n++;
+    }
 
     const where = parts.join(' AND ');
     return this.prisma.withTenantSchema(schema, (tx) =>
@@ -274,6 +284,182 @@ export class TransfersService {
         ...vals,
       ),
     );
+  }
+
+  /**
+   * Count transfers per `status` for allowed branches and optional list filters
+   * (aligns with `list` / `listPaged` WHERE).
+   */
+  async statusCounts(
+    schema: string,
+    allowedBranchIds: string[],
+    query?: ListTransfersQuery,
+  ): Promise<Record<string, number>> {
+    await this.ensureTables(schema);
+    if (!allowedBranchIds.length) {
+      return {};
+    }
+
+    const parts: string[] = [
+      '(t.from_branch_id = ANY($1::uuid[]) OR t.to_branch_id = ANY($1::uuid[]))',
+    ];
+    const vals: unknown[] = [allowedBranchIds];
+    let n = 2;
+
+    if (query?.status) {
+      parts.push(`t.status = $${n}`);
+      vals.push(query.status);
+      n++;
+    }
+    if (query?.from_branch_id) {
+      parts.push(`t.from_branch_id = $${n}::uuid`);
+      vals.push(query.from_branch_id);
+      n++;
+    }
+    if (query?.to_branch_id) {
+      parts.push(`t.to_branch_id = $${n}::uuid`);
+      vals.push(query.to_branch_id);
+      n++;
+    }
+    if (query?.approval_state) {
+      parts.push(`t.approval_state = $${n}`);
+      vals.push(query.approval_state);
+      n++;
+    }
+    if (query?.branch_id?.trim()) {
+      parts.push(
+        `(t.from_branch_id = $${n}::uuid OR t.to_branch_id = $${n}::uuid)`,
+      );
+      vals.push(query.branch_id.trim());
+      n++;
+    }
+
+    const where = parts.join(' AND ');
+    const rows = await this.prisma.withTenantSchema(schema, (tx) =>
+      tx.$queryRawUnsafe<{ status: string; c: bigint }[]>(
+        `SELECT t.status, COUNT(*)::bigint AS c
+         FROM stock_transfers t
+         WHERE ${where}
+         GROUP BY t.status`,
+        ...vals,
+      ),
+    );
+    const out: Record<string, number> = {};
+    for (const r of rows) {
+      out[r.status] = Number(r.c ?? 0);
+    }
+    return out;
+  }
+
+  async listPaged(
+    schema: string,
+    allowedBranchIds: string[],
+    query: ListTransfersQuery | undefined,
+    skip: number,
+    take: number,
+  ): Promise<PagedResult<TransferRow>> {
+    await this.ensureTables(schema);
+    if (!allowedBranchIds.length) {
+      return toPagedResult([], 0, Math.floor(skip / take) + 1, take);
+    }
+
+    const parts: string[] = [
+      '(t.from_branch_id = ANY($1::uuid[]) OR t.to_branch_id = ANY($1::uuid[]))',
+    ];
+    const vals: unknown[] = [allowedBranchIds];
+    let n = 2;
+
+    if (query?.status) {
+      parts.push(`t.status = $${n}`);
+      vals.push(query.status);
+      n++;
+    }
+    if (query?.from_branch_id) {
+      parts.push(`t.from_branch_id = $${n}::uuid`);
+      vals.push(query.from_branch_id);
+      n++;
+    }
+    if (query?.to_branch_id) {
+      parts.push(`t.to_branch_id = $${n}::uuid`);
+      vals.push(query.to_branch_id);
+      n++;
+    }
+    if (query?.approval_state) {
+      parts.push(`t.approval_state = $${n}`);
+      vals.push(query.approval_state);
+      n++;
+    }
+    if (query?.branch_id?.trim()) {
+      parts.push(
+        `(t.from_branch_id = $${n}::uuid OR t.to_branch_id = $${n}::uuid)`,
+      );
+      vals.push(query.branch_id.trim());
+      n++;
+    }
+
+    const where = parts.join(' AND ');
+    const limitPos = n;
+    const offsetPos = n + 1;
+    const listVals = [...vals, take, skip];
+
+    return this.prisma.withTenantSchema(schema, async (tx) => {
+      const [countRow] = await tx.$queryRawUnsafe<{ c: bigint }[]>(
+        `SELECT COUNT(*)::bigint AS c FROM stock_transfers t WHERE ${where}`,
+        ...vals,
+      );
+      const total = Number(countRow?.c ?? 0);
+      const items = await tx.$queryRawUnsafe<TransferRow[]>(
+        `SELECT
+           t.id,
+           t.transfer_number,
+           t.from_branch_id,
+           t.to_branch_id,
+           t.status,
+           t.approval_state,
+           t.approval_state AS approval_status,
+           t.lock_version,
+           t.expected_date,
+           t.expected_stock_snapshot,
+           t.created_at,
+           t.confirmed_at,
+           t.approved_by,
+           t.approved_at,
+           t.shipped_at,
+           t.received_at,
+           t.ship_accounting_state,
+           t.receive_accounting_state,
+           t.last_accounting_error,
+           t.shipped_journal_entry_id,
+           t.receive_journal_entry_id,
+           t.ship_reversal_journal_entry_id,
+           t.receive_reversal_journal_entry_id,
+           t.is_reversed,
+           t.reversed_by,
+           t.reversed_at,
+           t.reversal_reason,
+           t.processing_lock_owner,
+           t.processing_lock_until,
+           t.processing_stage,
+           COALESCE(t.created_by_name, creator.name) AS created_by_name
+         FROM stock_transfers t
+         LEFT JOIN LATERAL (
+           SELECT u.name
+           FROM stock_transfer_events e
+           JOIN users u ON u.id = e.actor_user_id
+           WHERE e.transfer_id = t.id
+             AND e.event_type = 'CREATED'
+             AND u.name IS NOT NULL
+           ORDER BY e.created_at ASC
+           LIMIT 1
+         ) creator ON TRUE
+         WHERE ${where}
+         ORDER BY t.created_at DESC
+         LIMIT $${limitPos} OFFSET $${offsetPos}`,
+        ...listVals,
+      );
+      const page = Math.floor(skip / take) + 1;
+      return toPagedResult(items, total, page, take);
+    });
   }
 
   async monitoringOverview(

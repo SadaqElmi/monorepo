@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { Geist_Mono, Roboto } from "next/font/google";
 import "./globals.css";
+import { QueryClientProvider } from "@/components/query-provider";
 import { TooltipProvider } from "@/components/ui/tooltip";
 
 const roboto = Roboto({
@@ -29,7 +30,9 @@ export default function RootLayout({
       <body
         className={`${roboto.variable} ${geistMono.variable}`}
       >
-        <TooltipProvider>{children}</TooltipProvider>
+        <QueryClientProvider>
+          <TooltipProvider>{children}</TooltipProvider>
+        </QueryClientProvider>
       </body>
     </html>
   );

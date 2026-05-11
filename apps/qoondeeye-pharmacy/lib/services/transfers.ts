@@ -20,6 +20,7 @@
  * Responses: supports raw arrays, `{ data: [] }`, or `{ transfers: [] }`.
  */
 
+import type { PagedList } from "@repo/types";
 import { TRANSFERS_PREFIX } from "./endpoints";
 import { type JsonHeaders, jsonFetch } from "./http";
 import { invalidateReportCacheForBranch } from "./accounting";
@@ -141,6 +142,12 @@ export type ListTransfersQuery = {
   from_branch_id?: string;
   to_branch_id?: string;
   approval_state?: string;
+  branch_id?: string;
+};
+
+export type ListTransfersPagedQuery = ListTransfersQuery & {
+  page: number;
+  limit?: number;
 };
 
 function parseListPayload(raw: unknown): TransferDto[] {
@@ -160,19 +167,53 @@ function buildQuery(q?: ListTransfersQuery): string {
   if (q.from_branch_id) p.set("from_branch_id", q.from_branch_id);
   if (q.to_branch_id) p.set("to_branch_id", q.to_branch_id);
   if (q.approval_state) p.set("approval_state", q.approval_state);
+  if (q.branch_id) p.set("branch_id", q.branch_id);
   const s = p.toString();
   return s ? `?${s}` : "";
+}
+
+function buildPagedQuery(q: ListTransfersPagedQuery): string {
+  const p = new URLSearchParams();
+  if (q.status) p.set("status", q.status);
+  if (q.from_branch_id) p.set("from_branch_id", q.from_branch_id);
+  if (q.to_branch_id) p.set("to_branch_id", q.to_branch_id);
+  if (q.approval_state) p.set("approval_state", q.approval_state);
+  if (q.branch_id) p.set("branch_id", q.branch_id);
+  p.set("page", String(Math.max(1, q.page)));
+  if (q.limit != null) p.set("limit", String(Math.max(1, q.limit)));
+  const s = p.toString();
+  return s ? `?${s}` : "?";
 }
 
 export async function listTransfers(
   tenantSlug: string,
   query?: ListTransfersQuery,
+  init?: Pick<RequestInit, "signal">,
 ): Promise<TransferDto[]> {
-  const raw = await jsonFetch<unknown>(`${TRANSFERS_PREFIX}${buildQuery(query)}`, {
-    method: "GET",
-    headers: { "X-Tenant": tenantSlug } as JsonHeaders,
-  });
+  const raw = await jsonFetch<unknown>(
+    `${TRANSFERS_PREFIX}${buildQuery(query)}`,
+    {
+      method: "GET",
+      headers: { "X-Tenant": tenantSlug } as JsonHeaders,
+      signal: init?.signal,
+    },
+  );
   return parseListPayload(raw);
+}
+
+export async function listTransfersPaged(
+  tenantSlug: string,
+  query: ListTransfersPagedQuery,
+  init?: Pick<RequestInit, "signal">,
+): Promise<PagedList<TransferDto>> {
+  return jsonFetch<PagedList<TransferDto>>(
+    `${TRANSFERS_PREFIX}${buildPagedQuery(query)}`,
+    {
+      method: "GET",
+      headers: { "X-Tenant": tenantSlug } as JsonHeaders,
+      signal: init?.signal,
+    },
+  );
 }
 
 export async function getTransfer(
@@ -216,6 +257,26 @@ export async function getTransferMonitoringOverview(
     {
       method: "GET",
       headers: { "X-Tenant": tenantSlug } as JsonHeaders,
+    },
+  );
+}
+
+/** Per-status counts for KPI cards (optional branch scope = either endpoint). */
+export async function getTransferStatusCounts(
+  tenantSlug: string,
+  branchScopeId?: string | null,
+  init?: Pick<RequestInit, "signal">,
+): Promise<Record<string, number>> {
+  const qs =
+    branchScopeId != null && branchScopeId.trim()
+      ? `?branch_id=${encodeURIComponent(branchScopeId.trim())}`
+      : "";
+  return jsonFetch<Record<string, number>>(
+    `${TRANSFERS_PREFIX}/summary/status-counts${qs}`,
+    {
+      method: "GET",
+      headers: { "X-Tenant": tenantSlug } as JsonHeaders,
+      signal: init?.signal,
     },
   );
 }

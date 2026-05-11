@@ -7,6 +7,7 @@ import { AccountingPostingService } from '../accounting/accounting-posting.servi
 import { AccountingLockDateService } from '../accounting/accounting-lock-date.service';
 import { AuditLogService } from '../accounting/audit-log.service';
 import { maxSaleDiscountPercentForRole } from './sales-discount.policy';
+import { toPagedResult, type PagedResult } from '../common/pagination.util';
 
 export type SalesMutationContext = {
   actorUserId?: string | null;
@@ -87,6 +88,36 @@ export class SalesService {
         allowedBranchIds,
       ),
     );
+  }
+
+  async findAllPaged(
+    schemaName: string,
+    allowedBranchIds: string[],
+    skip: number,
+    take: number,
+  ): Promise<PagedResult<SaleListRow>> {
+    await this.tenantService.applyTenantSchemaPatches(schemaName);
+    return this.prisma.withTenantSchema(schemaName, async (tx) => {
+      const [countRow] = await tx.$queryRawUnsafe<{ c: bigint }[]>(
+        `SELECT COUNT(*)::bigint AS c FROM sales s WHERE s.branch_id = ANY($1::uuid[])`,
+        allowedBranchIds,
+      );
+      const total = Number(countRow?.c ?? 0);
+      const items = await tx.$queryRawUnsafe<SaleListRow[]>(
+        `SELECT s.id, s.branch_id, s.receipt_number, s.total_amount, s.discount, s.tax, s.sale_date,
+                s.customer_id, s.on_account,
+                (SELECT p.method FROM payments p WHERE p.sale_id = s.id ORDER BY p.paid_at ASC NULLS LAST LIMIT 1) AS payment_method
+         FROM sales s
+         WHERE s.branch_id = ANY($1::uuid[])
+         ORDER BY s.sale_date DESC
+         LIMIT $2 OFFSET $3`,
+        allowedBranchIds,
+        take,
+        skip,
+      );
+      const page = Math.floor(skip / take) + 1;
+      return toPagedResult(items, total, page, take);
+    });
   }
 
   async findOne(schemaName: string, id: string, allowedBranchIds: string[]) {

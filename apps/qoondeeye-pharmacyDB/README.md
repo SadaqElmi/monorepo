@@ -32,11 +32,20 @@ pnpm install
 
 ### 2. Configure database
 
-Create a PostgreSQL database and set `DATABASE_URL_STAGING` in `.env`:
+Create a PostgreSQL database and set a connection URL in `.env`:
+
+- **Production (e.g. Render):** `DATABASE_URL` is injected by the platform.
+- **Local / shared dev:** use `DATABASE_URL_LOCAL` or `DATABASE_URL_STAGING` (see [`prisma.config.ts`](prisma.config.ts)).
 
 ```env
-DATABASE_URL_STAGING="postgresql://USER:PASSWORD@localhost:5432/pharmacare?schema=public"
+# Example local
+DATABASE_URL_LOCAL="postgresql://USER:PASSWORD@localhost:5432/pharmacare?schema=public"
+
+# Optional: Prisma CLI / migrate may honor URL hints (runtime pooling uses explicit `pg.Pool` in code)
+# DATABASE_URL_LOCAL="postgresql://USER:PASSWORD@localhost:5432/pharmacare?schema=public&connection_limit=10&pool_timeout=20"
 ```
+
+The API uses a single `pg` pool with **`max: 10`**, **`idleTimeoutMillis: 30000`**, **`connectionTimeoutMillis: 20000`** ([`src/prisma/create-pg-adapter.ts`](src/prisma/create-pg-adapter.ts)).
 
 Device-bound POS rollout flags:
 

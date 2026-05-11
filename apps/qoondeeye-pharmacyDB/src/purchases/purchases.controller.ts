@@ -8,8 +8,10 @@ import {
   Delete,
   BadRequestException,
   ForbiddenException,
+  Query,
   Req,
 } from '@nestjs/common';
+import { parsePagedQueryParam } from '../common/pagination.util';
 import { TenantContextService } from '../tenant/tenant-context.service';
 import { PurchasesService } from './purchases.service';
 import { CreatePurchaseDto } from './dto/create-purchase.dto';
@@ -33,11 +35,24 @@ export class PurchasesController {
   }
 
   @Get()
-  findAll(@Req() req: Request) {
+  findAll(
+    @Req() req: Request,
+    @Query('page') page?: string,
+    @Query('limit') limit?: string,
+  ) {
     this.ensureTenant();
     const allowedBranchIds = req.allowedBranchIds ?? [];
     if (!allowedBranchIds.length) {
       throw new ForbiddenException('Access denied to this branch');
+    }
+    const paged = parsePagedQueryParam(page, limit);
+    if (paged) {
+      return this.purchasesService.findAllPaged(
+        this.tenantContext.getSchemaName()!,
+        allowedBranchIds,
+        paged.skip,
+        paged.limit,
+      );
     }
     return this.purchasesService.findAll(
       this.tenantContext.getSchemaName()!,

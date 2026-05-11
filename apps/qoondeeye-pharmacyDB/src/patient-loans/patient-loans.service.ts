@@ -1,4 +1,5 @@
 import { Injectable } from '@nestjs/common';
+import { toPagedResult, type PagedResult } from '../common/pagination.util';
 import { PrismaService } from '../prisma/prisma.service';
 
 export interface PatientLoanListRow {
@@ -86,6 +87,58 @@ export class PatientLoansService {
       }
       query += ` ORDER BY pl.created_at DESC`;
       return tx.$queryRawUnsafe<PatientLoanListRow[]>(query, ...params);
+    });
+  }
+
+  async findAllPaged(
+    schemaName: string,
+    status: string | undefined,
+    allowedBranchIds: string[],
+    skip: number,
+    take: number,
+  ): Promise<PagedResult<PatientLoanListRow>> {
+    return this.prisma.withTenantSchema(schemaName, async (tx) => {
+      let countSql = `
+        SELECT COUNT(*)::bigint AS c
+        FROM patient_loans pl
+        LEFT JOIN customers c ON c.id = pl.customer_id
+        WHERE 1=1
+      `;
+      let query = `
+        SELECT pl.id, pl.customer_id, pl.branch_id, pl.sale_id, pl.total_amount,
+               pl.amount_paid, pl.status, pl.due_date, pl.created_at,
+               c.name as customer_name
+        FROM patient_loans pl
+        LEFT JOIN customers c ON c.id = pl.customer_id
+        WHERE 1=1
+      `;
+      const params: unknown[] = [];
+
+      params.push(allowedBranchIds);
+      const branchIdx = params.length;
+      countSql += ` AND pl.branch_id = ANY($${branchIdx}::uuid[])`;
+      query += ` AND pl.branch_id = ANY($${branchIdx}::uuid[])`;
+
+      if (status) {
+        params.push(status);
+        countSql += ` AND pl.status = $${params.length}`;
+        query += ` AND pl.status = $${params.length}`;
+      }
+
+      query += ` ORDER BY pl.created_at DESC LIMIT $${params.length + 1} OFFSET $${params.length + 2}`;
+      const listParams = [...params, take, skip];
+
+      const [countRow] = await tx.$queryRawUnsafe<{ c: bigint }[]>(
+        countSql,
+        ...params,
+      );
+      const total = Number(countRow?.c ?? 0);
+      const items = await tx.$queryRawUnsafe<PatientLoanListRow[]>(
+        query,
+        ...listParams,
+      );
+      const page = Math.floor(skip / take) + 1;
+      return toPagedResult(items, total, page, take);
     });
   }
 

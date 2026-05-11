@@ -1,3 +1,4 @@
+import type { PagedList } from "@repo/types";
 import { PURCHASES_PREFIX } from "./endpoints";
 import { type JsonHeaders, jsonFetch } from "./http";
 
@@ -81,10 +82,31 @@ export async function getPurchaseLinePricingByProduct(
   );
 }
 
-export async function getPurchases(tenantSlug: string): Promise<Purchase[]> {
+export async function getPurchases(
+  tenantSlug: string,
+  init?: Pick<RequestInit, "signal">,
+): Promise<Purchase[]> {
   return jsonFetch<Purchase[]>(PURCHASES_PREFIX, {
     method: "GET",
     headers: { "X-Tenant": tenantSlug } as JsonHeaders,
+    signal: init?.signal,
+  });
+}
+
+export async function getPurchasesPaged(
+  tenantSlug: string,
+  page: number,
+  limit: number,
+  init?: Pick<RequestInit, "signal">,
+): Promise<PagedList<Purchase>> {
+  const q = new URLSearchParams({
+    page: String(Math.max(1, page)),
+    limit: String(Math.max(1, limit)),
+  });
+  return jsonFetch<PagedList<Purchase>>(`${PURCHASES_PREFIX}?${q}`, {
+    method: "GET",
+    headers: { "X-Tenant": tenantSlug } as JsonHeaders,
+    signal: init?.signal,
   });
 }
 

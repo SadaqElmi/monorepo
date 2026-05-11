@@ -9,8 +9,9 @@ export default defineConfig({
     path: 'prisma/migrations',
   },
   datasource: {
-    // Staging is the source of truth for shared environments; local is optional fallback.
+    // DATABASE_URL: Render/production. Staging/local for shared dev DBs.
     url:
+      process.env['DATABASE_URL'] ??
       process.env['DATABASE_URL_STAGING'] ??
       process.env['DATABASE_URL_LOCAL'],
   },

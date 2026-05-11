@@ -24,9 +24,15 @@ export type NavMainItem = {
 export function NavMain({
   items,
   prepend,
+  onCollapsiblePointerEnter,
+  onCollapsibleOpenChange,
 }: {
   items: NavMainItem[];
   prepend?: React.ReactNode;
+  /** Hovering a nav group with sub-items (for prefetch). */
+  onCollapsiblePointerEnter?: (itemTitle: string) => void;
+  /** Collapsible opened or closed (open=true after expand). */
+  onCollapsibleOpenChange?: (itemTitle: string, open: boolean) => void;
 }) {
   const pathname = usePathname();
 
@@ -68,11 +74,17 @@ export function NavMain({
             key={item.title}
             defaultOpen={openDefault}
             className="group/collapsible"
+            onOpenChange={(open) =>
+              onCollapsibleOpenChange?.(item.title, open)
+            }
           >
             <CollapsibleTrigger asChild>
               <Button
                 variant="ghost"
                 className="h-9 w-full justify-between gap-2 px-2 font-normal"
+                onPointerEnter={() =>
+                  onCollapsiblePointerEnter?.(item.title)
+                }
               >
                 <span className="flex min-w-0 items-center gap-2">
                   {Icon ? <Icon className="size-4 shrink-0" /> : null}

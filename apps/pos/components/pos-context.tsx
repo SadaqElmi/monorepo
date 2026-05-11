@@ -8,6 +8,7 @@ import React, {
   useState,
 } from "react";
 import { usePathname } from "next/navigation";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
 import type { PosTransaction, PosCartLine, PosHeldOrder } from "@repo/types";
 import { getResolvedStoredUser, type StoredUser } from "@/lib/auth-client";
 import {
@@ -19,6 +20,8 @@ import {
   newReceiptId,
 } from "@/lib/pos-utils";
 import { createSale } from "@/lib/api";
+import type { CreateSaleInput, Sale } from "@repo/types";
+import { getBranchQueryKeyFacet } from "@/lib/query-branch-key";
 import {
   getCurrentPosSession,
   openPosSession,
@@ -105,8 +108,99 @@ type PosContextType = {
 
 const PosContext = createContext<PosContextType | undefined>(undefined);
 
+type CreateSaleMutatePayload = {
+  tenantSlug: string;
+  body: CreateSaleInput;
+  optimisticSaleId: string;
+  optimisticReceiptId: string;
+};
+
+type CreateSaleMutationCtx = {
+  previous: Sale[] | undefined;
+  queryKey: readonly unknown[];
+};
+
 export function PosProvider({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
+  const queryClient = useQueryClient();
+
+  const createSaleMutation = useMutation<
+    Sale,
+    Error,
+    CreateSaleMutatePayload,
+    CreateSaleMutationCtx
+  >({
+    mutationFn: async (payload) =>
+      createSale(payload.tenantSlug, payload.body),
+    onMutate: async (variables) => {
+      const facet = getBranchQueryKeyFacet();
+      const queryKey = [
+        "pos",
+        "sales",
+        variables.tenantSlug,
+        facet,
+        1,
+        200,
+      ] as const;
+      await queryClient.cancelQueries({ queryKey });
+      const previous = queryClient.getQueryData<Sale[]>(queryKey);
+      const optimisticSale: Sale = {
+        id: variables.optimisticSaleId,
+        branch_id: null,
+        receipt_number: variables.optimisticReceiptId,
+        total_amount: variables.body.totalAmount ?? null,
+        discount: variables.body.discount ?? null,
+        tax: variables.body.tax ?? null,
+        sale_date: new Date().toISOString(),
+        payment_method: variables.body.paymentMethod,
+        items: [],
+      };
+      queryClient.setQueryData<Sale[]>(queryKey, (old) => {
+        const base = old ?? [];
+        const filtered = base.filter(
+          (s) => s.id !== variables.optimisticSaleId,
+        );
+        return [optimisticSale, ...filtered].slice(0, 200);
+      });
+      return { previous, queryKey };
+    },
+    onSuccess: (data, variables) => {
+      const facet = getBranchQueryKeyFacet();
+      const queryKey = [
+        "pos",
+        "sales",
+        variables.tenantSlug,
+        facet,
+        1,
+        200,
+      ] as const;
+      queryClient.setQueryData<Sale[]>(queryKey, (old) => {
+        if (!old) return old;
+        return old.map((row) =>
+          row.id === variables.optimisticSaleId ? data : row,
+        );
+      });
+    },
+    onError: (_e, variables, context) => {
+      const qk = context?.queryKey;
+      if (!qk) return;
+      if (context?.previous !== undefined) {
+        queryClient.setQueryData(qk, context.previous);
+      } else {
+        queryClient.setQueryData<Sale[]>(qk, (old) => {
+          if (!old) return old;
+          return old.filter((s) => s.id !== variables.optimisticSaleId);
+        });
+      }
+    },
+    onSettled: (_d, _e, variables) => {
+      if (!variables?.tenantSlug) return;
+      const facet = getBranchQueryKeyFacet();
+      void queryClient.invalidateQueries({
+        queryKey: ["pos", "sales", variables.tenantSlug, facet],
+      });
+    },
+  });
   const [mainTab, setMainTab] = useState<"register" | "returns">("register");
   const [checkoutStep, setCheckoutStep] = useState<"cart" | "payment">("cart");
   const [transactions, setTransactions] = useState<PosTransaction[]>([]);
@@ -453,32 +547,56 @@ export function PosProvider({ children }: { children: React.ReactNode }) {
           );
           return;
         }
+        const changeRounded =
+          Math.round(Math.max(0, tendered - tot) * 100) / 100;
+        const optimisticId = `opt-${Date.now()}`;
+        const optimisticEntry: PosTransaction = {
+          receiptId: newReceiptId(),
+          saleId: optimisticId,
+          createdAt: Date.now(),
+          paymentMethod: paymentLabel,
+          lines: cloneLines(billable),
+          discount,
+          subtotal: s,
+          tax: t,
+          total: tot,
+          amountTendered: tendered,
+          changeDue: changeRounded,
+        };
+        setTransactions((prev) => {
+          const next = [optimisticEntry, ...prev].slice(0, 500);
+          persistPosTransactions(next);
+          return next;
+        });
         try {
-          const sale = await createSale(tenantSlug, {
-            totalAmount: tot,
-            discount,
-            tax: t,
-            paymentMethod: paymentMethodCode ?? paymentLabel,
-            posSessionId,
-            items: billable.map((l) =>
-              l.miscChargeKind === "delivery" || l.miscChargeKind === "tailor"
-                ? {
-                    miscChargeKind: l.miscChargeKind,
-                    quantity: l.qty,
-                    price: l.unitPrice,
-                  }
-                : {
-                    productId: l.productId,
-                    quantity: l.qty,
-                    price: l.unitPrice,
-                  },
-            ),
+          const sale = await createSaleMutation.mutateAsync({
+            tenantSlug,
+            optimisticSaleId: optimisticId,
+            optimisticReceiptId: optimisticEntry.receiptId,
+            body: {
+              totalAmount: tot,
+              discount,
+              tax: t,
+              paymentMethod: paymentMethodCode ?? paymentLabel,
+              posSessionId,
+              items: billable.map((l) =>
+                l.miscChargeKind === "delivery" || l.miscChargeKind === "tailor"
+                  ? {
+                      miscChargeKind: l.miscChargeKind,
+                      quantity: l.qty,
+                      price: l.unitPrice,
+                    }
+                  : {
+                      productId: l.productId,
+                      quantity: l.qty,
+                      price: l.unitPrice,
+                    },
+              ),
+            },
           });
           const receiptNum =
             (sale.receipt_number as string | null | undefined)?.trim() ||
-            newReceiptId();
-          const changeRounded =
-            Math.round(Math.max(0, tendered - tot) * 100) / 100;
+            optimisticEntry.receiptId;
           const entry: PosTransaction = {
             receiptId: receiptNum,
             saleId: sale.id,
@@ -494,7 +612,9 @@ export function PosProvider({ children }: { children: React.ReactNode }) {
           };
           const changeDue = changeRounded;
           setTransactions((prev) => {
-            const next = [entry, ...prev].slice(0, 500);
+            const next = prev
+              .map((row) => (row.saleId === optimisticId ? entry : row))
+              .slice(0, 500);
             persistPosTransactions(next);
             return next;
           });
@@ -512,6 +632,11 @@ export function PosProvider({ children }: { children: React.ReactNode }) {
               .join(" · "),
           );
         } catch (e) {
+          setTransactions((prev) => {
+            const next = prev.filter((row) => row.saleId !== optimisticId);
+            persistPosTransactions(next);
+            return next;
+          });
           posToast.error(
             "Could not save sale",
             e instanceof Error
@@ -562,6 +687,7 @@ export function PosProvider({ children }: { children: React.ReactNode }) {
       clearCart,
       roleForDiscountPolicy,
       posSessionId,
+      createSaleMutation,
     ],
   );
 

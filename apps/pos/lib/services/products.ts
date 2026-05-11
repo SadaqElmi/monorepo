@@ -4,10 +4,14 @@ import type { Product } from "@repo/types";
 
 export type { Product };
 
-export async function getProducts(tenantSlug: string): Promise<Product[]> {
+export async function getProducts(
+  tenantSlug: string,
+  init?: Pick<RequestInit, "signal">,
+): Promise<Product[]> {
   return jsonFetch<Product[]>(PRODUCTS_PREFIX, {
     method: "GET",
     headers: { "X-Tenant": tenantSlug } as JsonHeaders,
+    signal: init?.signal,
   });
 }
 

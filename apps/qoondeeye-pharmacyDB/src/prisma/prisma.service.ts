@@ -5,8 +5,13 @@ import {
   Logger,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import { PrismaPg } from '@prisma/adapter-pg';
 import { Prisma, PrismaClient } from '@prisma/client';
+import type { Pool } from 'pg';
+import {
+  createPgPool,
+  createPrismaPgFromPool,
+  resolveDatabaseUrl,
+} from './create-pg-adapter';
 
 @Injectable()
 export class PrismaService
@@ -14,23 +19,22 @@ export class PrismaService
   implements OnModuleInit, OnModuleDestroy
 {
   private readonly logger = new Logger(PrismaService.name);
+  private readonly pgPool: Pool;
 
   constructor(config: ConfigService) {
-    const url =
-      config.get<string>('DATABASE_URL_STAGING') ??
-      process.env.DATABASE_URL_STAGING ??
-      config.get<string>('DATABASE_URL_LOCAL') ??
-      process.env.DATABASE_URL_LOCAL;
+    const url = resolveDatabaseUrl(config);
     if (!url) {
       throw new Error(
-        'Database URL required: set DATABASE_URL_STAGING or DATABASE_URL_LOCAL',
+        'Database URL required: set DATABASE_URL (production) or DATABASE_URL_STAGING / DATABASE_URL_LOCAL',
       );
     }
-    const adapter = new PrismaPg({ connectionString: url });
+    const pool = createPgPool(url);
+    const adapter = createPrismaPgFromPool(pool);
     super({
       adapter,
       log: ['error', 'warn'],
     });
+    this.pgPool = pool;
   }
 
   async onModuleInit() {
@@ -82,6 +86,7 @@ export class PrismaService
 
   async onModuleDestroy() {
     await this.$disconnect();
+    await this.pgPool.end();
     this.logger.log('Database disconnected');
   }
 

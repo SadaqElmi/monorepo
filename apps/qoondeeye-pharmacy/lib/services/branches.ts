@@ -11,10 +11,14 @@ export type Branch = {
   created_at?: string;
 };
 
-export async function getBranches(tenantSlug: string): Promise<Branch[]> {
+export async function getBranches(
+  tenantSlug: string,
+  init?: Pick<RequestInit, "signal">,
+): Promise<Branch[]> {
   return jsonFetch<Branch[]>(BRANCHES_PREFIX, {
     method: "GET",
     headers: { "X-Tenant": tenantSlug } as JsonHeaders,
+    signal: init?.signal,
   });
 }
 

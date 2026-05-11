@@ -1,6 +1,7 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { keepPreviousData, useQuery } from "@tanstack/react-query";
+import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import {
@@ -36,8 +37,12 @@ import {
 } from "@/components/ui/select";
 import { Input } from "@/components/ui/input";
 import { getStoredUser } from "@/lib/auth-client";
+import { getBranchQueryKeyFacet } from "@/lib/query-branch-key";
 import { getBranches } from "@/lib/services/branches";
-import { listTransfers } from "@/lib/services/transfers";
+import {
+  getTransferStatusCounts,
+  listTransfersPaged,
+} from "@/lib/services/transfers";
 import { ROUTES } from "@/lib/routes";
 import { toast } from "sonner";
 
@@ -48,76 +53,124 @@ const ALL_STATUSES = "all";
 
 export default function StockTransfersPage() {
   const router = useRouter();
-  const [tenantSlug, setTenantSlug] = useState<string | null>(null);
-  const [allRows, setAllRows] = useState<StockTransferListRow[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [loadError, setLoadError] = useState<string | null>(null);
+  const [tenantSlug] = useState(
+    () => getStoredUser()?.tenantSlug?.trim() ?? null,
+  );
+  const [branchFacet, setBranchFacet] = useState(() =>
+    typeof window !== "undefined" ? getBranchQueryKeyFacet() : "",
+  );
   const [query, setQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState<string>(ALL_STATUSES);
   const [branchFilter, setBranchFilter] = useState<string>(ALL_BRANCHES);
   const [page, setPage] = useState(1);
 
-  const refresh = useCallback(async () => {
-    const u = getStoredUser();
-    const slug = u?.tenantSlug?.trim() ?? null;
-    setTenantSlug(slug);
-    if (!slug) {
-      setLoading(false);
-      setAllRows([]);
-      return;
-    }
-    setLoading(true);
-    setLoadError(null);
-    try {
-      const [branches, dtos] = await Promise.all([
-        getBranches(slug),
-        listTransfers(slug),
-      ]);
-      const bm = branchesToMap(branches);
-      setAllRows(dtos.map((d) => transferDtoToListRow(d, bm)));
-    } catch (e) {
-      setLoadError(e instanceof Error ? e.message : "Failed to load transfers");
-      setAllRows([]);
-    } finally {
-      setLoading(false);
-    }
+  useEffect(() => {
+    const sync = () => setBranchFacet(getBranchQueryKeyFacet());
+    window.addEventListener("storage", sync);
+    window.addEventListener("activeBranchChanged", sync as EventListener);
+    return () => {
+      window.removeEventListener("storage", sync);
+      window.removeEventListener(
+        "activeBranchChanged",
+        sync as EventListener,
+      );
+    };
   }, []);
 
-  useEffect(() => {
-    void refresh();
-  }, [refresh]);
+  const statusCountsQuery = useQuery({
+    queryKey: [
+      "erp",
+      "transfers",
+      "status-counts",
+      tenantSlug,
+      branchFacet,
+      branchFilter,
+    ],
+    enabled: Boolean(tenantSlug && branchFacet),
+    queryFn: ({ signal }) =>
+      getTransferStatusCounts(
+        tenantSlug!,
+        branchFilter !== ALL_BRANCHES ? branchFilter : null,
+        { signal },
+      ),
+  });
+
+  const transfersQuery = useQuery({
+    queryKey: [
+      "erp",
+      "transfers",
+      "list",
+      tenantSlug,
+      branchFacet,
+      page,
+      PAGE_SIZE,
+      statusFilter,
+      branchFilter,
+    ],
+    enabled: Boolean(tenantSlug && branchFacet),
+    placeholderData: keepPreviousData,
+    queryFn: async ({ signal }) => {
+      const slug = tenantSlug!;
+      const [branches, pageRes] = await Promise.all([
+        getBranches(slug, { signal }),
+        listTransfersPaged(
+          slug,
+          {
+            page,
+            limit: PAGE_SIZE,
+            status:
+              statusFilter !== ALL_STATUSES ? statusFilter : undefined,
+            branch_id:
+              branchFilter !== ALL_BRANCHES ? branchFilter : undefined,
+          },
+          { signal },
+        ),
+      ]);
+      const bm = branchesToMap(branches);
+      const rows = pageRes.items.map((d) => transferDtoToListRow(d, bm));
+      return {
+        rows,
+        branches,
+        total: pageRes.total,
+        totalPages: pageRes.totalPages,
+        page: pageRes.page,
+        limit: pageRes.limit,
+      };
+    },
+  });
+
+  const loading = transfersQuery.isPending || transfersQuery.isFetching;
+  const loadError = transfersQuery.error
+    ? transfersQuery.error instanceof Error
+      ? transfersQuery.error.message
+      : "Failed to load transfers"
+    : null;
 
   const branchOptions = useMemo(() => {
-    const map = new Map<string, string>();
-    for (const r of allRows) {
-      if (r.fromBranchId) map.set(r.fromBranchId, r.fromBranch);
-      if (r.toBranchId) map.set(r.toBranchId, r.toBranch);
-    }
-    return [...map.entries()].sort((a, b) =>
-      a[1].localeCompare(b[1], undefined, { sensitivity: "base" }),
-    );
-  }, [allRows]);
+    const br = transfersQuery.data?.branches ?? [];
+    return [...br]
+      .map((b) => [b.id, b.name ?? b.id] as [string, string])
+      .sort((a, b) =>
+        a[1].localeCompare(b[1], undefined, { sensitivity: "base" }),
+      );
+  }, [transfersQuery.data?.branches]);
 
   const kpis = useMemo(() => {
-    const draft = allRows.filter((r) => r.status === "draft").length;
-    const confirmed = allRows.filter((r) => r.status === "confirmed").length;
-    const shipped = allRows.filter((r) => r.status === "shipped").length;
-    const received = allRows.filter((r) => r.status === "received").length;
-    return { draft, confirmed, shipped, received };
-  }, [allRows]);
+    const sc = statusCountsQuery.data ?? {};
+    return {
+      draft: sc.draft ?? 0,
+      confirmed: sc.confirmed ?? 0,
+      shipped: sc.shipped ?? 0,
+      received: sc.received ?? 0,
+    };
+  }, [statusCountsQuery.data]);
+
+  const serverRows = transfersQuery.data?.rows ?? [];
 
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
-    return allRows.filter((r) => {
-      if (statusFilter !== ALL_STATUSES && r.status !== statusFilter) {
-        return false;
-      }
-      if (branchFilter !== ALL_BRANCHES) {
-        const matches =
-          r.fromBranchId === branchFilter || r.toBranchId === branchFilter;
-        if (!matches) return false;
-      }
-      if (!q) return true;
+    if (!q) return serverRows;
+    return serverRows.filter((r) => {
       const hay = [
         r.displayId,
         r.fromBranch,
@@ -128,22 +181,23 @@ export default function StockTransfersPage() {
         .toLowerCase();
       return hay.includes(q);
     });
-  }, [allRows, query, statusFilter, branchFilter]);
+  }, [serverRows, query]);
 
   useEffect(() => {
     setPage(1);
   }, [query, statusFilter, branchFilter]);
 
-  const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
+  const totalPages = Math.max(1, transfersQuery.data?.totalPages ?? 1);
 
   useEffect(() => {
     setPage((p) => Math.min(p, totalPages));
   }, [totalPages]);
 
-  const pagedRows = useMemo(() => {
-    const start = (page - 1) * PAGE_SIZE;
-    return filtered.slice(start, start + PAGE_SIZE);
-  }, [filtered, page]);
+  const pagedRows = filtered;
+
+  const totalCountForTable = query.trim()
+    ? filtered.length
+    : (transfersQuery.data?.total ?? 0);
 
   const clearFilters = () => {
     setQuery("");
@@ -258,7 +312,7 @@ export default function StockTransfersPage() {
           <Card className="border-destructive/40 bg-destructive/5">
             <CardContent className="flex flex-col items-start gap-3 p-4 sm:flex-row sm:items-center sm:justify-between">
               <p className="text-sm text-destructive">{loadError}</p>
-              <Button size="sm" variant="outline" type="button" onClick={() => void refresh()}>
+              <Button size="sm" variant="outline" type="button" onClick={() => void transfersQuery.refetch()}>
                 Retry
               </Button>
             </CardContent>
@@ -356,7 +410,7 @@ export default function StockTransfersPage() {
                 rows={pagedRows}
                 page={page}
                 totalPages={totalPages}
-                totalCount={filtered.length}
+                totalCount={totalCountForTable}
                 pageSize={PAGE_SIZE}
                 onPageChange={setPage}
                 onEditClick={onEditClick}

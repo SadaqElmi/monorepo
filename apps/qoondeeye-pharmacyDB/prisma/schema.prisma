@@ -59,6 +59,7 @@ model Domain {
 
   tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
 
+  @@index([tenantId])
   @@schema("public")
 }
 
@@ -134,6 +135,7 @@ model User {
   posSessions PosSession[]
 
   @@index([staffId])
+  @@index([branchId])
   @@schema("tenant_template")
 }
 
@@ -278,6 +280,8 @@ model PatientLoan {
   sale     Sale?                @relation(fields: [saleId], references: [id], onDelete: SetNull)
   payments PatientLoanPayment[]
 
+  @@index([branchId])
+  @@index([customerId])
   @@schema("tenant_template")
 }
 
@@ -291,6 +295,7 @@ model PatientLoanPayment {
 
   loan PatientLoan @relation(fields: [loanId], references: [id], onDelete: Cascade)
 
+  @@index([loanId])
   @@schema("tenant_template")
 }
 
@@ -308,6 +313,10 @@ model Purchase {
   branch        Branch?        @relation(fields: [branchId], references: [id])
   purchaseItems PurchaseItem[]
 
+  @@index([branchId])
+  @@index([supplierId])
+  @@index([invoiceNumber])
+  @@index([branchId, createdAt(sort: Desc)])
   @@schema("tenant_template")
 }
 
@@ -327,6 +336,9 @@ model PurchaseItem {
   product  Product? @relation(fields: [productId], references: [id])
   batch    Batch?   @relation(fields: [batchId], references: [id])
 
+  @@index([purchaseId])
+  @@index([productId])
+  @@index([branchId])
   @@schema("tenant_template")
 }
 
@@ -462,6 +474,9 @@ model SaleItem {
   saleReturnItems SaleReturnItem[]
   returnVouchers  ReturnVoucher[]
 
+  @@index([saleId])
+  @@index([productId])
+  @@index([branchId])
   @@schema("tenant_template")
 }
 
@@ -536,6 +551,7 @@ model Payment {
 
   sale Sale? @relation(fields: [saleId], references: [id])
 
+  @@index([saleId])
   @@schema("tenant_template")
 }
 
@@ -560,6 +576,8 @@ model Expense {
   category ExpenseCategory? @relation(fields: [categoryId], references: [id])
   branch   Branch?          @relation(fields: [branchId], references: [id])
 
+  @@index([branchId])
+  @@index([createdAt(sort: Desc)])
   @@schema("tenant_template")
 }
 

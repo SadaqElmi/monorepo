@@ -1,6 +1,7 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { keepPreviousData, useQuery } from "@tanstack/react-query";
+import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { Inbox, Loader2, Package, Search } from "lucide-react";
 
@@ -14,63 +15,88 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { getStoredUser } from "@/lib/auth-client";
+import { getBranchQueryKeyFacet } from "@/lib/query-branch-key";
 import { getBranches } from "@/lib/services/branches";
 import { getClientBranchId } from "@/lib/services/http";
-import { listTransfers } from "@/lib/services/transfers";
+import { listTransfersPaged } from "@/lib/services/transfers";
 import { ROUTES } from "@/lib/routes";
 
 const PAGE_SIZE = 10;
 
 export default function IncomingTransfersPage() {
-  const [tenantSlug, setTenantSlug] = useState<string | null>(null);
-  const [branchId, setBranchId] = useState<string | null>(null);
-  const [branchName, setBranchName] = useState<string | null>(null);
-  const [rows, setRows] = useState<StockTransferListRow[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  const [tenantSlug] = useState(
+    () => getStoredUser()?.tenantSlug?.trim() ?? null,
+  );
+  const [branchFacet, setBranchFacet] = useState(() =>
+    typeof window !== "undefined" ? getBranchQueryKeyFacet() : "",
+  );
   const [query, setQuery] = useState("");
   const [page, setPage] = useState(1);
 
-  const refresh = useCallback(async () => {
-    const u = getStoredUser();
-    const slug = u?.tenantSlug?.trim() ?? null;
-    const bid = getClientBranchId() ?? null;
-    setTenantSlug(slug);
-    setBranchId(bid);
-    if (!slug || !bid) {
-      setLoading(false);
-      setRows([]);
-      setBranchName(null);
-      return;
-    }
-    setLoading(true);
-    setError(null);
-    try {
-      const [branches, dtos] = await Promise.all([
-        getBranches(slug),
-        listTransfers(slug, {
-          status: "shipped",
-          to_branch_id: bid,
-        }),
-      ]);
-      const bm = branchesToMap(branches);
-      setBranchName(bm.get(bid) ?? bid);
-      setRows(
-        dtos
-          .filter((d) => !d.is_reversed)
-          .map((d) => transferDtoToListRow(d, bm)),
+  useEffect(() => {
+    const sync = () => setBranchFacet(getBranchQueryKeyFacet());
+    window.addEventListener("storage", sync);
+    window.addEventListener("activeBranchChanged", sync as EventListener);
+    return () => {
+      window.removeEventListener("storage", sync);
+      window.removeEventListener(
+        "activeBranchChanged",
+        sync as EventListener,
       );
-    } catch (e) {
-      setError(e instanceof Error ? e.message : "Failed to load incoming transfers");
-      setRows([]);
-    } finally {
-      setLoading(false);
-    }
+    };
   }, []);
 
-  useEffect(() => {
-    void refresh();
-  }, [refresh]);
+  const incomingQuery = useQuery({
+    queryKey: [
+      "erp",
+      "transfers",
+      "incoming",
+      tenantSlug,
+      branchFacet,
+      page,
+      PAGE_SIZE,
+    ],
+    enabled: Boolean(tenantSlug && branchFacet && getClientBranchId()),
+    placeholderData: keepPreviousData,
+    queryFn: async ({ signal }) => {
+      const slug = tenantSlug!;
+      const bid = getClientBranchId()!;
+      const [branches, pageRes] = await Promise.all([
+        getBranches(slug, { signal }),
+        listTransfersPaged(
+          slug,
+          {
+            page,
+            limit: PAGE_SIZE,
+            status: "shipped",
+            to_branch_id: bid,
+          },
+          { signal },
+        ),
+      ]);
+      const bm = branchesToMap(branches);
+      const rows = pageRes.items
+        .filter((d) => !d.is_reversed)
+        .map((d) => transferDtoToListRow(d, bm));
+      return {
+        rows,
+        branchName: bm.get(bid) ?? bid,
+        branchId: bid,
+        total: pageRes.total,
+        totalPages: pageRes.totalPages,
+      };
+    },
+  });
+
+  const rows = incomingQuery.data?.rows ?? [];
+  const branchId = incomingQuery.data?.branchId ?? null;
+  const branchName = incomingQuery.data?.branchName ?? null;
+  const loading = incomingQuery.isPending || incomingQuery.isFetching;
+  const error = incomingQuery.error
+    ? incomingQuery.error instanceof Error
+      ? incomingQuery.error.message
+      : "Failed to load incoming transfers"
+    : null;
 
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
@@ -87,16 +113,17 @@ export default function IncomingTransfersPage() {
     setPage(1);
   }, [query]);
 
-  const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
+  const totalPages = Math.max(1, incomingQuery.data?.totalPages ?? 1);
 
   useEffect(() => {
     setPage((p) => Math.min(p, totalPages));
   }, [totalPages]);
 
-  const pagedRows = useMemo(() => {
-    const start = (page - 1) * PAGE_SIZE;
-    return filtered.slice(start, start + PAGE_SIZE);
-  }, [filtered, page]);
+  const pagedRows = filtered;
+
+  const totalCountForTable = query.trim()
+    ? filtered.length
+    : (incomingQuery.data?.total ?? 0);
 
   return (
     <div className="flex min-h-0 flex-1 flex-col">
@@ -157,7 +184,7 @@ export default function IncomingTransfersPage() {
           <Card className="border-destructive/40">
             <CardContent className="flex flex-col gap-3 p-4 sm:flex-row sm:items-center sm:justify-between">
               <p className="text-sm text-destructive">{error}</p>
-              <Button size="sm" variant="outline" type="button" onClick={() => void refresh()}>
+              <Button size="sm" variant="outline" type="button" onClick={() => void incomingQuery.refetch()}>
                 Retry
               </Button>
             </CardContent>
@@ -190,7 +217,7 @@ export default function IncomingTransfersPage() {
             rows={pagedRows}
             page={page}
             totalPages={totalPages}
-            totalCount={filtered.length}
+            totalCount={totalCountForTable}
             pageSize={PAGE_SIZE}
             onPageChange={setPage}
             detailLinkReceiver

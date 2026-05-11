@@ -2,6 +2,7 @@
 
 import * as React from "react";
 import { useRouter } from "next/navigation";
+import { useQueryClient } from "@tanstack/react-query";
 import {
   Activity,
   BarChart2,
@@ -32,6 +33,7 @@ import {
   SidebarRail,
 } from "@/components/ui/sidebar";
 import { clearAuthToken, getStoredUser } from "@/lib/auth-client";
+import { prefetchErpSidebarHints } from "@/lib/erp-query-prefetch";
 import { ROUTES } from "@/lib/routes";
 
 const pharmacyNavMain = [
@@ -163,6 +165,21 @@ const adminNavMain = [
 
 export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
   const router = useRouter();
+  const queryClient = useQueryClient();
+
+  const prefetchSidebarModule = React.useCallback(
+    (title: string) => {
+      prefetchErpSidebarHints(queryClient, title);
+    },
+    [queryClient],
+  );
+
+  const onCollapsibleOpenChange = React.useCallback(
+    (title: string, open: boolean) => {
+      if (open) prefetchSidebarModule(title);
+    },
+    [prefetchSidebarModule],
+  );
   const [sidebarUser, setSidebarUser] = React.useState<{
     name: string;
     email: string;
@@ -230,6 +247,8 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
         <NavMain
           items={navMain}
           prepend={isAdmin || isCashier ? null : <TeamSwitcher />}
+          onCollapsiblePointerEnter={prefetchSidebarModule}
+          onCollapsibleOpenChange={onCollapsibleOpenChange}
         />
       </SidebarContent>
       <SidebarFooter>

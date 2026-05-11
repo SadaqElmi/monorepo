@@ -1,6 +1,7 @@
 export {
   createSale,
   getSales,
+  getSalesPaged,
   getSaleById,
   getSaleByReceiptNumber,
   type Sale,

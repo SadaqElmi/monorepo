@@ -1,3 +1,4 @@
+import type { PagedList } from "@repo/types";
 import { PATIENT_LOANS_PREFIX } from "./endpoints";
 import { type JsonHeaders, jsonFetch } from "./http";
 
@@ -46,11 +47,32 @@ export type PatientLoanPayment = {
 export async function getPatientLoans(
   tenantSlug: string,
   status?: string,
+  init?: Pick<RequestInit, "signal">,
 ): Promise<PatientLoan[]> {
   const url = status ? `${PATIENT_LOANS_PREFIX}?status=${encodeURIComponent(status)}` : PATIENT_LOANS_PREFIX;
   return jsonFetch<PatientLoan[]>(url, {
     method: "GET",
     headers: { "X-Tenant": tenantSlug } as JsonHeaders,
+    signal: init?.signal,
+  });
+}
+
+export async function getPatientLoansPaged(
+  tenantSlug: string,
+  page: number,
+  limit: number,
+  status?: string,
+  init?: Pick<RequestInit, "signal">,
+): Promise<PagedList<PatientLoan>> {
+  const q = new URLSearchParams({
+    page: String(Math.max(1, page)),
+    limit: String(Math.max(1, limit)),
+  });
+  if (status) q.set("status", status);
+  return jsonFetch<PagedList<PatientLoan>>(`${PATIENT_LOANS_PREFIX}?${q}`, {
+    method: "GET",
+    headers: { "X-Tenant": tenantSlug } as JsonHeaders,
+    signal: init?.signal,
   });
 }
 

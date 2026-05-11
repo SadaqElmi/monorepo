@@ -16,6 +16,7 @@ export type UpdateInventoryInput = {
 
 type BranchScopeOptions = {
   includeAllBranches?: boolean;
+  signal?: AbortSignal;
 };
 
 export async function getInventory(
@@ -29,6 +30,7 @@ export async function getInventory(
   return jsonFetch<InventoryEntry[]>(INVENTORY_PREFIX, {
     method: "GET",
     headers,
+    signal: options?.signal,
   });
 }
 

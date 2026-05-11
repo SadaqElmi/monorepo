@@ -14,6 +14,7 @@ import { TenantContextService } from '../tenant/tenant-context.service';
 import { CreateTransferDto } from './dto/create-transfer.dto';
 import { RejectTransferDto } from './dto/reject-transfer.dto';
 import { UpdateTransferDto } from './dto/update-transfer.dto';
+import { parsePagedQueryParam } from '../common/pagination.util';
 import { TransfersService } from './transfers.service';
 
 @Controller('transfers')
@@ -52,17 +53,32 @@ export class TransfersController {
     @Query('from_branch_id') fromBranchId?: string,
     @Query('to_branch_id') toBranchId?: string,
     @Query('approval_state') approvalState?: string,
+    @Query('branch_id') branchScopeId?: string,
+    @Query('page') page?: string,
+    @Query('limit') limit?: string,
   ) {
     this.ensureTenant();
+    const q = {
+      status,
+      from_branch_id: fromBranchId,
+      to_branch_id: toBranchId,
+      approval_state: approvalState,
+      branch_id: branchScopeId?.trim(),
+    };
+    const paged = parsePagedQueryParam(page, limit);
+    if (paged) {
+      return this.transfersService.listPaged(
+        this.tenantContext.getSchemaName()!,
+        req.allowedBranchIds ?? [],
+        q,
+        paged.skip,
+        paged.limit,
+      );
+    }
     return this.transfersService.list(
       this.tenantContext.getSchemaName()!,
       req.allowedBranchIds ?? [],
-      {
-        status,
-        from_branch_id: fromBranchId,
-        to_branch_id: toBranchId,
-        approval_state: approvalState,
-      },
+      q,
     );
   }
 
@@ -72,6 +88,22 @@ export class TransfersController {
     return this.transfersService.monitoringOverview(
       this.tenantContext.getSchemaName()!,
       req.allowedBranchIds ?? [],
+    );
+  }
+
+  /** GET counts per status (optional `branch_id` = either endpoint). */
+  @Get('summary/status-counts')
+  statusCounts(
+    @Req() req: Request,
+    @Query('branch_id') branchScopeId?: string,
+  ) {
+    this.ensureTenant();
+    return this.transfersService.statusCounts(
+      this.tenantContext.getSchemaName()!,
+      req.allowedBranchIds ?? [],
+      branchScopeId?.trim()
+        ? { branch_id: branchScopeId.trim() }
+        : undefined,
     );
   }
 

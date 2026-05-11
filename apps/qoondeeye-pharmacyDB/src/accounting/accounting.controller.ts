@@ -32,6 +32,10 @@ import { CreateFollowUpLevelDto } from './dto/create-follow-up-level.dto';
 import { MergeChartOfAccountsDto } from './dto/merge-chart-of-accounts.dto';
 import { ChartOfAccountsMergeService } from './chart-of-accounts-merge.service';
 import { isGlobalBranchRole } from '../common/branch-scope/branch-scope.util';
+import {
+  parsePagedQueryParam,
+  toPagedResult,
+} from '../common/pagination.util';
 
 interface ChartOfAccountsListRow {
   id: string;
@@ -289,16 +293,46 @@ export class AccountingController {
     @Req() req: Request,
     @Query('branchId') branchId?: string,
     @Query('limit') limit?: string,
+    @Query('page') page?: string,
   ) {
     this.ensureTenant();
     assertAllowedBranches(req);
     const target = resolveSingleBranchId(req, branchId);
+    const schema = this.tenantContext.getSchemaName()!;
+    await this.tenantService.applyTenantSchemaPatches(schema);
+
+    const paged = parsePagedQueryParam(page, limit, {
+      defaultLimit: 50,
+      maxLimit: 500,
+    });
+    if (paged) {
+      return this.prisma.withTenantSchema(schema, async (tx) => {
+        const [countRow] = await tx.$queryRawUnsafe<{ c: bigint }[]>(
+          `SELECT COUNT(*)::bigint AS c
+           FROM audit_logs
+           WHERE branch_id IS NULL OR branch_id = $1::uuid`,
+          target,
+        );
+        const total = Number(countRow?.c ?? 0);
+        const rows = (await tx.$queryRawUnsafe(
+          `SELECT id, branch_id::text, actor_user_id::text, table_name, record_id::text,
+                  action, old_payload, new_payload, created_at
+           FROM audit_logs
+           WHERE branch_id IS NULL OR branch_id = $1::uuid
+           ORDER BY created_at DESC
+           LIMIT $2 OFFSET $3`,
+          target,
+          paged.limit,
+          paged.skip,
+        )) as unknown[];
+        return toPagedResult(rows, total, paged.page, paged.limit);
+      });
+    }
+
     const take = Math.min(
       500,
       Math.max(1, parseInt(limit ?? '100', 10) || 100),
     );
-    const schema = this.tenantContext.getSchemaName()!;
-    await this.tenantService.applyTenantSchemaPatches(schema);
     return this.prisma.withTenantSchema(schema, (tx) =>
       tx.$queryRawUnsafe(
         `SELECT id, branch_id::text, actor_user_id::text, table_name, record_id::text,
