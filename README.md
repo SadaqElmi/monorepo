@@ -1,6 +1,6 @@
 # Pharmcare (Turborepo)
 
-This monorepo uses [pnpm](https://pnpm.io) (`packageManager` is set in the root `package.json`). Install dependencies with `pnpm install` from the repository root.
+This monorepo uses [pnpm](https://pnpm.io) (`packageManager` is set in the root `package.json`). Install dependencies with `pnpm install` from the repository root..
 
 ## Toolchain and dependency alignment
 

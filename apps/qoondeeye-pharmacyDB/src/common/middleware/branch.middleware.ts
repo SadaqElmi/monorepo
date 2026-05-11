@@ -51,6 +51,19 @@ function parseCookies(
   return out;
 }
 
+function getBearerToken(
+  authorizationHeader: string | string[] | undefined,
+): string | null {
+  const raw = Array.isArray(authorizationHeader)
+    ? authorizationHeader[0]
+    : authorizationHeader;
+  if (!raw) return null;
+  const [scheme, token] = raw.trim().split(/\s+/, 2);
+  if (!scheme || !token) return null;
+  if (scheme.toLowerCase() !== 'bearer') return null;
+  return token.trim() || null;
+}
+
 function isMutationMethod(method: string | undefined): boolean {
   const m = (method ?? '').toUpperCase();
   return m !== 'GET' && m !== 'HEAD' && m !== 'OPTIONS';
@@ -299,7 +312,8 @@ export class BranchMiddleware implements NestMiddleware {
 
     const cookieHeader = req.headers.cookie;
     const cookies = parseCookies(cookieHeader);
-    const token = cookies['auth_token'];
+    const token =
+      getBearerToken(req.headers.authorization) ?? cookies['auth_token'];
     if (!token) {
       throw new ForbiddenException('Missing auth token');
     }
