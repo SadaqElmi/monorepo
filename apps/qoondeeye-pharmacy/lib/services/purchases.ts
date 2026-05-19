@@ -1,4 +1,10 @@
 import type { PagedList } from "@repo/types";
+import {
+  createPurchaseSchema,
+  parseInput,
+  type CreatePurchaseInput as ValidatedCreatePurchaseInput,
+} from "@/lib/validation";
+
 import { PURCHASES_PREFIX } from "./endpoints";
 import { type JsonHeaders, jsonFetch } from "./http";
 
@@ -28,21 +34,7 @@ export type PurchaseItem = {
   batch_number?: string | null;
 };
 
-export type CreatePurchaseInput = {
-  supplierId?: string;
-  branchId?: string;
-  invoiceNumber?: string;
-  totalAmount?: number;
-  purchaseDate?: string;
-  items: Array<{
-    productId: string;
-    quantity: number;
-    batchNumber?: string;
-    costPrice?: number;
-    sellingPrice?: number;
-    expiryDate?: string;
-  }>;
-};
+export type CreatePurchaseInput = ValidatedCreatePurchaseInput;
 
 export type UpdatePurchaseInput = {
   supplierId?: string;
@@ -114,13 +106,14 @@ export async function createPurchase(
   tenantSlug: string,
   input: CreatePurchaseInput,
 ): Promise<Purchase> {
+  const body = parseInput(createPurchaseSchema, input);
   return jsonFetch<Purchase>(PURCHASES_PREFIX, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
       "X-Tenant": tenantSlug,
     } as JsonHeaders,
-    body: JSON.stringify(input),
+    body: JSON.stringify(body),
   });
 }
 

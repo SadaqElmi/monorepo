@@ -60,6 +60,11 @@ import {
 } from "@/lib/auth-client";
 import { pinLogin } from "@/lib/services/auth";
 import {
+  createSaleSchema,
+  pinLoginSchema,
+  validateForSubmit,
+} from "@/lib/validation";
+import {
   createSale,
   getBatches,
   getCategories,
@@ -423,21 +428,29 @@ function PosPinGate({ onSuccess }: { onSuccess: () => void }) {
 
   const submit = async () => {
     setError("");
-    const t = tenant.trim();
-    if (!t || pin.length < 4) {
-      setError("Enter pharmacy code and a PIN (at least 4 digits).");
+    let branchId: string | undefined;
+    try {
+      const b = localStorage.getItem("branchId");
+      if (b) branchId = b;
+    } catch {
+      /* ignore */
+    }
+    const validated = validateForSubmit(pinLoginSchema, {
+      pin,
+      tenant: tenant.trim(),
+      ...(branchId ? { branchId } : {}),
+    });
+    if (!validated.ok) {
+      setError(validated.message);
       return;
     }
     setLoading(true);
     try {
-      let branchId: string | undefined;
-      try {
-        const b = localStorage.getItem("branchId");
-        if (b) branchId = b;
-      } catch {
-        /* ignore */
-      }
-      const res = await pinLogin(pin, t, branchId);
+      const res = await pinLogin(
+        validated.data.pin,
+        validated.data.tenant,
+        validated.data.branchId,
+      );
       const user: StoredUser = {
         id: res.user.id,
         email: res.user.email ?? "",
@@ -451,7 +464,7 @@ function PosPinGate({ onSuccess }: { onSuccess: () => void }) {
       };
       setAuthToken(res.token, user);
       try {
-        localStorage.setItem("posTenantSlug", t);
+        localStorage.setItem("posTenantSlug", validated.data.tenant);
         const initialBranchId = res.assignedBranchId ?? res.defaultBranchId;
         if (initialBranchId) {
           localStorage.setItem("branchId", initialBranchId);
@@ -1061,7 +1074,7 @@ function POSUserPageInner() {
         return;
       }
       try {
-        const sale = await createSale(tenantSlug, {
+        const saleBody = {
           totalAmount: tot,
           discount,
           tax: t,
@@ -1079,7 +1092,13 @@ function POSUserPageInner() {
                   price: l.unitPrice,
                 },
           ),
-        });
+        };
+        const validated = validateForSubmit(createSaleSchema, saleBody);
+        if (!validated.ok) {
+          window.alert(validated.message);
+          return;
+        }
+        const sale = await createSale(tenantSlug, validated.data);
         const receiptNum =
           (sale.receipt_number as string | null | undefined)?.trim() ||
           newReceiptId();

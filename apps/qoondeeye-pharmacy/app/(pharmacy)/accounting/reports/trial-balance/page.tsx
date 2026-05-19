@@ -37,6 +37,7 @@ import {
   getTrialBalance,
   type TrialBalanceLine,
 } from "@/lib/services/accounting";
+import { validateReportAsOf } from "@/lib/report-date-validation";
 
 export default function TrialBalanceReportPage() {
   const [tenantSlug] = React.useState(
@@ -50,6 +51,11 @@ export default function TrialBalanceReportPage() {
   const [err, setErr] = React.useState<string | null>(null);
 
   const load = React.useCallback(async () => {
+    const asOfCheck = validateReportAsOf(asOf);
+    if (!asOfCheck.ok) {
+      setErr(asOfCheck.message);
+      return;
+    }
     setLoading(true);
     setErr(null);
     try {

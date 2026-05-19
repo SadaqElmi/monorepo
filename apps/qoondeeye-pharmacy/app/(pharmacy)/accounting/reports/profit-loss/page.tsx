@@ -34,6 +34,7 @@ import {
   type ReportEnvelope,
   type VarianceAnalysisRow,
 } from "@/lib/services/accounting";
+import { validateReportDateRange } from "@/lib/report-date-validation";
 import { cn } from "@/lib/utils";
 
 function Bal({ n }: { n: number }) {
@@ -72,6 +73,15 @@ export default function ProfitLossReportPage() {
     React.useState<VarianceAnalysisRow | null>(null);
 
   const load = React.useCallback(async () => {
+    const rangeCheck = validateReportDateRange(from, to, {
+      compareFrom: compareFrom || undefined,
+      compareTo: compareTo || undefined,
+      branchId,
+    });
+    if (!rangeCheck.ok) {
+      setErr(rangeCheck.message);
+      return;
+    }
     setLoading(true);
     setErr(null);
     try {

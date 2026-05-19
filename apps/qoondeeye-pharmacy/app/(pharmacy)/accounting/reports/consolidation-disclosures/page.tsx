@@ -39,6 +39,7 @@ import {
   getDisclosureNci,
   type ConsolidationEntityItem,
 } from "@/lib/services/accounting";
+import { validateReportAsOf } from "@/lib/report-date-validation";
 
 function todayStr() {
   return format(new Date(), "yyyy-MM-dd");
@@ -565,6 +566,11 @@ export default function ConsolidationDisclosuresPage() {
   }, [tenantSlug]);
 
   const load = React.useCallback(async () => {
+    const asOfCheck = validateReportAsOf(toDate);
+    if (!asOfCheck.ok) {
+      setErr(asOfCheck.message);
+      return;
+    }
     setLoading(true);
     setErr(null);
     setPayload(null);

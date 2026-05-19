@@ -37,6 +37,7 @@ import {
   getTrialBalance,
   type TrialBalanceLine,
 } from "@/lib/services/accounting";
+import { validateReportAsOf } from "@/lib/report-date-validation";
 
 /** Seeded fixed-asset / depreciation-related GL keys (trial balance snapshot). */
 const DEPRECIATION_SCHEDULE_KEYS = new Set([
@@ -65,6 +66,11 @@ export default function DepreciationScheduleReportPage() {
   const [err, setErr] = React.useState<string | null>(null);
 
   const load = React.useCallback(async () => {
+    const asOfCheck = validateReportAsOf(asOf);
+    if (!asOfCheck.ok) {
+      setErr(asOfCheck.message);
+      return;
+    }
     setLoading(true);
     setErr(null);
     try {

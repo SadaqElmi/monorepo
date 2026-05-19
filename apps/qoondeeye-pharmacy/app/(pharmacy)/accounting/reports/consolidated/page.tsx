@@ -66,6 +66,7 @@ import {
 } from "@/lib/services/accounting";
 import type { BsLine } from "@/lib/balance-sheet-tree";
 import { inventoryTransferDetailPath, ROUTES } from "@/lib/routes";
+import { validateReportAsOf, validateReportDateRange } from "@/lib/report-date-validation";
 import { cn } from "@/lib/utils";
 import { Badge } from "@/components/ui/badge";
 import {
@@ -263,6 +264,16 @@ export default function ConsolidatedReportsPage() {
     if (!canMultiBranch) {
       setBs(null);
       setPnl(null);
+      return;
+    }
+    const asOfCheck = validateReportAsOf(asOf);
+    if (!asOfCheck.ok) {
+      setErr(asOfCheck.message);
+      return;
+    }
+    const rangeCheck = validateReportDateRange(from, to, { branchId });
+    if (!rangeCheck.ok) {
+      setErr(rangeCheck.message);
       return;
     }
     setLoading(true);

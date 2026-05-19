@@ -12,6 +12,10 @@ import {
 } from 'class-validator';
 import { Type } from 'class-transformer';
 
+/**
+ * Keep in sync with:
+ * packages/validation/src/sales.ts — saleLineSchema
+ */
 export class CreateSaleItemDto {
   /** Inventory / catalog line — use this or `miscChargeKind`, not both. */
   @IsOptional()
@@ -35,6 +39,10 @@ export class CreateSaleItemDto {
   price?: number;
 }
 
+/**
+ * Keep in sync with:
+ * packages/validation/src/sales.ts — createSaleSchema
+ */
 export class CreateSaleDto {
   @IsOptional()
   @IsUUID()

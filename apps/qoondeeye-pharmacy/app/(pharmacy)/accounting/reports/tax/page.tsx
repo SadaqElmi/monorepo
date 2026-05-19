@@ -33,6 +33,7 @@ import {
 import { useReportBranchQuery } from "@/hooks/use-branch-for-reports";
 import { money } from "@/lib/accounting-display";
 import { getStoredUser } from "@/lib/auth-client";
+import { validateReportDateRange } from "@/lib/report-date-validation";
 import {
   getTaxReport,
   type TaxReportResult,
@@ -51,6 +52,11 @@ export default function TaxReportPage() {
   const [err, setErr] = React.useState<string | null>(null);
 
   const load = React.useCallback(async () => {
+    const rangeCheck = validateReportDateRange(from, to, { branchId });
+    if (!rangeCheck.ok) {
+      setErr(rangeCheck.message);
+      return;
+    }
     setLoading(true);
     setErr(null);
     try {

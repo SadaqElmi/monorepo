@@ -34,6 +34,7 @@
     "rxjs": "^7.8.1"
   },
   "devDependencies": {
+    "@repo/validation": "workspace:*",
     "@eslint/eslintrc": "catalog:",
     "@eslint/js": "catalog:",
     "@nestjs/cli": "catalog:",
@@ -74,6 +75,10 @@
       "json",
       "ts"
     ],
+    "moduleNameMapper": {
+      "^@repo/validation$": "<rootDir>/../../../packages/validation/src/index.ts"
+    },
+    "setupFiles": ["<rootDir>/../test/jest-setup.ts"],
     "rootDir": "src",
     "testRegex": ".*\\.spec\\.ts$",
     "transform": {

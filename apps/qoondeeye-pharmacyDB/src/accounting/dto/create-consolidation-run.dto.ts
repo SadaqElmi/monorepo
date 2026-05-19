@@ -11,6 +11,10 @@ import {
 } from 'class-validator';
 import { ConsolidationFxPolicyDto } from './consolidation-fx-policy.dto';
 
+/**
+ * Keep in sync with:
+ * packages/validation/src/accounting/consolidation.ts — createConsolidationRunSchema
+ */
 export class CreateConsolidationRunDto {
   @IsString()
   periodKey!: string;

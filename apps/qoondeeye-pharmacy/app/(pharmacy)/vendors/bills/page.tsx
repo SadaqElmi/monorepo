@@ -37,6 +37,7 @@ import {
 } from "@/components/ui/table";
 
 import { getStoredUser } from "@/lib/auth-client";
+import { createPurchaseSchema, validateForSubmit } from "@/lib/validation";
 import {
   deletePurchase,
   getBranches,
@@ -377,12 +378,34 @@ export default function PurchasesPage() {
     if (!Number.isFinite(totalAmountNum))
       return setError("Total amount must be a valid number.");
 
-    const payload = {
+    const purchaseBody = {
       supplierId,
       branchId,
       invoiceNumber,
       totalAmount: totalAmountNum,
       purchaseDate,
+      items: [
+        {
+          productId: activePurchase.productId,
+          quantity: quantityNum,
+          batchNumber: activePurchase.batchNumber.trim() || undefined,
+          costPrice: Number.isFinite(costPriceNum) ? costPriceNum : undefined,
+          sellingPrice: Number.isFinite(sellingPriceNum)
+            ? sellingPriceNum
+            : undefined,
+          expiryDate: activePurchase.expiryDate || undefined,
+        },
+      ],
+    };
+    const validated = validateForSubmit(createPurchaseSchema, purchaseBody);
+    if (!validated.ok) return setError(validated.message);
+
+    const payload = {
+      supplierId: validated.data.supplierId,
+      branchId: validated.data.branchId,
+      invoiceNumber: validated.data.invoiceNumber,
+      totalAmount: validated.data.totalAmount,
+      purchaseDate: validated.data.purchaseDate,
     };
 
     try {
@@ -390,21 +413,7 @@ export default function PurchasesPage() {
       setError(null);
 
       if (formMode === "create") {
-        const created = await createPurchase(tenantSlug, {
-          ...payload,
-          items: [
-            {
-              productId: activePurchase.productId,
-              quantity: quantityNum,
-              batchNumber: activePurchase.batchNumber.trim() || undefined,
-              costPrice: Number.isFinite(costPriceNum) ? costPriceNum : undefined,
-              sellingPrice: Number.isFinite(sellingPriceNum)
-                ? sellingPriceNum
-                : undefined,
-              expiryDate: activePurchase.expiryDate || undefined,
-            },
-          ],
-        });
+        const created = await createPurchase(tenantSlug, validated.data);
         setPurchases((prev) => [created, ...prev]);
       } else {
         const updated = await updatePurchase(

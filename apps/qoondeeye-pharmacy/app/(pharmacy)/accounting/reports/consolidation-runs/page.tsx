@@ -32,6 +32,10 @@ import {
 import { useReportBranchQuery } from "@/hooks/use-branch-for-reports";
 import { getStoredUser } from "@/lib/auth-client";
 import {
+  createConsolidationRunSchema,
+  validateForSubmit,
+} from "@/lib/validation";
+import {
   approveConsolidationAdjustment,
   createConsolidationAdjustment,
   createConsolidationRun,
@@ -585,7 +589,7 @@ export default function ConsolidationRunsPage() {
     setSubmitting(true);
     setErr(null);
     try {
-      await createConsolidationRun(tenantSlug, {
+      const runBody = {
         periodKey: periodFromDate(toDate),
         asOfDate,
         fromDate,
@@ -597,8 +601,8 @@ export default function ConsolidationRunsPage() {
           entityId && groupCurrency.trim()
             ? {
                 bs: ratePolicy,
-                pnl: "average",
-                equity: "historical",
+                pnl: "average" as const,
+                equity: "historical" as const,
               }
             : undefined,
         includeAdjustments,
@@ -606,7 +610,13 @@ export default function ConsolidationRunsPage() {
         branchIds: entityId ? undefined : await resolveBranchScopeIds(),
         entityId: entityId || undefined,
         asDraft,
-      });
+      };
+      const validated = validateForSubmit(createConsolidationRunSchema, runBody);
+      if (!validated.ok) {
+        setErr(validated.message);
+        return;
+      }
+      await createConsolidationRun(tenantSlug, validated.data);
       await loadRuns();
     } catch (e: unknown) {
       setErr(

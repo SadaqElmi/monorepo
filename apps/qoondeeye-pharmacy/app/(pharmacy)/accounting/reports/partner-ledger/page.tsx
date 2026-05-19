@@ -40,6 +40,7 @@ import {
 import { useReportBranchQuery } from "@/hooks/use-branch-for-reports";
 import { money } from "@/lib/accounting-display";
 import { getStoredUser } from "@/lib/auth-client";
+import { validateReportDateRange } from "@/lib/report-date-validation";
 import {
   getPartnerLedger,
   type PartnerLedgerResult,
@@ -92,6 +93,11 @@ export default function PartnerLedgerReportPage() {
   const load = React.useCallback(async () => {
     if ((!branchId && !aggregateAll) || !partnerId.trim()) {
       setData(null);
+      return;
+    }
+    const rangeCheck = validateReportDateRange(from, to, { branchId });
+    if (!rangeCheck.ok) {
+      setErr(rangeCheck.message);
       return;
     }
     setLoading(true);

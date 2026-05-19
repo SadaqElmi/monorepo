@@ -12,6 +12,10 @@ import {
 } from 'class-validator';
 import { Type } from 'class-transformer';
 
+/**
+ * Keep in sync with:
+ * packages/validation/src/purchases.ts — purchaseLineSchema
+ */
 export class CreatePurchaseItemDto {
   @IsUUID()
   productId!: string;
@@ -36,6 +40,10 @@ export class CreatePurchaseItemDto {
   expiryDate?: string;
 }
 
+/**
+ * Keep in sync with:
+ * packages/validation/src/purchases.ts — createPurchaseSchema
+ */
 export class CreatePurchaseDto {
   @IsOptional()
   @IsUUID()

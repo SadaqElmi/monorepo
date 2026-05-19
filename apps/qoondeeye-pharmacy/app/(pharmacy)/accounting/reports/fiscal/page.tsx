@@ -29,6 +29,7 @@ import {
   getFiscalReport,
   type FiscalReportResult,
 } from "@/lib/services/accounting";
+import { validateReportDateRange } from "@/lib/report-date-validation";
 
 export default function FiscalReportPage() {
   const [tenantSlug] = React.useState(
@@ -43,6 +44,11 @@ export default function FiscalReportPage() {
   const [err, setErr] = React.useState<string | null>(null);
 
   const load = React.useCallback(async () => {
+    const rangeCheck = validateReportDateRange(from, to, { branchId });
+    if (!rangeCheck.ok) {
+      setErr(rangeCheck.message);
+      return;
+    }
     setLoading(true);
     setErr(null);
     try {

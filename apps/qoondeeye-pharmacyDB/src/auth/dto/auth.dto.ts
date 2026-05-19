@@ -8,6 +8,10 @@ import {
   MinLength,
 } from 'class-validator';
 
+/**
+ * Keep in sync with:
+ * packages/validation/src/auth.ts — loginSchema
+ */
 /** Unified login: email + password; optional tenant for pharmacy users */
 export class LoginDto {
   @IsEmail()
@@ -22,6 +26,10 @@ export class LoginDto {
   tenant?: string;
 }
 
+/**
+ * Keep in sync with:
+ * packages/validation/src/auth.ts — pinLoginSchema
+ */
 /** Cashier fast login: PIN + pharmacy slug (and optional branch) */
 export class PinLoginDto {
   @IsString()
@@ -46,6 +54,10 @@ export class PinLoginDto {
   staffId?: string;
 }
 
+/**
+ * Keep in sync with:
+ * packages/validation/src/auth.ts — staffLoginSchema
+ */
 /** Device-bound POS login: staff identifier + PIN + device credential */
 export class StaffLoginDto {
   @IsString()
@@ -67,6 +79,10 @@ export class StaffLoginDto {
   branchId?: string;
 }
 
+/**
+ * Keep in sync with:
+ * packages/validation/src/auth.ts — posDeviceEnrollSchema
+ */
 /** Manager enrollment for POS device binding */
 export class PosDeviceEnrollDto {
   @IsString()

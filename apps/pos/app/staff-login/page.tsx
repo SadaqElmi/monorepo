@@ -14,6 +14,11 @@ import { setAuthToken, type StoredUser } from "@/lib/auth-client";
 import { usePos } from "@/components/pos-context";
 import { getPosDeviceCredential } from "@/lib/device-client";
 import { staffLogin, pinLogin } from "@/lib/services/auth";
+import {
+  pinLoginSchema,
+  staffLoginSchema,
+  validateForSubmit,
+} from "@/lib/validation";
 import { prefetchPosRegisterData } from "@/lib/prefetch-register-data";
 
 const POS_LOGIN_MODE = (
@@ -62,10 +67,6 @@ export default function StaffLoginPage() {
   const submit = async () => {
     setError("");
     const id = staffId.trim();
-    if (!id || pin.length < 4) {
-      setError("Enter Staff ID and a Password (at least 4 digits).");
-      return;
-    }
     setLoading(true);
     try {
       let branchId: string | undefined;
@@ -92,10 +93,42 @@ export default function StaffLoginPage() {
         return;
       }
 
-      const res =
-        deviceCredential && POS_LOGIN_MODE !== "legacy"
-          ? await staffLogin(id, pin, deviceCredential, branchId)
-          : await pinLogin(pin, fallbackTenant, branchId, id);
+      let res: Awaited<ReturnType<typeof staffLogin>>;
+      if (deviceCredential && POS_LOGIN_MODE !== "legacy") {
+        const validated = validateForSubmit(staffLoginSchema, {
+          staffId: id,
+          pin,
+          deviceCredential,
+          ...(branchId ? { branchId } : {}),
+        });
+        if (!validated.ok) {
+          setError(validated.message);
+          return;
+        }
+        res = await staffLogin(
+          validated.data.staffId,
+          validated.data.pin,
+          validated.data.deviceCredential,
+          validated.data.branchId,
+        );
+      } else {
+        const validated = validateForSubmit(pinLoginSchema, {
+          pin,
+          tenant: fallbackTenant,
+          ...(branchId ? { branchId } : {}),
+          ...(id ? { staffId: id } : {}),
+        });
+        if (!validated.ok) {
+          setError(validated.message);
+          return;
+        }
+        res = await pinLogin(
+          validated.data.pin,
+          validated.data.tenant,
+          validated.data.branchId,
+          validated.data.staffId,
+        );
+      }
 
       const user: StoredUser = {
         id: res.user.id,

@@ -36,6 +36,7 @@ import {
   type CashFlowStatementResult,
   type ReportEnvelope,
 } from "@/lib/services/accounting";
+import { validateReportDateRange } from "@/lib/report-date-validation";
 import { cn } from "@/lib/utils";
 
 function Amount({ value }: { value: number }) {
@@ -106,6 +107,15 @@ export default function CashFlowReportPage() {
   const [err, setErr] = React.useState<string | null>(null);
 
   const load = React.useCallback(async () => {
+    const rangeCheck = validateReportDateRange(from, to, {
+      compareFrom: compareFrom || undefined,
+      compareTo: compareTo || undefined,
+      branchId,
+    });
+    if (!rangeCheck.ok) {
+      setErr(rangeCheck.message);
+      return;
+    }
     setLoading(true);
     setErr(null);
     try {

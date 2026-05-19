@@ -1,6 +1,11 @@
 import type { PagedList } from "@repo/types";
 import { getClientBranchIdHeaderForApi } from "@/lib/branch-access";
 import { sanitizeBranchIdForQuery } from "@/lib/branch-scope";
+import {
+  createConsolidationRunSchema,
+  parseInput,
+  type CreateConsolidationRunInput,
+} from "@/lib/validation";
 
 import {
   ACCOUNTING_PREFIX,
@@ -599,32 +604,16 @@ export type ConsolidationFxPolicyBody = {
   equity: "closing" | "average" | "historical";
 };
 
-export type CreateConsolidationRunBody = {
-  periodKey: string;
-  asOfDate: string;
-  fromDate: string;
-  toDate: string;
-  scopeHash: string;
-  branchIds?: string[];
-  entityId?: string;
-  dryRun?: boolean;
-  asDraft?: boolean;
-  replaceDraftRunId?: string;
-  asOfFxDate?: string;
-  groupCurrency?: string;
-  /** @deprecated Prefer `fxPolicy`. */
-  ratePolicy?: "closing" | "average" | "historical";
-  fxPolicy?: ConsolidationFxPolicyBody;
-  includeAdjustments?: boolean;
-};
+export type CreateConsolidationRunBody = CreateConsolidationRunInput;
 
 export async function createConsolidationRun(
   tenantSlug: string,
   body: CreateConsolidationRunBody,
 ): Promise<{ run: ConsolidationRunItem; reversedRunId: string | null }> {
+  const validated = parseInput(createConsolidationRunSchema, body);
   return authPost<{ run: ConsolidationRunItem; reversedRunId: string | null }>(
     `${REPORTS_PREFIX}/consolidation/run`,
-    body as Record<string, unknown>,
+    validated as Record<string, unknown>,
     { "X-Tenant": tenantSlug } as JsonHeaders,
   );
 }

@@ -12,6 +12,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { setAuthToken, type StoredUser } from "@/lib/auth-client";
 import { login } from "@/lib/api";
+import { loginSchema, validateForSubmit } from "@/lib/validation";
 import { prefetchDashboardAfterLogin } from "@/lib/erp-query-prefetch";
 
 export default function LoginPage() {
@@ -26,9 +27,17 @@ export default function LoginPage() {
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     setError("");
+    const validated = validateForSubmit(loginSchema, {
+      email: email.trim(),
+      password,
+    });
+    if (!validated.ok) {
+      setError(validated.message);
+      return;
+    }
     setLoading(true);
     try {
-      const res = await login(email.trim(), password);
+      const res = await login(validated.data.email, validated.data.password);
       const user: StoredUser = {
         id: res.user.id,
         email: res.user.email ?? "",

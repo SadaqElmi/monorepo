@@ -55,6 +55,7 @@ import {
   type ReportEnvelope,
 } from "@/lib/services/accounting";
 import type { BsLine } from "@/lib/balance-sheet-tree";
+import { validateReportAsOf } from "@/lib/report-date-validation";
 import { cn } from "@/lib/utils";
 
 function Bal({ n }: { n: number }) {
@@ -225,6 +226,11 @@ export default function BalanceSheetReportPage() {
   const [err, setErr] = React.useState<string | null>(null);
 
   const load = React.useCallback(async () => {
+    const rangeCheck = validateReportAsOf(asOf);
+    if (!rangeCheck.ok) {
+      setErr(rangeCheck.message);
+      return;
+    }
     setLoading(true);
     setErr(null);
     try {

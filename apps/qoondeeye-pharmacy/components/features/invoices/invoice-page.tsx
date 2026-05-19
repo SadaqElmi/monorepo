@@ -75,6 +75,7 @@ import {
   type Product,
   type Sale,
 } from "@/lib/api";
+import { createSaleSchema, validateForSubmit } from "@/lib/validation";
 
 export default function CustomerInvoicesPage() {
   const { openDrawer } = useDrawerHost();
@@ -462,11 +463,27 @@ export default function CustomerInvoicesPage() {
     if (!Number.isFinite(taxNum))
       return setFormError("Tax must be a valid number.");
 
-    const payload = {
+    const saleBody = {
       branchId,
       totalAmount: totalAmountNum,
       discount: discountNum,
       tax: taxNum,
+      items: [
+        {
+          productId: activeSale.productId,
+          quantity: quantityNum,
+          price: Number.isFinite(unitPriceNum) ? unitPriceNum : undefined,
+        },
+      ],
+    };
+    const validated = validateForSubmit(createSaleSchema, saleBody);
+    if (!validated.ok) return setFormError(validated.message);
+
+    const payload = {
+      branchId: validated.data.branchId,
+      totalAmount: validated.data.totalAmount,
+      discount: validated.data.discount,
+      tax: validated.data.tax,
     };
 
     try {
@@ -474,16 +491,7 @@ export default function CustomerInvoicesPage() {
       setFormError(null);
 
       if (formMode === "create") {
-        await createSale(tenantSlug, {
-          ...payload,
-          items: [
-            {
-              productId: activeSale.productId,
-              quantity: quantityNum,
-              price: Number.isFinite(unitPriceNum) ? unitPriceNum : undefined,
-            },
-          ],
-        });
+        await createSale(tenantSlug, validated.data);
       } else {
         const updated = await updateSale(tenantSlug, activeSale.id, payload);
         if (!updated) {

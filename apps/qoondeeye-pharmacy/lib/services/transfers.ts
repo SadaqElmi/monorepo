@@ -21,6 +21,12 @@
  */
 
 import type { PagedList } from "@repo/types";
+import {
+  createTransferDraftSchema,
+  parseInput,
+  type CreateTransferDraftInput,
+} from "@/lib/validation";
+
 import { TRANSFERS_PREFIX } from "./endpoints";
 import { type JsonHeaders, jsonFetch } from "./http";
 import { invalidateReportCacheForBranch } from "./accounting";
@@ -281,10 +287,8 @@ export async function getTransferStatusCounts(
   );
 }
 
-export type CreateTransferInput = {
-  toBranchId: string;
+export type CreateTransferInput = CreateTransferDraftInput & {
   expectedDate?: string | null;
-  items: { productId: string; quantity: number }[];
 };
 
 function buildMutationHeaders(tenantSlug: string): JsonHeaders {
@@ -302,15 +306,19 @@ export async function createTransfer(
   tenantSlug: string,
   input: CreateTransferInput,
 ): Promise<TransferDto> {
+  const validated = parseInput(createTransferDraftSchema, {
+    toBranchId: input.toBranchId,
+    items: input.items,
+  });
   const payload = await jsonFetch<TransferDto>(TRANSFERS_PREFIX, {
     method: "POST",
     headers: {
       ...buildMutationHeaders(tenantSlug),
     } as JsonHeaders,
     body: JSON.stringify({
-      to_branch_id: input.toBranchId,
+      to_branch_id: validated.toBranchId,
       expected_date: input.expectedDate ?? undefined,
-      items: input.items.map((i) => ({
+      items: validated.items.map((i) => ({
         product_id: i.productId,
         quantity: i.quantity,
       })),
