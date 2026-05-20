@@ -42,6 +42,7 @@ export function usePosCatalog(
     queryKey: posKeys.catalog(tenantSlug ?? "", branchFacet),
     enabled,
     staleTime: POS_STALE_CATALOG,
+    refetchOnWindowFocus: true,
     initialData: options?.initialData,
     queryFn: ({ signal }) => fetchPosCatalog(tenantSlug!, signal),
   });
