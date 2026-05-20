@@ -78,7 +78,9 @@
     "moduleNameMapper": {
       "^@repo/validation$": "<rootDir>/../../../packages/validation/src/index.ts"
     },
-    "setupFiles": ["<rootDir>/../test/jest-setup.ts"],
+    "setupFiles": [
+      "<rootDir>/../test/jest-setup.ts"
+    ],
     "rootDir": "src",
     "testRegex": ".*\\.spec\\.ts$",
     "transform": {
