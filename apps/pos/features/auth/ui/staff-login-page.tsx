@@ -1,7 +1,9 @@
 "use client";
 
 import * as React from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
+import { ArrowLeft } from "lucide-react";
 import { useQueryClient } from "@tanstack/react-query";
 
 import { Button } from "@/components/ui/button";
@@ -20,6 +22,7 @@ import {
   validateForSubmit,
 } from "@/lib/validation";
 import { prefetchPosRegisterData } from "@/lib/prefetch-register-data";
+import { POS_BRAND_COLOR } from "@/features/register/model/constants";
 
 const POS_LOGIN_MODE = (
   process.env.NEXT_PUBLIC_POS_DEVICE_LOGIN_MODE ?? "dual"
@@ -189,9 +192,9 @@ export function StaffLoginPage() {
   ];
 
   return (
-    <div className="flex min-h-screen items-center justify-center bg-background p-6">
+    <div className="flex min-h-0 flex-1 flex-col items-center justify-center gap-4 overflow-y-auto bg-background p-6">
       <Card className="w-full max-w-4xl gap-4 rounded-md py-0">
-        <div className="space-y-4 px-6 pt-6 mb-10">
+        <div className="space-y-4 px-6 pt-6">
           <div className="flex items-center gap-3">
             <Label
               htmlFor="pos-staff-id"
@@ -283,6 +286,23 @@ export function StaffLoginPage() {
           </div>
         </div>
       </Card>
+
+      <div className="flex flex-wrap items-center justify-center gap-x-6 gap-y-2 text-center text-xs">
+        <Link
+          href="/login"
+          className="font-medium underline underline-offset-3"
+          style={{ color: POS_BRAND_COLOR }}
+        >
+          Manager sign in (email)
+        </Link>
+        <Link
+          href="/"
+          className="inline-flex items-center gap-1 text-muted-foreground hover:text-foreground"
+        >
+          <ArrowLeft className="h-3 w-3" />
+          Back to terminal
+        </Link>
+      </div>
     </div>
   );
 }

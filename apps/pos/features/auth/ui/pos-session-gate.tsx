@@ -193,15 +193,14 @@ function PosPinGate({
       <div className="w-full max-w-5xl">
         <div className="grid grid-cols-3 gap-6">
           <Card className="col-start-2 row-start-1 aspect-square rounded-md border bg-sky-200 py-0 shadow-sm">
-            <Link href="/staff-login" className="block h-full w-full">
-              <Button
-                type="button"
-                variant="ghost"
-                className="h-full w-full rounded-md text-2xl font-bold tracking-tight text-slate-900"
-              >
-                Tender Operation
-              </Button>
-            </Link>
+            <Button
+              asChild
+              type="button"
+              variant="ghost"
+              className="h-full w-full rounded-md text-2xl font-bold tracking-tight text-slate-900"
+            >
+              <Link href="/staff-login">Tender Operation</Link>
+            </Button>
           </Card>
 
           <Card className="col-start-1 row-start-2 aspect-square rounded-md border bg-white py-0 shadow-sm">
@@ -242,20 +241,22 @@ function PosPinGate({
           </Card>
 
           <Card className="col-start-3 row-start-2 aspect-square rounded-md border bg-white py-0 shadow-sm">
-            <Link href="/staff-login" className="block h-full w-full">
-              <Button
-                type="button"
-                variant="ghost"
-                className="h-full w-full rounded-md"
+            <Button
+              asChild
+              type="button"
+              variant="ghost"
+              className="h-full w-full rounded-md"
+            >
+              <Link
+                href="/staff-login"
+                className="flex h-full w-full flex-col items-center justify-center gap-3"
               >
-                <div className="flex flex-col items-center justify-center gap-3">
-                  <LogIn className="h-16 w-16 text-emerald-500" />
-                  <div className="text-base font-medium text-foreground">
-                    Logon
-                  </div>
-                </div>
-              </Button>
-            </Link>
+                <LogIn className="h-16 w-16 text-emerald-500" />
+                <span className="text-base font-medium text-foreground">
+                  Logon
+                </span>
+              </Link>
+            </Button>
           </Card>
         </div>
 

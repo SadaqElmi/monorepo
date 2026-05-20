@@ -65,7 +65,6 @@ import {
   type Customer,
 } from "@/lib/api";
 import { useErpCustomers } from "@/hooks/queries/use-erp-customers";
-import { erpKeys } from "@/lib/erp-query-keys";
 
 type FormMode = "create" | "edit" | "view";
 
@@ -136,10 +135,7 @@ export default function CustomersPage({
   const refresh = React.useCallback(async () => {
     if (!tenantSlug) return;
     setError(null);
-    await queryClient.invalidateQueries({
-      queryKey: erpKeys.customers(tenantSlug, ""),
-      exact: false,
-    });
+    await queryClient.invalidateQueries({ queryKey: ["erp", "customers"] });
   }, [tenantSlug, queryClient]);
 
   const displayError =
