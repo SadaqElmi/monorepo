@@ -1,0 +1,18 @@
+{
+  "name": "@repo/validation",
+  "version": "0.0.0",
+  "dependencies": {
+    "zod": "catalog:"
+  },
+  "devDependencies": {
+    "@repo/typescript-config": "workspace:*",
+    "typescript": "catalog:"
+  },
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "private": true,
+  "scripts": {
+    "check-types": "tsc --noEmit"
+  }
+}

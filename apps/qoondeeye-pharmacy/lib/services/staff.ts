@@ -11,12 +11,16 @@ export type StaffMember = {
   created_at?: string;
 };
 
-export async function getStaff(tenantSlug: string): Promise<StaffMember[]> {
+export async function getStaff(
+  tenantSlug: string,
+  init?: Pick<RequestInit, "signal">,
+): Promise<StaffMember[]> {
   return jsonFetch<StaffMember[]>(STAFF_PREFIX, {
     method: "GET",
     headers: {
       "X-Tenant": tenantSlug,
     } as JsonHeaders,
+    signal: init?.signal,
   });
 }
 

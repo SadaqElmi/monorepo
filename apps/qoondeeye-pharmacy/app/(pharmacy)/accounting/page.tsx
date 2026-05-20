@@ -1,5 +1,12 @@
-import { AccountingDashboard } from "@/components/accounting/accounting-dashboard";
+import { Suspense } from "react";
 
-export default function AccountingIndexPage() {
-  return <AccountingDashboard />;
+import { RouteLoading } from "@/components/loading/route-loading";
+import AccountingPageContent from "./accounting-page-content";
+
+export default function AccountingPage() {
+  return (
+    <Suspense fallback={<RouteLoading variant="section" />}>
+      <AccountingPageContent />
+    </Suspense>
+  );
 }

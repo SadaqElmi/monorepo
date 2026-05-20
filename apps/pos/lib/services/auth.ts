@@ -1,3 +1,9 @@
+import {
+  parseInput,
+  pinLoginSchema,
+  staffLoginSchema,
+} from "@/lib/validation";
+
 import { AUTH_PREFIX } from "./endpoints";
 import { jsonFetch } from "./http";
 
@@ -64,15 +70,16 @@ export async function pinLogin(
   const resolvedBranchId =
     trimmed && trimmed.toLowerCase() !== "all" ? trimmed : undefined;
   const sid = staffId?.trim();
+  const body = parseInput(pinLoginSchema, {
+    pin,
+    tenant: tenant.trim(),
+    ...(resolvedBranchId ? { branchId: resolvedBranchId } : {}),
+    ...(sid ? { staffId: sid } : {}),
+  });
   return jsonFetch<LoginResponse>(`${AUTH_PREFIX}/pin-login`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      pin,
-      tenant,
-      ...(resolvedBranchId ? { branchId: resolvedBranchId } : {}),
-      ...(sid ? { staffId: sid } : {}),
-    }),
+    body: JSON.stringify(body),
   });
 }
 
@@ -85,15 +92,16 @@ export async function staffLogin(
   const trimmed = branchId?.trim();
   const resolvedBranchId =
     trimmed && trimmed.toLowerCase() !== "all" ? trimmed : undefined;
+  const body = parseInput(staffLoginSchema, {
+    staffId: staffId.trim(),
+    pin,
+    deviceCredential,
+    ...(resolvedBranchId ? { branchId: resolvedBranchId } : {}),
+  });
   return jsonFetch<LoginResponse>(`${AUTH_PREFIX}/staff-login`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      staffId,
-      pin,
-      deviceCredential,
-      ...(resolvedBranchId ? { branchId: resolvedBranchId } : {}),
-    }),
+    body: JSON.stringify(body),
   });
 }
 

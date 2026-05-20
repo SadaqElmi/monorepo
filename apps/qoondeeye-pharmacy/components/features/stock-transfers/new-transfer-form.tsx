@@ -55,6 +55,7 @@ import {
 } from "@/lib/services/transfers";
 import { inventoryTransferDetailPath, ROUTES } from "@/lib/routes";
 import { cn } from "@/lib/utils";
+import { createTransferDraftSchema, validateForSubmit } from "@/lib/validation";
 import { toast } from "sonner";
 
 type LineRow = {
@@ -328,20 +329,24 @@ export function NewTransferForm({ editId }: { editId?: string | null }) {
   const persistDraft = async (): Promise<string | null> => {
     if (!tenantSlug || !sourceId || !destId) return null;
     const items = buildPayloadItems();
-    if (items.length === 0) {
-      toast.error("Add at least one line with a product and quantity.");
+    const validated = validateForSubmit(createTransferDraftSchema, {
+      toBranchId: destId,
+      items,
+    });
+    if (!validated.ok) {
+      toast.error(validated.message);
       return null;
     }
     if (transferId) {
       await updateTransfer(tenantSlug, transferId, {
-        toBranchId: destId,
-        items,
+        toBranchId: validated.data.toBranchId,
+        items: validated.data.items,
       });
       return transferId;
     }
     const created = await createTransfer(tenantSlug, {
-      toBranchId: destId,
-      items,
+      toBranchId: validated.data.toBranchId,
+      items: validated.data.items,
     });
     setTransferId(created.id);
     return created.id;

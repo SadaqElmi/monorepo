@@ -39,6 +39,7 @@ export class TenantMiddleware implements NestMiddleware {
       const tenant = await this.tenantService.findBySchemaName(slug);
       if (tenant) {
         this.tenantContext.setTenant(tenant);
+        await this.tenantService.applyTenantSchemaPatches(tenant.schemaName);
         return next();
       }
       const anyTenant = await this.tenantService.findBySchemaNameAny(slug);
@@ -70,6 +71,7 @@ export class TenantMiddleware implements NestMiddleware {
     }
 
     this.tenantContext.setTenant(tenant);
+    await this.tenantService.applyTenantSchemaPatches(tenant.schemaName);
     next();
   }
 }

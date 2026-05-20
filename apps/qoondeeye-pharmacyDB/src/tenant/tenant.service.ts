@@ -12,6 +12,8 @@ import { Tenant } from '@prisma/client';
 export class TenantService {
   private readonly logger = new Logger(TenantService.name);
   private readonly inventoryMatrixBackfillApplied = new Set<string>();
+  /** Per-process: skip re-running full patch chain after first success per schema. */
+  private readonly schemaPatchesApplied = new Set<string>();
 
   constructor(private readonly prisma: PrismaService) {}
 
@@ -198,6 +200,8 @@ export class TenantService {
     await this.prisma.$executeRawUnsafe(
       `DROP SCHEMA IF EXISTS "${esc}" CASCADE`,
     );
+    this.schemaPatchesApplied.delete(schemaName);
+    this.inventoryMatrixBackfillApplied.delete(schemaName);
     this.logger.log(`Dropped Postgres schema "${schemaName}"`);
   }
 
@@ -281,7 +285,7 @@ export class TenantService {
           `Schema "${schemaName}" base tables already exist; applying isolation + patches only`,
         );
         await this.ensureTenantBranchIsolationColumns(schemaName);
-        await this.applyTenantSchemaPatches(schemaName);
+        await this.applyTenantSchemaPatches(schemaName, { force: true });
         return;
       }
       if (hasRoles && !hasBatches) {
@@ -634,8 +638,26 @@ export class TenantService {
    * Apply idempotent upgrades for an existing tenant schema (e.g. `pin_hash`, branch columns).
    * Safe to call on every request; use when a code path bypasses provision (e.g. public PIN login).
    */
-  async applyTenantSchemaPatches(schemaName: string): Promise<void> {
+  async applyTenantSchemaPatches(
+    schemaName: string,
+    options?: { force?: boolean },
+  ): Promise<void> {
+    if (!options?.force && this.schemaPatchesApplied.has(schemaName)) {
+      return;
+    }
+    try {
+      await this.runTenantSchemaPatches(schemaName);
+      this.schemaPatchesApplied.add(schemaName);
+    } catch (e) {
+      this.schemaPatchesApplied.delete(schemaName);
+      throw e;
+    }
+  }
+
+  private async runTenantSchemaPatches(schemaName: string): Promise<void> {
     await this.ensureTenantBranchIsolationColumns(schemaName);
+    await this.ensureProductCategoryColumns(schemaName);
+    await this.ensureProductCatalogColumns(schemaName);
     await this.ensureSaleItemsMiscChargeKindColumn(schemaName);
     await this.ensurePosSessionsAndStatements(schemaName);
     await this.ensureInventoryTable(schemaName);
@@ -658,6 +680,159 @@ export class TenantService {
     await this.ensureConsolidationPermissions(schemaName);
     await this.ensureAuditLogArchiveTable(schemaName);
     await this.ensureTenantPerformanceIndexes(schemaName);
+  }
+
+  private async tenantColumnExists(
+    schemaName: string,
+    tableName: string,
+    columnName: string,
+  ): Promise<boolean> {
+    const [row] = await this.prisma.$queryRawUnsafe<{ ok: boolean }[]>(
+      `
+      SELECT EXISTS (
+        SELECT 1
+        FROM information_schema.columns
+        WHERE table_schema = $1
+          AND table_name = $2
+          AND column_name = $3
+      ) AS ok
+      `,
+      schemaName,
+      tableName,
+      columnName,
+    );
+    return Boolean(row?.ok);
+  }
+
+  private async tenantTableExists(
+    schemaName: string,
+    tableName: string,
+  ): Promise<boolean> {
+    const [row] = await this.prisma.$queryRawUnsafe<{ ok: boolean }[]>(
+      `
+      SELECT EXISTS (
+        SELECT 1
+        FROM information_schema.tables
+        WHERE table_schema = $1
+          AND table_name = $2
+      ) AS ok
+      `,
+      schemaName,
+      tableName,
+    );
+    return Boolean(row?.ok);
+  }
+
+  /** Mirrors tenant_template product category columns on live snake_case schemas. */
+  private async ensureProductCategoryColumns(schemaName: string): Promise<void> {
+    if (!(await this.tenantTableExists(schemaName, 'product_categories'))) {
+      return;
+    }
+    const cols: Array<{ column: string; alterSql: string }> = [
+      {
+        column: 'description',
+        alterSql: `ALTER TABLE "${schemaName}"."product_categories"
+          ADD COLUMN IF NOT EXISTS description TEXT`,
+      },
+      {
+        column: 'slug',
+        alterSql: `ALTER TABLE "${schemaName}"."product_categories"
+          ADD COLUMN IF NOT EXISTS slug VARCHAR(255)`,
+      },
+      {
+        column: 'branch_id',
+        alterSql: `ALTER TABLE "${schemaName}"."product_categories"
+          ADD COLUMN IF NOT EXISTS branch_id UUID REFERENCES "${schemaName}"."branches"(id)
+          ON DELETE SET NULL`,
+      },
+      {
+        column: 'parent_id',
+        alterSql: `ALTER TABLE "${schemaName}"."product_categories"
+          ADD COLUMN IF NOT EXISTS parent_id UUID REFERENCES "${schemaName}"."product_categories"(id)
+          ON DELETE SET NULL`,
+      },
+    ];
+    for (const { column, alterSql } of cols) {
+      if (!(await this.tenantColumnExists(schemaName, 'product_categories', column))) {
+        await this.prisma.$executeRawUnsafe(alterSql);
+      }
+    }
+    await this.prisma.$executeRawUnsafe(
+      `CREATE INDEX IF NOT EXISTS idx_product_categories_branch_id
+       ON "${schemaName}"."product_categories"(branch_id)`,
+    );
+    await this.prisma.$executeRawUnsafe(
+      `CREATE INDEX IF NOT EXISTS idx_product_categories_parent_id
+       ON "${schemaName}"."product_categories"(parent_id)`,
+    );
+  }
+
+  /** Product catalog columns used by POS / inventory (list_price, strength, …). */
+  private async ensureProductCatalogColumns(schemaName: string): Promise<void> {
+    if (!(await this.tenantTableExists(schemaName, 'products'))) {
+      return;
+    }
+    const cols: Array<{ column: string; alterSql: string }> = [
+      {
+        column: 'generic_name',
+        alterSql: `ALTER TABLE "${schemaName}"."products"
+          ADD COLUMN IF NOT EXISTS generic_name VARCHAR(255)`,
+      },
+      {
+        column: 'barcode',
+        alterSql: `ALTER TABLE "${schemaName}"."products"
+          ADD COLUMN IF NOT EXISTS barcode VARCHAR(100)`,
+      },
+      {
+        column: 'list_price',
+        alterSql: `ALTER TABLE "${schemaName}"."products"
+          ADD COLUMN IF NOT EXISTS list_price NUMERIC(10,2)`,
+      },
+      {
+        column: 'strength',
+        alterSql: `ALTER TABLE "${schemaName}"."products"
+          ADD COLUMN IF NOT EXISTS strength VARCHAR(100)`,
+      },
+      {
+        column: 'formulation',
+        alterSql: `ALTER TABLE "${schemaName}"."products"
+          ADD COLUMN IF NOT EXISTS formulation VARCHAR(100)`,
+      },
+      {
+        column: 'branch_id',
+        alterSql: `ALTER TABLE "${schemaName}"."products"
+          ADD COLUMN IF NOT EXISTS branch_id UUID REFERENCES "${schemaName}"."branches"(id)
+          ON DELETE SET NULL`,
+      },
+      {
+        column: 'unit',
+        alterSql: `ALTER TABLE "${schemaName}"."products"
+          ADD COLUMN IF NOT EXISTS unit VARCHAR(50)`,
+      },
+      {
+        column: 'description',
+        alterSql: `ALTER TABLE "${schemaName}"."products"
+          ADD COLUMN IF NOT EXISTS description TEXT`,
+      },
+    ];
+    for (const { column, alterSql } of cols) {
+      if (!(await this.tenantColumnExists(schemaName, 'products', column))) {
+        await this.prisma.$executeRawUnsafe(alterSql);
+      }
+    }
+    await this.prisma.$executeRawUnsafe(
+      `CREATE UNIQUE INDEX IF NOT EXISTS products_barcode_unique_not_null
+       ON "${schemaName}"."products"(barcode)
+       WHERE barcode IS NOT NULL AND TRIM(barcode) <> ''`,
+    );
+    await this.prisma.$executeRawUnsafe(
+      `CREATE INDEX IF NOT EXISTS idx_products_barcode
+       ON "${schemaName}"."products"(barcode)`,
+    );
+    await this.prisma.$executeRawUnsafe(
+      `CREATE INDEX IF NOT EXISTS idx_products_branch_id
+       ON "${schemaName}"."products"(branch_id)`,
+    );
   }
 
   /**
@@ -739,21 +914,28 @@ export class TenantService {
       `ALTER TABLE "${schemaName}"."audit_logs"
        ADD COLUMN IF NOT EXISTS audit_hash VARCHAR(128)`,
     );
-    await this.prisma.$executeRawUnsafe(
-      `UPDATE "${schemaName}"."audit_logs"
-       SET entity_type = COALESCE(entity_type, table_name),
-           entity_id = COALESCE(entity_id, record_id::text),
-           user_id = COALESCE(user_id, actor_user_id),
-           before_json = COALESCE(before_json, old_payload),
-           after_json = COALESCE(after_json, new_payload),
-           event_ts = COALESCE(event_ts, created_at)
-       WHERE entity_type IS NULL
-          OR entity_id IS NULL
-          OR user_id IS NULL
-          OR before_json IS NULL
-          OR after_json IS NULL
-          OR event_ts IS NULL`,
+    const hasLegacyAuditColumns = await this.tenantColumnExists(
+      schemaName,
+      'audit_logs',
+      'table_name',
     );
+    if (hasLegacyAuditColumns) {
+      await this.prisma.$executeRawUnsafe(
+        `UPDATE "${schemaName}"."audit_logs"
+         SET entity_type = COALESCE(entity_type, table_name),
+             entity_id = COALESCE(entity_id, record_id::text),
+             user_id = COALESCE(user_id, actor_user_id),
+             before_json = COALESCE(before_json, old_payload),
+             after_json = COALESCE(after_json, new_payload),
+             event_ts = COALESCE(event_ts, created_at)
+         WHERE entity_type IS NULL
+            OR entity_id IS NULL
+            OR user_id IS NULL
+            OR before_json IS NULL
+            OR after_json IS NULL
+            OR event_ts IS NULL`,
+      );
+    }
     await this.prisma.$executeRawUnsafe(
       `CREATE INDEX IF NOT EXISTS idx_audit_logs_event_ts
        ON "${schemaName}"."audit_logs"(event_ts DESC)`,
@@ -1379,6 +1561,12 @@ export class TenantService {
     );
     await this.prisma.$executeRawUnsafe(
       `CREATE INDEX IF NOT EXISTS idx_stock_transfers_status ON "${schemaName}"."stock_transfers"(status)`,
+    );
+    await this.prisma.$executeRawUnsafe(
+      `CREATE INDEX IF NOT EXISTS idx_stock_transfers_from_to_status ON "${schemaName}"."stock_transfers"(from_branch_id, to_branch_id, status)`,
+    );
+    await this.prisma.$executeRawUnsafe(
+      `CREATE INDEX IF NOT EXISTS idx_stock_transfers_to_status ON "${schemaName}"."stock_transfers"(to_branch_id, status)`,
     );
     await this.prisma.$executeRawUnsafe(
       `CREATE TABLE IF NOT EXISTS "${schemaName}"."stock_transfer_items" (

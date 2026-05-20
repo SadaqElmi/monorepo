@@ -34,7 +34,6 @@ import {
   createReturnVoucher,
   finalizeReturnVoucher,
   getProductByBarcode,
-  getProducts,
   getReturnVoucherByToken,
   getSaleById,
   getSaleByReceiptNumber,
@@ -42,6 +41,7 @@ import {
   type Sale,
   type SaleItem,
 } from "@/lib/api";
+import { usePosCatalog } from "@/hooks/use-pos-catalog";
 
 const UUID_RE =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
@@ -123,30 +123,20 @@ export function PosReturnPanel({
     null,
   );
 
+  const catalogQuery = usePosCatalog(tenantSlug);
   React.useEffect(() => {
-    if (!tenantSlug) return;
-    let cancelled = false;
-    (async () => {
-      try {
-        const prods = await getProducts(tenantSlug);
-        if (cancelled) return;
-        const map: Record<string, string> = {};
-        const bc: Record<string, string> = {};
-        for (const p of prods) {
-          map[p.id] = p.name;
-          const code = (p.sku ?? "").trim().toLowerCase();
-          if (code) bc[code] = p.id;
-        }
-        setProductNames(map);
-        setBarcodeToProductId(bc);
-      } catch {
-        /* ignore */
-      }
-    })();
-    return () => {
-      cancelled = true;
-    };
-  }, [tenantSlug]);
+    const prods = catalogQuery.data?.prods;
+    if (!prods) return;
+    const map: Record<string, string> = {};
+    const bc: Record<string, string> = {};
+    for (const p of prods) {
+      map[p.id] = p.name;
+      const code = (p.sku ?? "").trim().toLowerCase();
+      if (code) bc[code] = p.id;
+    }
+    setProductNames(map);
+    setBarcodeToProductId(bc);
+  }, [catalogQuery.data]);
 
   const runLookup = async () => {
     if (!tenantSlug) return;

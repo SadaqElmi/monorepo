@@ -10,9 +10,11 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { syncActiveBranchCookie } from "@/lib/branch-cookie";
 import { setAuthToken, type StoredUser } from "@/lib/auth-client";
 import { login } from "@/lib/api";
-import { prefetchDashboardAfterLogin } from "@/lib/erp-query-prefetch";
+import { loginSchema, validateForSubmit } from "@/lib/validation";
+import { prefetchErpCoreAfterLogin } from "@/lib/erp-query-prefetch";
 
 export default function LoginPage() {
   const router = useRouter();
@@ -26,9 +28,17 @@ export default function LoginPage() {
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     setError("");
+    const validated = validateForSubmit(loginSchema, {
+      email: email.trim(),
+      password,
+    });
+    if (!validated.ok) {
+      setError(validated.message);
+      return;
+    }
     setLoading(true);
     try {
-      const res = await login(email.trim(), password);
+      const res = await login(validated.data.email, validated.data.password);
       const user: StoredUser = {
         id: res.user.id,
         email: res.user.email ?? "",
@@ -46,6 +56,7 @@ export default function LoginPage() {
         const initialBranchId = res.assignedBranchId ?? res.defaultBranchId;
         if (initialBranchId) {
           localStorage.setItem("branchId", initialBranchId);
+          syncActiveBranchCookie(initialBranchId);
         } else {
           localStorage.removeItem("branchId");
         }
@@ -54,7 +65,7 @@ export default function LoginPage() {
       }
       const slug = res.tenantSlug?.trim();
       if (slug && res.userType !== "system") {
-        void prefetchDashboardAfterLogin(queryClient, slug);
+        void prefetchErpCoreAfterLogin(queryClient, slug);
       }
       if (res.userType === "system") {
         router.push("/admin");

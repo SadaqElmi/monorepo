@@ -2,10 +2,15 @@
 
 import * as React from "react";
 import Link from "next/link";
+import { useQuery } from "@tanstack/react-query";
+import { Loader2 } from "lucide-react";
 import { usePos } from "@/components/pos-context";
+import { usePosBranchFacet } from "@/hooks/use-pos-branch-facet";
 import { getZReport } from "@/lib/api";
-import { accountingPosStatementHref } from "@/lib/erp-app-link";
 import { getCurrentPosSession } from "@/lib/services/pos-sessions";
+import { posKeys, POS_STALE_SALES } from "@/lib/pos-query-keys";
+import { normalizeZReportPayload, zReportNum } from "@/lib/z-report-payload";
+import type { ZReportPayload } from "@/lib/z-report-payload";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
@@ -18,49 +23,11 @@ import {
   TableRow,
 } from "@/components/ui/table";
 
-type ZReportPayload = {
-  sessionId: string;
-  openedAt: string;
-  currentTime: string;
-  totals: {
-    transactionCount: number;
-    totalSales: number;
-    taxAmount: number;
-    netSales: number;
-    cashTotal: number;
-    cardTotal: number;
-    walletTotal: number;
-    cogsEstimate: number;
-  };
-  paymentByMethod?: Array<{ method: string; amount: number }>;
-  paymentsTotal?: number;
-  categorySales?: Array<{ categoryName: string; amount: number }>;
-  reportStats?: {
-    grossSales: number;
-    discountTotal: number;
-    discountTransactionCount: number;
-    rounding: number;
-    itemsSoldQuantity: number;
-    refundCount: number;
-    suspendedCount: number;
-  };
-  statementPosted?: boolean;
-  statement?: {
-    id: string;
-    lines: Array<{
-      id?: string;
-      paymentBucket: string;
-      expectedAmount: number;
-      actualAmount: number;
-      difference: number;
-    }>;
-  } | null;
+export type ZReportProps = {
+  initialData?: ZReportPayload | null;
+  serverPrefetched?: boolean;
+  serverError?: string | null;
 };
-
-function num(n: unknown, fallback = 0): number {
-  const v = typeof n === "number" ? n : Number(n);
-  return Number.isFinite(v) ? v : fallback;
-}
 
 function fmtMoney(n: number) {
   const x = num(n, 0);
@@ -83,179 +50,70 @@ function paymentRowsFromTotals(t: ZReportPayload["totals"]) {
   return rows.sort((a, b) => b.amount - a.amount);
 }
 
-/** Accept camelCase or snake_case from the API; coerce nested numbers. */
-function normalizeZReportPayload(res: unknown): ZReportPayload | null {
-  if (!res || typeof res !== "object") return null;
-  const r = res as Record<string, unknown>;
-  const rawTotals = r.totals as Record<string, unknown> | undefined;
-  if (!rawTotals || typeof rawTotals !== "object") return null;
-
-  const t = (a: string, b: string) => num(rawTotals[a] ?? rawTotals[b], 0);
-
-  const totals: ZReportPayload["totals"] = {
-    transactionCount: t("transactionCount", "transaction_count"),
-    totalSales: t("totalSales", "total_sales"),
-    taxAmount: t("taxAmount", "tax_amount"),
-    netSales: t("netSales", "net_sales"),
-    cashTotal: t("cashTotal", "cash_total"),
-    cardTotal: t("cardTotal", "card_total"),
-    walletTotal: t("walletTotal", "wallet_total"),
-    cogsEstimate: t("cogsEstimate", "cogs_estimate"),
-  };
-
-  const rawStats = r.reportStats as Record<string, unknown> | undefined;
-  const reportStats = rawStats
-    ? {
-        grossSales: num(rawStats.grossSales ?? rawStats.gross_sales, 0),
-        discountTotal: num(
-          rawStats.discountTotal ?? rawStats.discount_total,
-          0,
-        ),
-        discountTransactionCount: num(
-          rawStats.discountTransactionCount ??
-            rawStats.discount_transaction_count,
-          0,
-        ),
-        rounding: num(rawStats.rounding, 0),
-        itemsSoldQuantity: num(
-          rawStats.itemsSoldQuantity ?? rawStats.items_sold_quantity,
-          0,
-        ),
-        refundCount: num(rawStats.refundCount ?? rawStats.refund_count, 0),
-        suspendedCount: num(
-          rawStats.suspendedCount ?? rawStats.suspended_count,
-          0,
-        ),
-      }
-    : undefined;
-
-  const rawPay = r.paymentByMethod ?? r.payment_by_method;
-  let paymentByMethod: ZReportPayload["paymentByMethod"];
-  if (Array.isArray(rawPay)) {
-    paymentByMethod = rawPay.map((row) => {
-      const x = row as Record<string, unknown>;
-      return {
-        method: String(x.method ?? x.payment_method ?? "Unspecified"),
-        amount: num(x.amount, 0),
-      };
-    });
-  }
-
-  const rawCat = r.categorySales ?? r.category_sales;
-  let categorySales: ZReportPayload["categorySales"];
-  if (Array.isArray(rawCat)) {
-    categorySales = rawCat.map((row) => {
-      const x = row as Record<string, unknown>;
-      return {
-        categoryName: String(
-          x.categoryName ?? x.category_name ?? "Uncategorized",
-        ),
-        amount: num(x.amount, 0),
-      };
-    });
-  }
-
-  let statementOut: ZReportPayload["statement"] | null | undefined;
-  const stmtRaw = r.statement;
-  if (stmtRaw === null) {
-    statementOut = null;
-  } else if (stmtRaw && typeof stmtRaw === "object") {
-    const stmt = stmtRaw as Record<string, unknown>;
-    const linesRaw = stmt.lines;
-    const lines = Array.isArray(linesRaw)
-      ? linesRaw.map((ln, i) => {
-          const x = ln as Record<string, unknown>;
-          return {
-            id: typeof x.id === "string" ? x.id : undefined,
-            paymentBucket: String(
-              x.paymentBucket ?? x.payment_bucket ?? `bucket-${i}`,
-            ),
-            expectedAmount: num(x.expectedAmount ?? x.expected_amount, 0),
-            actualAmount: num(x.actualAmount ?? x.actual_amount, 0),
-            difference: num(x.difference, 0),
-          };
-        })
-      : [];
-    statementOut = {
-      id: String(stmt.id ?? ""),
-      lines,
-    };
-  }
-
-  const paymentsTotalRaw = num(r.paymentsTotal ?? r.payments_total, Number.NaN);
-
-  return {
-    sessionId: String(r.sessionId ?? r.session_id ?? ""),
-    openedAt: String(r.openedAt ?? r.opened_at ?? ""),
-    currentTime: String(
-      r.currentTime ?? r.current_time ?? new Date().toISOString(),
-    ),
-    totals,
-    paymentByMethod,
-    paymentsTotal: Number.isFinite(paymentsTotalRaw)
-      ? paymentsTotalRaw
-      : undefined,
-    categorySales,
-    reportStats,
-    statementPosted: Boolean(r.statementPosted ?? r.statement_posted),
-    statement: statementOut,
-  };
+function num(n: unknown, fallback = 0): number {
+  return zReportNum(n, fallback);
 }
 
-export function ZReport() {
+export function ZReport({
+  initialData = null,
+  serverPrefetched = false,
+  serverError = null,
+}: ZReportProps) {
   const { currentUser, posSessionId, posSessionLoading } = usePos();
   const tenantSlug = currentUser?.tenantSlug?.trim() ?? null;
-  const [error, setError] = React.useState<string | null>(null);
-  const [data, setData] = React.useState<ZReportPayload | null>(null);
-  const [loading, setLoading] = React.useState(true);
+  const branchFacet = usePosBranchFacet(tenantSlug);
+  const prefetched: ZReportPayload | undefined =
+    serverPrefetched && initialData != null ? initialData : undefined;
+  const sessionKey =
+    (prefetched?.sessionId ?? posSessionId ?? "").trim() || "pending";
 
-  React.useEffect(() => {
-    if (posSessionLoading) return;
-    if (!tenantSlug) {
-      setError("Missing tenant. Sign in again from the register.");
-      setLoading(false);
-      return;
-    }
-    let cancelled = false;
-    setLoading(true);
-    setError(null);
-    void (async () => {
-      try {
-        const current = await getCurrentPosSession(tenantSlug);
-        if (cancelled) return;
-        const sessionId = current?.id ?? posSessionId;
-        if (!sessionId) {
-          setError(
-            "No open or selected session. Open a shift on the register first.",
-          );
-          return;
-        }
-        const raw = await getZReport(tenantSlug, sessionId);
-        if (cancelled) return;
-        const normalized = normalizeZReportPayload(raw);
-        if (!normalized) {
-          setError("Invalid Z-Report response from server.");
-          return;
-        }
-        setData(normalized);
-      } catch (e) {
-        if (!cancelled) {
-          setError(
-            e instanceof Error
-              ? e.message
-              : "Could not load Z-Report. Check your connection and branch.",
-          );
-        }
-      } finally {
-        if (!cancelled) setLoading(false);
+  const zReportQuery = useQuery({
+    queryKey: posKeys.zReport(tenantSlug ?? "", branchFacet, sessionKey),
+    enabled: Boolean(tenantSlug && !posSessionLoading),
+    initialData: prefetched,
+    staleTime: prefetched ? POS_STALE_SALES : 0,
+    queryFn: async () => {
+      const current = await getCurrentPosSession(tenantSlug!);
+      const sessionId = current?.id ?? posSessionId;
+      if (!sessionId) {
+        throw new Error(
+          "No open or selected session. Open a shift on the register first.",
+        );
       }
-    })();
-    return () => {
-      cancelled = true;
-    };
-  }, [tenantSlug, posSessionId, posSessionLoading]);
+      const raw = await getZReport(tenantSlug!, sessionId);
+      const normalized = normalizeZReportPayload(raw);
+      if (!normalized) {
+        throw new Error("Invalid Z-Report response from server.");
+      }
+      return normalized;
+    },
+  });
 
-  if (loading || posSessionLoading) {
+  const data = zReportQuery.data ?? null;
+  const loading = zReportQuery.isFetching;
+
+  const clientError =
+    zReportQuery.error instanceof Error
+      ? zReportQuery.error.message
+      : zReportQuery.error
+        ? "Could not load Z-Report. Check your connection and branch."
+        : null;
+
+  const blockingError = !data
+    ? (clientError ??
+      (serverPrefetched && serverError?.trim() ? serverError.trim() : null) ??
+      (!tenantSlug && !posSessionLoading
+        ? "Missing tenant. Sign in again from the register."
+        : null))
+    : null;
+
+  const showSkeleton =
+    !data &&
+    (posSessionLoading ||
+      zReportQuery.isPending ||
+      (zReportQuery.isFetching && !serverPrefetched));
+
+  if (showSkeleton) {
     return (
       <div className="flex min-h-screen items-center justify-center bg-background p-4">
         <p className="text-muted-foreground text-sm">Loading Z-Report…</p>
@@ -263,18 +121,32 @@ export function ZReport() {
     );
   }
 
-  if (error || !data) {
+  if (blockingError) {
     return (
       <div className="flex min-h-screen flex-col items-center justify-center gap-4 bg-background p-4">
         <p className="max-w-md text-center text-sm text-red-600">
-          {error?.trim() ||
-            (!data ? "Could not load Z-Report data." : "Unknown error.")}
+          {blockingError}
         </p>
-        <Button asChild variant="outline">
-          <Link href="/">Back to register</Link>
-        </Button>
+        <div className="flex gap-2">
+          <Button
+            type="button"
+            variant="secondary"
+            disabled={loading}
+            onClick={() => void zReportQuery.refetch()}
+          >
+            {loading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
+            Refresh
+          </Button>
+          <Button asChild variant="outline">
+            <Link href="/">Back to register</Link>
+          </Button>
+        </div>
       </div>
     );
+  }
+
+  if (!data) {
+    return null;
   }
 
   const t = {

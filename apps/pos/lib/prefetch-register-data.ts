@@ -1,7 +1,9 @@
 import type { QueryClient } from "@tanstack/react-query";
 
-import { getBatches, getCategories, getProducts, getSalesPaged } from "@/lib/api";
+import { getSalesPaged } from "@/lib/api";
+import { fetchPosCatalog } from "@/hooks/use-pos-catalog";
 import { getBranchQueryKeyFacet } from "@/lib/query-branch-key";
+import { posKeys, POS_STALE_CATALOG, POS_STALE_SALES } from "@/lib/pos-query-keys";
 
 const inflight = new Set<string>();
 
@@ -22,19 +24,13 @@ export function prefetchPosRegisterData(
 
   void Promise.all([
     queryClient.prefetchQuery({
-      queryKey: ["pos", "catalog", tenantSlug, facet],
-      queryFn: async ({ signal }) => {
-        const slug = tenantSlug;
-        const [prods, batchesData, cats] = await Promise.all([
-          getProducts(slug, { signal }),
-          getBatches(slug, { signal }),
-          getCategories(slug, { signal }),
-        ]);
-        return { prods, batchesData, cats };
-      },
+      queryKey: posKeys.catalog(tenantSlug, facet),
+      staleTime: POS_STALE_CATALOG,
+      queryFn: ({ signal }) => fetchPosCatalog(tenantSlug, signal),
     }),
     queryClient.prefetchQuery({
-      queryKey: ["pos", "sales", tenantSlug, facet, 1, 200],
+      queryKey: posKeys.sales(tenantSlug, facet, 1, 200),
+      staleTime: POS_STALE_SALES,
       queryFn: async ({ signal }) => {
         const res = await getSalesPaged(tenantSlug, 1, 200, { signal });
         return res.items;

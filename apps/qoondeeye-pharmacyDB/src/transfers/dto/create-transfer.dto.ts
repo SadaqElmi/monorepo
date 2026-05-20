@@ -8,6 +8,10 @@ import {
 } from 'class-validator';
 import { TransferLineDto } from './transfer-line.dto';
 
+/**
+ * Keep in sync with:
+ * packages/validation/src/transfers.ts — createTransferSchema (camelCase client payload)
+ */
 export class CreateTransferDto {
   @IsOptional()
   @IsUUID()

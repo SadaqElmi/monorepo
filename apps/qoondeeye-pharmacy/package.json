@@ -7,6 +7,8 @@
     "@radix-ui/react-dialog": "^1.1.15",
     "@repo/types": "workspace:*",
     "@repo/utils": "workspace:*",
+    "@repo/validation": "workspace:*",
+    "zod": "catalog:",
     "@tanstack/react-query": "^5.100.9",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
@@ -31,7 +33,9 @@
     "vaul": "^1.1.2"
   },
   "devDependencies": {
+    "@next/bundle-analyzer": "^16.1.0",
     "@repo/eslint-config": "workspace:*",
+    "cross-env": "^7.0.3",
     "@tailwindcss/postcss": "^4",
     "@types/jsbarcode": "^3.11.4",
     "@types/node": "catalog:",
@@ -47,6 +51,10 @@
   },
   "private": true,
   "scripts": {
+    "analyze": "cross-env ANALYZE=true next build --webpack",
+    "analyze:turbo": "next build --experimental-analyze",
+    "analyze:report": "node scripts/report-client-chunk-sizes.mjs transfer balance-sheet pharmacy-pos pos",
+    "audit:waterfalls": "node scripts/audit-server-waterfalls.mjs",
     "build": "next build",
     "dev": "next dev",
     "lint": "eslint",

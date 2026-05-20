@@ -1,7 +1,11 @@
-"use client";
+import AgedPayableReportClient from "@/components/accounting/reports/aged-payable-client";
+import { loadReportPageContext } from "@/lib/server-page-props";
 
-import { ReportPlaceholder } from "../_components/report-placeholder";
-
-export default function AgedPayableReportPage() {
-  return <ReportPlaceholder title="Aged Payable" />;
+export default async function Page({
+  searchParams,
+}: {
+  searchParams: Promise<Record<string, string | string[] | undefined>>;
+}) {
+  await loadReportPageContext(searchParams);
+  return <AgedPayableReportClient />;
 }

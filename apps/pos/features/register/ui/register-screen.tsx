@@ -3,8 +3,11 @@
 import * as React from "react";
 import { createPortal } from "react-dom";
 import Link from "next/link";
-import { usePathname, useRouter } from "next/navigation";
+import { useRouter } from "next/navigation";
 import { useQuery } from "@tanstack/react-query";
+import { usePosCatalog } from "@/hooks/use-pos-catalog";
+import { usePosBranchFacet } from "@/hooks/use-pos-branch-facet";
+import { posKeys, POS_STALE_SALES } from "@/lib/pos-query-keys";
 import { Calculator, ChevronDown, ChevronUp, Undo2 } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
@@ -36,7 +39,6 @@ import {
   getSaleById,
   getSalesPaged,
   getProductByBarcode,
-  getProducts,
   type Batch,
 } from "@/lib/api";
 import {
@@ -56,12 +58,10 @@ import { saleToPosTransaction } from "../model/transactions";
 import type { PosCatalogProduct } from "../model/types";
 import { formatMoney } from "@/shared/lib";
 import { posToast } from "@/lib/pos-toast";
-import { getBranchQueryKeyFacet } from "@/lib/query-branch-key";
 import { isManagerTierRole } from "../model/discount-policy";
 
 export function RegisterScreen() {
   const router = useRouter();
-  const pathname = usePathname();
   const {
     mainTab,
     checkoutStep,
@@ -147,44 +147,13 @@ export function RegisterScreen() {
   const [forceBlankSelectionPanel, setForceBlankSelectionPanel] =
     React.useState(false);
 
-  const [branchKey, setBranchKey] = React.useState(() =>
-    typeof window !== "undefined" ? getBranchQueryKeyFacet() : "",
-  );
-
-  React.useEffect(() => {
-    setBranchKey(getBranchQueryKeyFacet());
-  }, [pathname, tenantSlug]);
-
-  React.useEffect(() => {
-    const sync = () => setBranchKey(getBranchQueryKeyFacet());
-    window.addEventListener("storage", sync);
-    window.addEventListener("activeBranchChanged", sync as EventListener);
-    return () => {
-      window.removeEventListener("storage", sync);
-      window.removeEventListener(
-        "activeBranchChanged",
-        sync as EventListener,
-      );
-    };
-  }, []);
-
-  const catalogQuery = useQuery({
-    queryKey: ["pos", "catalog", tenantSlug, branchKey],
-    enabled: Boolean(tenantSlug && branchKey),
-    queryFn: async ({ signal }) => {
-      const slug = tenantSlug!;
-      const [prods, batchesData, cats] = await Promise.all([
-        getProducts(slug, { signal }),
-        getBatches(slug, { signal }),
-        getCategories(slug, { signal }),
-      ]);
-      return { prods, batchesData, cats };
-    },
-  });
+  const branchKey = usePosBranchFacet(tenantSlug);
+  const catalogQuery = usePosCatalog(tenantSlug);
 
   const salesQuery = useQuery({
-    queryKey: ["pos", "sales", tenantSlug, branchKey, 1, 200],
+    queryKey: posKeys.sales(tenantSlug ?? "", branchKey, 1, 200),
     enabled: Boolean(tenantSlug && branchKey),
+    staleTime: POS_STALE_SALES,
     queryFn: async ({ signal }) => {
       const res = await getSalesPaged(tenantSlug!, 1, 200, { signal });
       return res.items;

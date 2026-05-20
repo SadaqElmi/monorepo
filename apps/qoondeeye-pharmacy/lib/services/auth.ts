@@ -1,3 +1,9 @@
+import {
+  loginSchema,
+  parseInput,
+  pinLoginSchema,
+} from "@/lib/validation";
+
 import { AUTH_PREFIX } from "./endpoints";
 import { authPost, jsonFetch } from "./http";
 
@@ -37,10 +43,15 @@ export async function login(
   password: string,
   tenant?: string,
 ): Promise<LoginResponse> {
+  const body = parseInput(loginSchema, {
+    email: email.trim(),
+    password,
+    ...(tenant?.trim() ? { tenant: tenant.trim() } : {}),
+  });
   return jsonFetch<LoginResponse>(`${AUTH_PREFIX}/login`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ email, password, ...(tenant ? { tenant } : {}) }),
+    body: JSON.stringify(body),
   });
 }
 
@@ -56,15 +67,16 @@ export async function pinLogin(
   const resolvedBranchId =
     trimmed && trimmed.toLowerCase() !== "all" ? trimmed : undefined;
   const sid = staffId?.trim();
+  const body = parseInput(pinLoginSchema, {
+    pin,
+    tenant: tenant.trim(),
+    ...(resolvedBranchId ? { branchId: resolvedBranchId } : {}),
+    ...(sid ? { staffId: sid } : {}),
+  });
   return jsonFetch<LoginResponse>(`${AUTH_PREFIX}/pin-login`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      pin,
-      tenant,
-      ...(resolvedBranchId ? { branchId: resolvedBranchId } : {}),
-      ...(sid ? { staffId: sid } : {}),
-    }),
+    body: JSON.stringify(body),
   });
 }
 

@@ -1,11 +1,13 @@
 import type { NextConfig } from "next";
 import path from "node:path";
 
+const withBundleAnalyzer = require("@next/bundle-analyzer")({
+  enabled: process.env.ANALYZE === "true",
+});
+
 const nextConfig: NextConfig = {
   transpilePackages: ["@repo/utils", "@repo/types"],
   turbopack: {
-    // Monorepo: multiple package-lock.json files; pin root so resolution and
-    // workspace packages stay consistent (silences Next.js inference warning).
     root: path.resolve(__dirname, "../.."),
   },
   async rewrites() {
@@ -22,4 +24,4 @@ const nextConfig: NextConfig = {
   },
 };
 
-export default nextConfig;
+export default withBundleAnalyzer(nextConfig);

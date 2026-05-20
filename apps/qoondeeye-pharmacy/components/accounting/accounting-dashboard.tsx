@@ -89,22 +89,50 @@ function entryPartner(entry: JournalEntryRow): string {
   );
 }
 
-export function AccountingDashboard() {
-  const { branchId, aggregateAll } = useReportBranchQuery();
+export type AccountingDashboardProps = {
+  tenantSlug?: string;
+  serverScope?: { branchId?: string; aggregateAll?: boolean };
+  initialBalanceSheet?: BalanceSheetResult | null;
+  initialJournals?: JournalEntryRow[];
+  initialExecutive?: ExecutiveSummaryResult | null;
+  initialAudit?: AuditLogRow[];
+  serverPrefetched?: boolean;
+};
+
+export function AccountingDashboard({
+  tenantSlug: tenantSlugProp,
+  serverScope,
+  initialBalanceSheet = null,
+  initialJournals = [],
+  initialExecutive = null,
+  initialAudit = [],
+  serverPrefetched = false,
+}: AccountingDashboardProps) {
+  const { branchId: hookBranchId, aggregateAll: hookAggregateAll } =
+    useReportBranchQuery();
+  const effectiveBranchId = hookBranchId ?? serverScope?.branchId;
+  const effectiveAggregateAll =
+    hookAggregateAll ||
+    (!hookBranchId && Boolean(serverScope?.aggregateAll));
+
   const [tenantSlug] = React.useState(
-    () => getStoredUser()?.tenantSlug ?? "pharmacy1",
+    () => tenantSlugProp?.trim() || getStoredUser()?.tenantSlug || "pharmacy1",
   );
 
-  const [loading, setLoading] = React.useState(true);
+  const skipPrefetchOnce = React.useRef(serverPrefetched);
+
+  const [loading, setLoading] = React.useState(() => !serverPrefetched);
   const [error, setError] = React.useState<string | null>(null);
   const [balanceSheet, setBalanceSheet] = React.useState<BalanceSheetResult | null>(
-    null,
+    initialBalanceSheet,
   );
-  const [journals, setJournals] = React.useState<JournalEntryRow[]>([]);
+  const [journals, setJournals] = React.useState<JournalEntryRow[]>(
+    initialJournals,
+  );
   const [executive, setExecutive] = React.useState<ExecutiveSummaryResult | null>(
-    null,
+    initialExecutive,
   );
-  const [audit, setAudit] = React.useState<AuditLogRow[]>([]);
+  const [audit, setAudit] = React.useState<AuditLogRow[]>(initialAudit);
 
   const asOf = React.useMemo(
     () => format(new Date(), "yyyy-MM-dd"),
@@ -117,6 +145,10 @@ export function AccountingDashboard() {
   }, []);
 
   React.useEffect(() => {
+    if (skipPrefetchOnce.current) {
+      skipPrefetchOnce.current = false;
+      return;
+    }
     let cancelled = false;
     async function load() {
       setLoading(true);
@@ -128,16 +160,22 @@ export function AccountingDashboard() {
       const to = asOf;
       try {
         const [bs, je, ex] = await Promise.all([
-          getBalanceSheet(tenantSlug, asOf, branchId, aggregateAll),
-          branchId
-            ? getJournalEntries(tenantSlug, branchId, 8)
+          getBalanceSheet(tenantSlug, asOf, effectiveBranchId, effectiveAggregateAll),
+          effectiveBranchId
+            ? getJournalEntries(tenantSlug, effectiveBranchId, 8)
             : Promise.resolve([] as JournalEntryRow[]),
-          getExecutiveSummary(tenantSlug, from, to, branchId, aggregateAll),
+          getExecutiveSummary(
+            tenantSlug,
+            from,
+            to,
+            effectiveBranchId,
+            effectiveAggregateAll,
+          ),
         ]);
         let trail: AuditLogRow[] = [];
-        if (branchId) {
+        if (effectiveBranchId) {
           try {
-            trail = await getAuditTrail(tenantSlug, branchId, 6);
+            trail = await getAuditTrail(tenantSlug, effectiveBranchId, 6);
           } catch {
             trail = [];
           }
@@ -162,7 +200,7 @@ export function AccountingDashboard() {
     return () => {
       cancelled = true;
     };
-  }, [tenantSlug, asOf, branchId, aggregateAll]);
+  }, [tenantSlug, asOf, effectiveBranchId, effectiveAggregateAll]);
 
   const bankBal = balanceForKey(balanceSheet, "bank");
   const cashBal = balanceForKey(balanceSheet, "cash");
@@ -208,7 +246,7 @@ export function AccountingDashboard() {
             </div>
           </div>
 
-          {!branchId ? (
+          {!effectiveBranchId ? (
             <p className="mb-6 text-sm text-amber-700 dark:text-amber-400">
               Select a branch in the header to load balances and journals for that location.
             </p>

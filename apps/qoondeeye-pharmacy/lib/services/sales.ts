@@ -1,12 +1,12 @@
+import type { PagedList, Sale, SaleItem, UpdateSaleInput } from "@repo/types";
+import {
+  createSaleSchema,
+  parseInput,
+  type CreateSaleInput,
+} from "@/lib/validation";
+
 import { SALES_PREFIX } from "./endpoints";
 import { type JsonHeaders, jsonFetch } from "./http";
-import type {
-  CreateSaleInput,
-  PagedList,
-  Sale,
-  SaleItem,
-  UpdateSaleInput,
-} from "@repo/types";
 
 export type { Sale, SaleItem, CreateSaleInput, UpdateSaleInput };
 
@@ -65,13 +65,14 @@ export async function createSale(
   tenantSlug: string,
   input: CreateSaleInput,
 ): Promise<Sale> {
+  const body = parseInput(createSaleSchema, input);
   return jsonFetch<Sale>(SALES_PREFIX, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
       "X-Tenant": tenantSlug,
     } as JsonHeaders,
-    body: JSON.stringify(input),
+    body: JSON.stringify(body),
   });
 }
 

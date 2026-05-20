@@ -1,3 +1,7 @@
+/**
+ * Report GET query params (from, to, compareFrom, compareTo, branchId) — keep in sync with:
+ * packages/validation/src/accounting/reports.ts — reportDateRangeSchema
+ */
 import {
   BadRequestException,
   Body,
