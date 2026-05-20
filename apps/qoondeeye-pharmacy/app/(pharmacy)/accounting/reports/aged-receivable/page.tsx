@@ -1,7 +1,11 @@
-"use client";
+import AgedReceivableReportClient from "@/components/accounting/reports/aged-receivable-client";
+import { loadReportPageContext } from "@/lib/server-page-props";
 
-import { ReportPlaceholder } from "../_components/report-placeholder";
-
-export default function AgedReceivableReportPage() {
-  return <ReportPlaceholder title="Aged Receivable" />;
+export default async function Page({
+  searchParams,
+}: {
+  searchParams: Promise<Record<string, string | string[] | undefined>>;
+}) {
+  await loadReportPageContext(searchParams);
+  return <AgedReceivableReportClient />;
 }

@@ -1,11 +1,32 @@
 import type { Branch } from "@/lib/services/branches";
+import type { InventoryEntry } from "@/lib/services/inventory";
 import type {
   TransferApprovalState,
   TransferDto,
+  TransferEventDto,
 } from "@/lib/services/transfers";
 
 import type { StockTransferDetail, StockTransferListRow } from "./types";
 import type { TransferStatus } from "./types";
+
+export type TransferDetailBundle = {
+  detail: StockTransferDetail;
+  events: TransferEventDto[];
+};
+
+export function availabilityMapForBranch(
+  branchId: string | undefined,
+  inventory: Pick<InventoryEntry, "product_id" | "branch_id" | "quantity">[],
+): Map<string, number> {
+  const m = new Map<string, number>();
+  if (!branchId) return m;
+  for (const row of inventory) {
+    if (row.branch_id === branchId && row.product_id) {
+      m.set(row.product_id, row.quantity ?? 0);
+    }
+  }
+  return m;
+}
 
 function normalizeStatus(raw: string | undefined | null): TransferStatus {
   const s = (raw ?? "draft").toLowerCase();

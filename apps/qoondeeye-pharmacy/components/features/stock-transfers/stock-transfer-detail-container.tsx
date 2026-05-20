@@ -1,19 +1,22 @@
 "use client";
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { useCallback, useEffect, useState } from "react";
+import { Suspense, useCallback, useEffect, useState } from "react";
 import { Loader2 } from "lucide-react";
 
 import { TransferDetailView } from "@/components/features/stock-transfers/transfer-detail-view";
 import {
+  availabilityMapForBranch,
   branchesToMap,
   transferDtoToDetail,
+  type TransferDetailBundle,
 } from "@/components/features/stock-transfers/transfer-mappers";
-import type { StockTransferDetail } from "@/components/features/stock-transfers/types";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
-import { getStoredUser } from "@/lib/auth-client";
+import { RouteLoading } from "@/components/loading/route-loading";
+import { getResolvedStoredUser } from "@/lib/auth-client";
 import { getBranchQueryKeyFacet } from "@/lib/query-branch-key";
+import { transferDetailQueryKey } from "@/lib/transfers-query-keys";
 import { getBranches } from "@/lib/services/branches";
 import { getClientBranchId } from "@/lib/services/http";
 import { getInventory } from "@/lib/services/inventory";
@@ -31,25 +34,6 @@ import {
 } from "@/lib/services/transfers";
 import { toast } from "sonner";
 
-function availabilityMapForBranch(
-  branchId: string | undefined,
-  inventory: { product_id: string | null; branch_id: string | null; quantity: number }[],
-): Map<string, number> {
-  const m = new Map<string, number>();
-  if (!branchId) return m;
-  for (const row of inventory) {
-    if (row.branch_id === branchId && row.product_id) {
-      m.set(row.product_id, row.quantity ?? 0);
-    }
-  }
-  return m;
-}
-
-type DetailBundle = {
-  detail: StockTransferDetail;
-  events: TransferEventDto[];
-};
-
 type TransitionKind =
   | "confirm"
   | "ship"
@@ -60,9 +44,9 @@ type TransitionKind =
   | "reverse";
 
 function optimisticPatchDetail(
-  d: StockTransferDetail,
+  d: TransferDetailBundle["detail"],
   kind: TransitionKind,
-): StockTransferDetail {
+): TransferDetailBundle["detail"] {
   const now = new Date().toISOString();
   switch (kind) {
     case "confirm":
@@ -87,24 +71,34 @@ function optimisticPatchDetail(
 export function StockTransferDetailContainer({
   transferId,
   receiverView,
+  tenantSlug: tenantSlugProp,
+  initialBranchFacet,
 }: {
   transferId: string;
   receiverView: boolean;
+  tenantSlug?: string;
+  initialBranchFacet?: string;
 }) {
   const queryClient = useQueryClient();
-  const [tenantSlug, setTenantSlug] = useState<string | null>(null);
+  const [tenantSlug, setTenantSlug] = useState(
+    () => tenantSlugProp?.trim() || getResolvedStoredUser()?.tenantSlug?.trim() || "",
+  );
   const [actorBranchId, setActorBranchId] = useState<string | null>(null);
   const [actorRole, setActorRole] = useState<string | null>(null);
-  const [branchFacet, setBranchFacet] = useState(() =>
-    typeof window !== "undefined" ? getBranchQueryKeyFacet() : "",
+  const [branchFacet, setBranchFacet] = useState(
+    () => initialBranchFacet ?? (typeof window !== "undefined" ? getBranchQueryKeyFacet() : ""),
   );
 
   useEffect(() => {
-    const u = getStoredUser();
-    setTenantSlug(u?.tenantSlug?.trim() || null);
+    if (tenantSlugProp?.trim()) {
+      setTenantSlug(tenantSlugProp.trim());
+      return;
+    }
+    const u = getResolvedStoredUser();
+    setTenantSlug(u?.tenantSlug?.trim() || "");
     setActorBranchId(getClientBranchId() ?? null);
     setActorRole(u?.role?.trim()?.toLowerCase() || null);
-  }, []);
+  }, [tenantSlugProp]);
 
   useEffect(() => {
     const sync = () => setBranchFacet(getBranchQueryKeyFacet());
@@ -119,20 +113,17 @@ export function StockTransferDetailContainer({
     };
   }, []);
 
-  const detailQueryKey = [
-    "erp",
-    "transfers",
-    "detail",
+  const detailQueryKey = transferDetailQueryKey(
     tenantSlug,
     transferId,
     branchFacet,
-  ] as const;
+  );
 
   const detailQuery = useQuery({
     queryKey: detailQueryKey,
     enabled: Boolean(tenantSlug && transferId && branchFacet),
     queryFn: async ({ signal }) => {
-      const slug = tenantSlug!;
+      const slug = tenantSlug;
       const [branches, tr, inv] = await Promise.all([
         getBranches(slug, { signal }),
         getTransfer(slug, transferId),
@@ -148,7 +139,7 @@ export function StockTransferDetailContainer({
       const fromId = tr.from_branch_id;
       const avail = availabilityMapForBranch(fromId, inv);
       const detail = transferDtoToDetail(tr, bm, avail);
-      return { detail, events: ev } satisfies DetailBundle;
+      return { detail, events: ev } satisfies TransferDetailBundle;
     },
   });
 
@@ -163,9 +154,9 @@ export function StockTransferDetailContainer({
     },
     onMutate: async (input) => {
       await queryClient.cancelQueries({ queryKey: [...detailQueryKey] });
-      const prev = queryClient.getQueryData<DetailBundle>(detailQueryKey);
+      const prev = queryClient.getQueryData<TransferDetailBundle>(detailQueryKey);
       if (prev?.detail) {
-        queryClient.setQueryData<DetailBundle>(detailQueryKey, {
+        queryClient.setQueryData<TransferDetailBundle>(detailQueryKey, {
           ...prev,
           detail: optimisticPatchDetail(prev.detail, input.kind),
         });
@@ -240,49 +231,51 @@ export function StockTransferDetailContainer({
   }
 
   return (
-    <TransferDetailView
-      detail={detail}
-      receiverView={receiverView}
-      actorBranchId={actorBranchId}
-      actorRole={actorRole}
-      events={events}
-      eventsLoading={loading}
-      isMutating={transitionMutation.isPending}
-      onConfirm={() =>
-        runTransition("confirm", "Order confirmed", () =>
-          confirmTransfer(tenantSlug, transferId),
-        )
-      }
-      onShip={() =>
-        runTransition("ship", "Shipped", () => shipTransfer(tenantSlug, transferId))
-      }
-      onReceive={() =>
-        runTransition("receive", "Received", () =>
-          receiveTransfer(tenantSlug, transferId),
-        )
-      }
-      onRequestApproval={() =>
-        runTransition(
-          "requestApproval",
-          "Approval requested",
-          () => requestTransferApproval(tenantSlug, transferId),
-        )
-      }
-      onApprove={() =>
-        runTransition("approve", "Approved", () =>
-          approveTransfer(tenantSlug, transferId),
-        )
-      }
-      onReject={() =>
-        runTransition("reject", "Rejected", () =>
-          rejectTransfer(tenantSlug, transferId),
-        )
-      }
-      onReverse={() =>
-        runTransition("reverse", "Transfer reversed", () =>
-          reverseTransfer(tenantSlug, transferId, "ERP reversal"),
-        )
-      }
-    />
+    <Suspense fallback={<RouteLoading variant="section" />}>
+      <TransferDetailView
+        detail={detail}
+        receiverView={receiverView}
+        actorBranchId={actorBranchId}
+        actorRole={actorRole}
+        events={events}
+        eventsLoading={loading}
+        isMutating={transitionMutation.isPending}
+        onConfirm={() =>
+          runTransition("confirm", "Order confirmed", () =>
+            confirmTransfer(tenantSlug, transferId),
+          )
+        }
+        onShip={() =>
+          runTransition("ship", "Shipped", () => shipTransfer(tenantSlug, transferId))
+        }
+        onReceive={() =>
+          runTransition("receive", "Received", () =>
+            receiveTransfer(tenantSlug, transferId),
+          )
+        }
+        onRequestApproval={() =>
+          runTransition(
+            "requestApproval",
+            "Approval requested",
+            () => requestTransferApproval(tenantSlug, transferId),
+          )
+        }
+        onApprove={() =>
+          runTransition("approve", "Approved", () =>
+            approveTransfer(tenantSlug, transferId),
+          )
+        }
+        onReject={() =>
+          runTransition("reject", "Rejected", () =>
+            rejectTransfer(tenantSlug, transferId),
+          )
+        }
+        onReverse={() =>
+          runTransition("reverse", "Transfer reversed", () =>
+            reverseTransfer(tenantSlug, transferId, "ERP reversal"),
+          )
+        }
+      />
+    </Suspense>
   );
 }

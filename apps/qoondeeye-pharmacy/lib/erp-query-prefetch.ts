@@ -7,16 +7,20 @@ import {
 } from "@/components/features/stock-transfers/transfer-mappers";
 import { getStoredUser } from "@/lib/auth-client";
 import { getReportBranchSnapshot } from "@/hooks/use-branch-for-reports";
+import { erpKeys } from "@/lib/erp-query-keys";
+import { erpQueryOptions } from "@/lib/erp-query-options";
 import { getBranchQueryKeyFacet } from "@/lib/query-branch-key";
 import {
   getBatches,
   getBranches,
+  getCategories,
   getDashboardSeries,
   getInventory,
   getProducts,
   getPurchases,
   getSales,
 } from "@/lib/api";
+import { getProductsCatalog } from "@/lib/services/products";
 import {
   getLatestReconciliationRun,
   getReconciliationLogs,
@@ -50,7 +54,8 @@ export async function prefetchDashboardAfterLogin(
     if (!branchFacet) return;
 
     await queryClient.prefetchQuery({
-      queryKey: ["erp", "dashboard", "bundle", tenantSlug, branchFacet],
+      queryKey: erpKeys.dashboardBundle(tenantSlug, branchFacet),
+      ...erpQueryOptions.list,
       queryFn: async ({ signal }) => {
         const [sales, purchases, inventory, batches, products, branches] =
           await Promise.all([
@@ -78,17 +83,15 @@ export async function prefetchDashboardAfterLogin(
     const { branchId, aggregateAll } = getReportBranchSnapshot();
 
     await queryClient.prefetchQuery({
-      queryKey: [
-        "erp",
-        "dashboard",
-        "series",
+      queryKey: erpKeys.dashboardSeries(
         tenantSlug,
         branchFacet,
         fromStr,
         toStr,
         branchId ?? "",
         aggregateAll,
-      ],
+      ),
+      ...erpQueryOptions.list,
       queryFn: ({ signal }) =>
         getDashboardSeries(
           tenantSlug,
@@ -99,6 +102,40 @@ export async function prefetchDashboardAfterLogin(
           { signal },
         ),
     });
+  } finally {
+    inflight.delete(k);
+  }
+}
+
+/** Warm semi-static catalog data (products catalog, categories, branches). */
+export async function prefetchErpStaticCatalog(
+  queryClient: QueryClient,
+  tenantSlug: string,
+): Promise<void> {
+  const branchFacet = getBranchQueryKeyFacet();
+  if (!branchFacet) return;
+
+  const k = inflightKey(["static-catalog", tenantSlug, branchFacet]);
+  if (inflight.has(k)) return;
+  inflight.add(k);
+  try {
+    await Promise.all([
+      queryClient.prefetchQuery({
+        queryKey: erpKeys.productsCatalog(tenantSlug, branchFacet),
+        ...erpQueryOptions.static,
+        queryFn: ({ signal }) => getProductsCatalog(tenantSlug, { signal }),
+      }),
+      queryClient.prefetchQuery({
+        queryKey: erpKeys.categories(tenantSlug, branchFacet),
+        ...erpQueryOptions.static,
+        queryFn: ({ signal }) => getCategories(tenantSlug, { signal }),
+      }),
+      queryClient.prefetchQuery({
+        queryKey: erpKeys.branches(tenantSlug, branchFacet),
+        ...erpQueryOptions.static,
+        queryFn: ({ signal }) => getBranches(tenantSlug, { signal }),
+      }),
+    ]);
   } finally {
     inflight.delete(k);
   }
@@ -121,14 +158,12 @@ async function prefetchTransfersHints(
     const page = 1;
 
     await queryClient.prefetchQuery({
-      queryKey: [
-        "erp",
-        "transfers",
-        "status-counts",
+      queryKey: erpKeys.transfersStatusCounts(
         tenantSlug,
         branchFacet,
         branchFilter,
-      ],
+      ),
+      ...erpQueryOptions.list,
       queryFn: ({ signal }) =>
         getTransferStatusCounts(
           tenantSlug,
@@ -138,17 +173,15 @@ async function prefetchTransfersHints(
     });
 
     await queryClient.prefetchQuery({
-      queryKey: [
-        "erp",
-        "transfers",
-        "list",
+      queryKey: erpKeys.transfersList(
         tenantSlug,
         branchFacet,
         page,
         TRANSFERS_PAGE_SIZE,
         statusFilter,
         branchFilter,
-      ],
+      ),
+      ...erpQueryOptions.list,
       queryFn: async ({ signal }) => {
         const [branches, pageRes] = await Promise.all([
           getBranches(tenantSlug, { signal }),
@@ -206,9 +239,7 @@ async function prefetchReconciliationHints(
   inflight.add(k);
   try {
     await queryClient.prefetchQuery({
-      queryKey: [
-        "erp",
-        "reconciliation",
+      queryKey: erpKeys.reconciliation(
         tenantSlug,
         branchId,
         branchFacet,
@@ -217,7 +248,8 @@ async function prefetchReconciliationHints(
         typeFilter,
         logsPage,
         RECONCILIATION_LOG_PAGE_SIZE,
-      ],
+      ),
+      ...erpQueryOptions.list,
       queryFn: async ({ signal }) => {
         const [latest, logRes] = await Promise.all([
           getLatestReconciliationRun(tenantSlug, { signal }),
@@ -240,6 +272,52 @@ async function prefetchReconciliationHints(
   }
 }
 
+/** Warm dashboard, catalog, and inventory list after ERP login. */
+export async function prefetchErpCoreAfterLogin(
+  queryClient: QueryClient,
+  tenantSlug: string,
+): Promise<void> {
+  await Promise.all([
+    prefetchDashboardAfterLogin(queryClient, tenantSlug),
+    prefetchErpStaticCatalog(queryClient, tenantSlug),
+    prefetchErpInventoryList(queryClient, tenantSlug),
+  ]);
+}
+
+/** Stock page: prefetch inventory, products, and branches in parallel. */
+export async function prefetchErpInventoryList(
+  queryClient: QueryClient,
+  tenantSlug: string,
+): Promise<void> {
+  const branchFacet = getBranchQueryKeyFacet();
+  if (!branchFacet) return;
+
+  const k = inflightKey(["inventory-list", tenantSlug, branchFacet]);
+  if (inflight.has(k)) return;
+  inflight.add(k);
+  try {
+    await Promise.all([
+      queryClient.prefetchQuery({
+        queryKey: erpKeys.inventory(tenantSlug, branchFacet),
+        ...erpQueryOptions.list,
+        queryFn: ({ signal }) => getInventory(tenantSlug, { signal }),
+      }),
+      queryClient.prefetchQuery({
+        queryKey: erpKeys.products(tenantSlug, branchFacet),
+        ...erpQueryOptions.list,
+        queryFn: ({ signal }) => getProducts(tenantSlug, { signal }),
+      }),
+      queryClient.prefetchQuery({
+        queryKey: erpKeys.branches(tenantSlug, branchFacet),
+        ...erpQueryOptions.static,
+        queryFn: ({ signal }) => getBranches(tenantSlug, { signal }),
+      }),
+    ]);
+  } finally {
+    inflight.delete(k);
+  }
+}
+
 /**
  * Call from sidebar when the user hovers a collapsible group or opens it.
  * Guards duplicate work with module-level in-flight keys.
@@ -252,7 +330,12 @@ export function prefetchErpSidebarHints(
   if (!slug || slug.length === 0) return;
 
   if (moduleTitle === "Inventory") {
+    void prefetchErpStaticCatalog(queryClient, slug);
     void prefetchTransfersHints(queryClient, slug);
+    return;
+  }
+  if (moduleTitle === "Customers") {
+    void prefetchErpStaticCatalog(queryClient, slug);
     return;
   }
   if (moduleTitle === "Finance") {

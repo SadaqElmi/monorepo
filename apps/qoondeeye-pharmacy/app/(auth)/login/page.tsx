@@ -10,10 +10,11 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { syncActiveBranchCookie } from "@/lib/branch-cookie";
 import { setAuthToken, type StoredUser } from "@/lib/auth-client";
 import { login } from "@/lib/api";
 import { loginSchema, validateForSubmit } from "@/lib/validation";
-import { prefetchDashboardAfterLogin } from "@/lib/erp-query-prefetch";
+import { prefetchErpCoreAfterLogin } from "@/lib/erp-query-prefetch";
 
 export default function LoginPage() {
   const router = useRouter();
@@ -55,6 +56,7 @@ export default function LoginPage() {
         const initialBranchId = res.assignedBranchId ?? res.defaultBranchId;
         if (initialBranchId) {
           localStorage.setItem("branchId", initialBranchId);
+          syncActiveBranchCookie(initialBranchId);
         } else {
           localStorage.removeItem("branchId");
         }
@@ -63,7 +65,7 @@ export default function LoginPage() {
       }
       const slug = res.tenantSlug?.trim();
       if (slug && res.userType !== "system") {
-        void prefetchDashboardAfterLogin(queryClient, slug);
+        void prefetchErpCoreAfterLogin(queryClient, slug);
       }
       if (res.userType === "system") {
         router.push("/admin");

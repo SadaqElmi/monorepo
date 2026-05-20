@@ -6,12 +6,14 @@ import {
   QueryClientProvider as TanstackQueryClientProvider,
 } from "@tanstack/react-query";
 
+import { POS_GC_TIME, POS_STALE_SALES } from "@/lib/pos-query-keys";
+
 function makeQueryClient() {
   return new QueryClient({
     defaultOptions: {
       queries: {
-        staleTime: 60_000,
-        gcTime: 5 * 60_000,
+        staleTime: POS_STALE_SALES,
+        gcTime: POS_GC_TIME,
         refetchOnWindowFocus: false,
         retry: 1,
       },

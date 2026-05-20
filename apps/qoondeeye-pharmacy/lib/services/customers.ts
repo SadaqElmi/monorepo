@@ -17,10 +17,14 @@ export type CreateCustomerInput = {
 
 export type UpdateCustomerInput = CreateCustomerInput;
 
-export async function getCustomers(tenantSlug: string): Promise<Customer[]> {
+export async function getCustomers(
+  tenantSlug: string,
+  init?: Pick<RequestInit, "signal">,
+): Promise<Customer[]> {
   return jsonFetch<Customer[]>(CUSTOMERS_PREFIX, {
     method: "GET",
     headers: { "X-Tenant": tenantSlug } as JsonHeaders,
+    signal: init?.signal,
   });
 }
 

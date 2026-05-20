@@ -107,13 +107,17 @@ function prismaKnownToHttp(
           'Database schema is incomplete for this tenant. Retry after provisioning or contact support.',
         code: 'TABLE_NOT_FOUND',
       };
-    case 'P2010':
+    case 'P2010': {
+      const pgMessage = prismaRawQueryMessage(exception.meta);
       return {
         status: HttpStatus.SERVICE_UNAVAILABLE,
         clientMessage:
-          'Database operation failed; the tenant schema may be out of date.',
+          isProd || !pgMessage
+            ? 'Database operation failed; the tenant schema may be out of date.'
+            : `Database operation failed; the tenant schema may be out of date. (${pgMessage})`,
         code: 'RAW_QUERY_FAILED',
       };
+    }
     default:
       return {
         status: HttpStatus.INTERNAL_SERVER_ERROR,
@@ -123,6 +127,14 @@ function prismaKnownToHttp(
         code: 'DATABASE_ERROR',
       };
   }
+}
+
+function prismaRawQueryMessage(meta: unknown): string | undefined {
+  if (!meta || typeof meta !== 'object') return undefined;
+  const m = meta as { message?: unknown };
+  return typeof m.message === 'string' && m.message.trim()
+    ? m.message.trim()
+    : undefined;
 }
 
 function metaTarget(meta: unknown): string[] {

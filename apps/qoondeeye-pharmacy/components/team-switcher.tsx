@@ -8,6 +8,7 @@ import {
   getAssignedBranchIdFromUser,
   isRestrictedToAssignedBranch,
 } from "@/lib/branch-access";
+import { syncActiveBranchCookie } from "@/lib/branch-cookie";
 import { getBranches, type Branch } from "@/lib/services/branches";
 import { Button } from "@/components/ui/button";
 import {
@@ -95,6 +96,7 @@ export function TeamSwitcher({ variant = "default" }: TeamSwitcherProps) {
     } catch {
       // ignore
     }
+    syncActiveBranchCookie(branchId);
     setActiveId(branchId);
     const selectedBranchName =
       branchId === "all"
