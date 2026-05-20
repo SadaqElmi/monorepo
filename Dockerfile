@@ -6,17 +6,14 @@ RUN corepack enable
 
 RUN apk add --no-cache openssl
 
-COPY package.json pnpm-lock.yaml pnpm-workspace.yaml .npmrc ./
-COPY apps/qoondeeye-pharmacyDB ./apps/qoondeeye-pharmacyDB
-COPY packages/validation ./packages/validation
+COPY . .
 
-RUN pnpm install --frozen-lockfile --filter backend...
+RUN pnpm install
 
-WORKDIR /app/apps/qoondeeye-pharmacyDB
+RUN pnpm --filter backend exec prisma generate
 
-RUN pnpm prisma generate
-RUN pnpm run build
+RUN pnpm --filter backend build
 
 EXPOSE 10000
 
-CMD ["pnpm", "run", "start:prod"]
+CMD ["pnpm", "--filter", "backend", "run", "start:prod"]

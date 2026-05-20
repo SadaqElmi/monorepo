@@ -9,7 +9,6 @@ RUN corepack enable
 
 COPY package.json pnpm-lock.yaml pnpm-workspace.yaml .npmrc ./
 COPY apps/qoondeeye-pharmacyDB ./apps/qoondeeye-pharmacyDB
-COPY packages/validation ./packages/validation
 
 RUN pnpm install --frozen-lockfile --filter backend...
 
