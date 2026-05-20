@@ -1,9 +1,35 @@
 "use client";
 
 import React, { useEffect, useState } from "react";
+import { usePathname } from "next/navigation";
+
+import { getResolvedStoredUser } from "@/lib/auth-client";
 import { usePos } from "./pos-context";
 import { PosActionRow } from "./pos-action-row";
+
+const AUTH_PATHS = new Set(["/login", "/staff-login"]);
+
+/** Register chrome only when a staff/manager session is active — not on login or idle gate screens. */
+function usePosFooterVisible() {
+  const pathname = usePathname();
+  const [visible, setVisible] = useState(false);
+
+  useEffect(() => {
+    if (AUTH_PATHS.has(pathname)) {
+      setVisible(false);
+      return;
+    }
+    const user = getResolvedStoredUser();
+    const registerReady =
+      user?.userType === "tenant" && Boolean(user.tenantSlug?.trim());
+    setVisible(registerReady);
+  }, [pathname]);
+
+  return visible;
+}
+
 export function Footer() {
+  const footerVisible = usePosFooterVisible();
   const {
     mainTab,
     checkoutStep,
@@ -32,6 +58,10 @@ export function Footer() {
     second: "2-digit",
     hour12: false,
   });
+
+  if (!footerVisible) {
+    return null;
+  }
 
   return (
     <div className="flex flex-col border-t bg-slate-900">

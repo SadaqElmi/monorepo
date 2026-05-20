@@ -31,7 +31,11 @@ export default function RootLayout({
       <body className={`${geist.variable} ${geistMono.variable} h-full flex flex-col overflow-hidden`}>
         <QueryClientProvider>
           <PosProvider>
-            <TooltipProvider>{children}</TooltipProvider>
+            <TooltipProvider>
+              <main className="flex min-h-0 flex-1 flex-col overflow-y-auto">
+                {children}
+              </main>
+            </TooltipProvider>
             <Footer />
             <Toaster position="top-center" />
           </PosProvider>

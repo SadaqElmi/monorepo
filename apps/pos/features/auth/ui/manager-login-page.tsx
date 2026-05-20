@@ -112,7 +112,7 @@ export function ManagerLoginPage() {
 
   return (
     <div
-      className="flex min-h-screen items-center justify-center p-6"
+      className="flex min-h-0 flex-1 items-center justify-center overflow-y-auto p-6"
       style={{
         ["--pos-brand" as string]: POS_BRAND_COLOR,
         background: `linear-gradient(160deg, ${POS_BRAND_COLOR}18 0%, #0f172a08 45%)`,
