@@ -8,7 +8,7 @@ RUN apk add --no-cache openssl
 
 COPY . .
 
-RUN pnpm install
+RUN pnpm install --frozen-lockfile --filter backend...
 
 RUN pnpm --filter backend exec prisma generate
 
