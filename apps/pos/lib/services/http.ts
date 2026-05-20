@@ -4,6 +4,7 @@ import {
 } from "@/lib/branch-access";
 
 export type JsonHeaders = Record<string, string>;
+const AUTH_TOKEN_COOKIE = "auth_token";
 
 /** Single-branch UUID for UI (undefined when switcher is on "all"). */
 export function getClientBranchId(): string | undefined {
@@ -15,6 +16,24 @@ function hasExplicitBranchHeader(headers: Record<string, string>): boolean {
   return Object.keys(headers).some((k) => k.toLowerCase() === "x-branch-id");
 }
 
+function hasExplicitAuthorization(headers: Record<string, string>): boolean {
+  return Object.keys(headers).some((k) => k.toLowerCase() === "authorization");
+}
+
+function getAuthTokenFromCookie(): string | null {
+  if (typeof document === "undefined") return null;
+  const escaped = AUTH_TOKEN_COOKIE.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  const match = document.cookie.match(
+    new RegExp(`(?:^|;\\s*)${escaped}=([^;]*)`),
+  );
+  if (!match?.[1]) return null;
+  try {
+    return decodeURIComponent(match[1]);
+  } catch {
+    return null;
+  }
+}
+
 export async function jsonFetch<TResponse>(
   url: string,
   init?: RequestInit,
@@ -24,6 +43,12 @@ export async function jsonFetch<TResponse>(
   const branchHeader = getClientBranchIdHeaderForApi();
   if (!hasExplicitBranchHeader(mergedHeaders) && branchHeader) {
     mergedHeaders["x-branch-id"] = branchHeader;
+  }
+  if (!hasExplicitAuthorization(mergedHeaders)) {
+    const authToken = getAuthTokenFromCookie();
+    if (authToken) {
+      mergedHeaders.Authorization = `Bearer ${authToken}`;
+    }
   }
 
   const res = await fetch(url, {
