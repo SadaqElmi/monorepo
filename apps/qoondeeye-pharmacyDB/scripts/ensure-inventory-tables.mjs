@@ -42,13 +42,16 @@ try {
     await client.query(ddl(s));
     console.log(`OK: inventory ensured for "${s}"`);
   }
-  const r = await client.query(`
+  const r = await client.query(
+    `
     SELECT table_schema, table_name
     FROM information_schema.tables
     WHERE table_schema = ANY($1::text[])
       AND table_name = 'inventory'
     ORDER BY 1
-  `, [SCHEMAS]);
+  `,
+    [SCHEMAS],
+  );
   console.log('Verification:', r.rows);
 } finally {
   await client.end();

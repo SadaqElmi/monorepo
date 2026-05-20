@@ -11,7 +11,10 @@ deploy-test
 
 apps/pos
 apps/qoondeeye-pharmacy
-packages
+packages/eslint-config
+packages/typescript-config
+packages/types
+packages/utils
 
 .env
 .env.*
