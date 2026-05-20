@@ -70,6 +70,7 @@ import {
 import { useErpCategories } from "@/hooks/queries/use-erp-categories";
 import { useErpInventory } from "@/hooks/queries/use-erp-inventory";
 import { useErpProductsCatalog } from "@/hooks/queries/use-erp-products-catalog";
+import { invalidateErpCatalogQueries } from "@/lib/invalidate-erp-catalog";
 import type { InventoryEntry } from "@/lib/services/inventory";
 
 type FormMode = "create" | "edit";
@@ -281,9 +282,7 @@ export default function ProductsPage({
           description: payload.description,
         });
       }
-      await queryClient.invalidateQueries({
-        queryKey: ["erp", "products-catalog"],
-      });
+      await invalidateErpCatalogQueries(queryClient);
 
       setFormOpen(false);
       setActiveProduct(null);
@@ -308,9 +307,7 @@ export default function ProductsPage({
       setDeletingId(deleteCandidate.id);
       setError(null);
       await deleteProduct(tenantSlug, deleteCandidate.id);
-      await queryClient.invalidateQueries({
-        queryKey: ["erp", "products-catalog"],
-      });
+      await invalidateErpCatalogQueries(queryClient);
       setDeleteConfirmOpen(false);
       setDeleteCandidate(null);
     } catch (err) {

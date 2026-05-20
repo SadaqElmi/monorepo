@@ -8,14 +8,14 @@ import type { PosTransaction } from "@/components/pos/pos-transaction-receipt";
 import { clearAuthToken, getStoredUser } from "@/lib/auth-client";
 import {
   createSale,
-  getBatches,
-  getCategories,
   getProductByBarcode,
-  getProducts,
   getSaleById,
   getSales,
   type Batch,
 } from "@/lib/api";
+import { useErpBatches } from "@/hooks/queries/use-erp-batches";
+import { useErpCategories } from "@/hooks/queries/use-erp-categories";
+import { useErpProducts } from "@/hooks/queries/use-erp-products";
 import { createSaleSchema, validateForSubmit } from "@/lib/validation";
 import { POS_DEFAULT_DISCOUNT } from "@repo/types";
 
@@ -74,6 +74,10 @@ function PosSessionGate({ children }: { children: React.ReactNode }) {
 function PharmacyPosPageInner() {
   const router = useRouter();
   const tenantSlug = getStoredUser()?.tenantSlug ?? null;
+
+  const productsQuery = useErpProducts(tenantSlug);
+  const batchesQuery = useErpBatches(tenantSlug);
+  const categoriesQuery = useErpCategories(tenantSlug);
 
   const [mainTab, setMainTab] = React.useState<PosMainTab>("register");
   const [categoryList, setCategoryList] = React.useState<string[]>([
@@ -211,58 +215,67 @@ function PharmacyPosPageInner() {
     if (!tenantSlug) {
       setCatalogProducts([]);
       setCategoryList([ALL_CATEGORIES_LABEL]);
+      setBatchesState([]);
       return;
     }
-    let cancelled = false;
-    (async () => {
-      try {
-        const [prods, batchesData, cats] = await Promise.all([
-          getProducts(tenantSlug),
-          getBatches(tenantSlug),
-          getCategories(tenantSlug),
-        ]);
-        if (cancelled) return;
-        setBatchesState(batchesData);
-        const catNames = new Map(cats.map((c) => [c.id, c.name]));
-        const mapped: Product[] = prods.map((p) => {
-          const { sellingValue, listValue, showCompare } =
-            resolvePosCatalogPricing(p, batchesData, p.id);
-          return {
-            id: p.id,
-            sku: (p.sku ?? "").trim() || p.id.slice(0, 8),
-            name: p.name,
-            meta:
-              [p.genericName, p.strength, p.unit].filter(Boolean).join(" • ") ||
-              "Catalog item",
-            category:
-              (p.categoryId && catNames.get(p.categoryId)) || "Uncategorized",
-            price: formatMoney(sellingValue),
-            priceValue: sellingValue,
-            listPriceValue: showCompare ? listValue : undefined,
-            showCompare,
-            stock: "in" as const,
-            unitType: "PC" as UnitType,
-          };
-        });
-        if (mapped.length > 0) {
-          setCatalogProducts(mapped);
-          const uc = [...new Set(mapped.map((m) => m.category))].sort();
-          setCategoryList([ALL_CATEGORIES_LABEL, ...uc]);
-        } else {
-          setCatalogProducts([]);
-          setCategoryList([ALL_CATEGORIES_LABEL]);
-        }
-      } catch {
-        if (!cancelled) {
-          setCatalogProducts([]);
-          setCategoryList([ALL_CATEGORIES_LABEL]);
-        }
-      }
-    })();
-    return () => {
-      cancelled = true;
-    };
-  }, [tenantSlug]);
+
+    if (
+      productsQuery.isError ||
+      batchesQuery.isError ||
+      categoriesQuery.isError
+    ) {
+      setCatalogProducts([]);
+      setCategoryList([ALL_CATEGORIES_LABEL]);
+      return;
+    }
+
+    const prods = productsQuery.data;
+    const batchesData = batchesQuery.data;
+    const cats = categoriesQuery.data;
+    if (!prods || !batchesData || !cats) return;
+
+    setBatchesState(batchesData);
+    const catNames = new Map(cats.map((c) => [c.id, c.name]));
+    const mapped: Product[] = prods.map((p) => {
+      const { sellingValue, listValue, showCompare } = resolvePosCatalogPricing(
+        p,
+        batchesData,
+        p.id,
+      );
+      return {
+        id: p.id,
+        sku: (p.sku ?? "").trim() || p.id.slice(0, 8),
+        name: p.name,
+        meta:
+          [p.genericName, p.strength, p.unit].filter(Boolean).join(" • ") ||
+          "Catalog item",
+        category:
+          (p.categoryId && catNames.get(p.categoryId)) || "Uncategorized",
+        price: formatMoney(sellingValue),
+        priceValue: sellingValue,
+        listPriceValue: showCompare ? listValue : undefined,
+        showCompare,
+        stock: "in" as const,
+        unitType: "PC" as UnitType,
+      };
+    });
+    if (mapped.length > 0) {
+      setCatalogProducts(mapped);
+      const uc = [...new Set(mapped.map((m) => m.category))].sort();
+      setCategoryList([ALL_CATEGORIES_LABEL, ...uc]);
+    } else {
+      setCatalogProducts([]);
+      setCategoryList([ALL_CATEGORIES_LABEL]);
+    }
+  }, [
+    tenantSlug,
+    productsQuery.data,
+    productsQuery.isError,
+    batchesQuery.data,
+    batchesQuery.isError,
+    categoriesQuery.data,
+    categoriesQuery.isError,
+  ]);
 
   const addProductFromApi = React.useCallback(
     (p: {

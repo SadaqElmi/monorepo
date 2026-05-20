@@ -16,6 +16,7 @@ export const metadata: Metadata = {
   description: "PharmaCare point of sale frontend",
 };
 
+import { PosCatalogSync } from "@/components/pos-catalog-sync";
 import { PosProvider } from "@/components/pos-context";
 import { QueryClientProvider } from "@/components/query-provider";
 import { Toaster } from "@/components/ui/sonner";
@@ -30,6 +31,7 @@ export default function RootLayout({
     <html lang="en" className={cn("h-full", "font-sans", geist.variable)}>
       <body className={`${geist.variable} ${geistMono.variable} h-full flex flex-col overflow-hidden`}>
         <QueryClientProvider>
+          <PosCatalogSync />
           <PosProvider>
             <TooltipProvider>
               <main className="flex min-h-0 flex-1 flex-col overflow-y-auto">
