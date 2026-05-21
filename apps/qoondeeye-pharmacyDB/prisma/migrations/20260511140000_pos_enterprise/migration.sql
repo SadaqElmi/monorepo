@@ -1,0 +1,1 @@
+-- No-op: POS enterprise DDL is applied per-tenant via TenantService.applyTenantSchemaPatches.
