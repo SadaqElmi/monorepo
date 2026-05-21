@@ -1,10 +1,9 @@
 # Keep in sync with the root ../../Dockerfile.
-# Render: use repo-root Dockerfile + dockerContext `.` (see ../../render.yaml). Do not set
-# Render "Root Directory" to this folder — COPY paths below require the monorepo root.
-# Dokploy: Build path may be `apps/qoondeeye-pharmacyDB` but Docker Context Path must be s`.`.
+# Use this file when Dokploy "Build path" is set to `apps/qoondeeye-pharmacyDB`.
+# Docker context must still be the monorepo root: set Docker Context Path to `.` (clone root).
 FROM node:22-alpine
 
-WORKDIR /app
+WORKDIR /apps
 
 RUN corepack enable
 
@@ -15,7 +14,7 @@ COPY packages/typescript-config ./packages/typescript-config
 
 RUN pnpm install --frozen-lockfile --filter backend...
 
-WORKDIR /app/apps/qoondeeye-pharmacyDB
+WORKDIR apps/qoondeeye-pharmacyDB
 
 RUN pnpm prisma generate
 RUN pnpm run build
