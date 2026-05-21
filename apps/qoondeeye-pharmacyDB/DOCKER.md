@@ -26,20 +26,6 @@ Apply migrations separately when needed (e.g. one-off job or CI):
 pnpm --filter ./apps/qoondeeye-pharmacyDB exec prisma migrate deploy
 ```
 
-## Render
-
-Use the repo root **`render.yaml`** (Blueprint) or match these dashboard settings:
-
-| Setting | Value |
-| -------- | ----- |
-| **Root Directory** | **empty** (repo root). Never `apps/qoondeeye-pharmacyDB` — Render will not send `pnpm-workspace.yaml` or `packages/` to Docker. |
-| **Dockerfile Path** | **`Dockerfile`** (at repo root) |
-| **Docker Build Context** | **`.`** (repo root) |
-
-If the build log shows `transferring context: 3.70kB` and `COPY ... not found`, the root directory or Docker context is wrong.
-
-Recommended: connect the repo as a [Blueprint](https://render.com/docs/infrastructure-as-code) so `render.yaml` applies `dockerContext: .` and `dockerfilePath: ./Dockerfile` automatically.
-
 ## Dokploy
 
 | Setting | Value |
