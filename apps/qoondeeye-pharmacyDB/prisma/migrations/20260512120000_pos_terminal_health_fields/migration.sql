@@ -1,0 +1,1 @@
+-- No-op: POS terminal health fields are applied per-tenant via TenantService.applyTenantSchemaPatches.

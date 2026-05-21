@@ -1,0 +1,1 @@
+-- No-op: POS terminals/profiles/sessions DDL is applied per-tenant via TenantService.applyTenantSchemaPatches.

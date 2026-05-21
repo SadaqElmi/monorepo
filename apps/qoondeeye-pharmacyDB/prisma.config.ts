@@ -11,7 +11,6 @@ export default defineConfig({
   datasource: {
     // DATABASE_URL: Render/production. Staging/local for shared dev DBs.
     url:
-      process.env['DATABASE_URL'] ??
       process.env['DATABASE_URL_STAGING'] ??
       process.env['DATABASE_URL_LOCAL'],
   },

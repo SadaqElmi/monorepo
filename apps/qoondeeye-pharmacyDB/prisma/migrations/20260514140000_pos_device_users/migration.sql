@@ -1,0 +1,1 @@
+-- No-op: POS device users DDL is applied per-tenant via TenantService.applyTenantSchemaPatches.
