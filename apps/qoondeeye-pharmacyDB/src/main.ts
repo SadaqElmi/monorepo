@@ -18,6 +18,8 @@ function getCorsOrigins(): string[] {
     'http://localhost:3001',
     'https://monorepo-qoondeeye-pharmacy-2jed.vercel.app',
     'https://monorepo-pos-bay.vercel.app',
+    'https://pos.qoondeeye.online'
+    'https://pharmcare.qoondeeye.online',
   ];
 }
 
