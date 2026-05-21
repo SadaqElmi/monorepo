@@ -14,6 +14,7 @@ import {
   UserCog,
 } from "lucide-react";
 
+import { AdminCardTableLoading } from "@/components/admin/admin-loading";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
@@ -87,7 +88,7 @@ export default function SystemUsersPage({
       serverPrefetched && initialUsers ? initialUsers : undefined,
   });
   const users = usersQuery.data ?? [];
-  const loading = usersQuery.isPending;
+  const loading = usersQuery.isLoading;
   const loadError = usersQuery.error;
   const [error, setError] = useState<string | null>(null);
   const displayError =
@@ -318,10 +319,11 @@ export default function SystemUsersPage({
             </CardHeader>
             <CardContent className="px-0">
               {loading ? (
-                <div className="flex items-center justify-center gap-2 py-10 text-sm text-muted-foreground">
-                  <Loader2 className="h-4 w-4 animate-spin" />
-                  Loading system users…
-                </div>
+                <AdminCardTableLoading
+                  message="Loading system users…"
+                  rows={8}
+                  cols={4}
+                />
               ) : sortedUsers.length === 0 ? (
                 <div className="flex flex-col items-center justify-center gap-2 py-10 text-center text-sm text-muted-foreground">
                   <p>No system users yet.</p>

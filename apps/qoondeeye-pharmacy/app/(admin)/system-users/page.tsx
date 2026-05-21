@@ -1,10 +1,10 @@
-import { requireServerSession } from "@/lib/auth-server";
+import { requireSystemSession } from "@/lib/auth-server";
 import { getSystemUsersServer } from "@/lib/services/api.server";
 
 import Client from "./system-users-client";
 
 export default async function Page() {
-  await requireServerSession();
+  await requireSystemSession();
 
   let initialUsers = null;
   let serverPrefetched = false;

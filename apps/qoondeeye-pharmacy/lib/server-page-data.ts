@@ -3,6 +3,7 @@ import "server-only";
 import {
   getServerSession,
   requireServerSession,
+  requireSystemSession,
   type ServerSession,
 } from "@/lib/auth-server";
 import {
@@ -64,4 +65,4 @@ export async function loadReportContextParallel(
   return loadReportPageContext(searchParams, defaults);
 }
 
-export { getServerSession, requireServerSession };
+export { getServerSession, requireServerSession, requireSystemSession };

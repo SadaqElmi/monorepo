@@ -12,6 +12,7 @@ import {
   Trash2,
 } from "lucide-react";
 
+import { AdminCardTableLoading } from "@/components/admin/admin-loading";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
@@ -94,7 +95,7 @@ export default function DomainsPage({
   });
   const domains = domainsQuery.data ?? [];
   const tenants = tenantsQuery.data ?? [];
-  const loading = domainsQuery.isPending || tenantsQuery.isPending;
+  const loading = domainsQuery.isLoading || tenantsQuery.isLoading;
   const loadError = domainsQuery.error ?? tenantsQuery.error;
   const [error, setError] = useState<string | null>(null);
   const displayError =
@@ -345,10 +346,11 @@ export default function DomainsPage({
             </CardHeader>
             <CardContent className="px-0">
               {loading ? (
-                <div className="flex items-center justify-center gap-2 py-10 text-sm text-muted-foreground">
-                  <Loader2 className="h-4 w-4 animate-spin" />
-                  Loading domains…
-                </div>
+                <AdminCardTableLoading
+                  message="Loading domains…"
+                  rows={8}
+                  cols={5}
+                />
               ) : tenantOptions.length === 0 ? (
                 <div className="flex flex-col items-center justify-center gap-2 py-10 text-center text-sm text-muted-foreground">
                   <p>No clients found.</p>

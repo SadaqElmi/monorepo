@@ -18,6 +18,7 @@ import {
   UserX,
 } from "lucide-react";
 
+import { AdminDashboardLoading } from "@/components/admin/admin-loading";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
@@ -109,8 +110,8 @@ export default function AdminDashboardPage({
   const domains = dashboardQuery.data?.domains ?? [];
   const systemUsers = dashboardQuery.data?.systemUsers ?? [];
   const lastUpdatedAt = dashboardQuery.data?.lastUpdatedAt ?? null;
-  const loading = dashboardQuery.isPending;
-  const refreshing = dashboardQuery.isFetching && !dashboardQuery.isPending;
+  const loading = dashboardQuery.isLoading;
+  const refreshing = dashboardQuery.isFetching && !dashboardQuery.isLoading;
   const loadError = dashboardQuery.error;
   const [error, setError] = useState<string | null>(null);
   const displayError =
@@ -343,6 +344,10 @@ export default function AdminDashboardPage({
           </p>
         )}
 
+        {loading ? (
+          <AdminDashboardLoading />
+        ) : (
+          <>
         <section className="grid gap-4 md:grid-cols-2 lg:grid-cols-5">
           <KpiCard
             icon={<ShieldCheck className="h-4 w-4" />}
@@ -404,12 +409,7 @@ export default function AdminDashboardPage({
               </Button>
             </CardHeader>
             <CardContent className="px-0">
-              {loading ? (
-                <div className="flex items-center justify-center gap-2 py-10 text-sm text-muted-foreground">
-                  <Loader2 className="h-4 w-4 animate-spin" />
-                  Loading clients...
-                </div>
-              ) : recentClients.length === 0 ? (
+              {recentClients.length === 0 ? (
                 <div className="flex flex-col items-center justify-center gap-2 py-10 text-center text-sm text-muted-foreground">
                   <p>No clients found for current filters.</p>
                   <Button asChild size="sm" className="mt-2">
@@ -508,12 +508,7 @@ export default function AdminDashboardPage({
               </Button>
             </CardHeader>
             <CardContent className="px-0">
-              {loading ? (
-                <div className="flex items-center justify-center gap-2 py-10 text-sm text-muted-foreground">
-                  <Loader2 className="h-4 w-4 animate-spin" />
-                  Loading domains...
-                </div>
-              ) : recentDomainMappings.length === 0 ? (
+              {recentDomainMappings.length === 0 ? (
                 <div className="flex flex-col items-center justify-center gap-2 py-10 text-center text-sm text-muted-foreground">
                   <p>No domain mappings found for current filters.</p>
                   <Button asChild size="sm" className="mt-2">
@@ -571,6 +566,8 @@ export default function AdminDashboardPage({
             </CardContent>
           </Card>
         </section>
+          </>
+        )}
 
         <footer className="flex flex-col gap-4 border-t pt-6 text-sm text-muted-foreground md:flex-row md:items-center md:justify-between">
           <p>

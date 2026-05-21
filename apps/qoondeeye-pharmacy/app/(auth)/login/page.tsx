@@ -49,6 +49,7 @@ export default function LoginPage() {
         tenantSlug: res.tenantSlug ?? undefined,
         assignedBranchId: res.assignedBranchId,
         allowedBranchIds: res.allowedBranchIds,
+        canViewAllBranches: res.canViewAllBranches,
       };
       setAuthToken(res.token, user);
       // Persist default branch so the backend can filter on first load.
