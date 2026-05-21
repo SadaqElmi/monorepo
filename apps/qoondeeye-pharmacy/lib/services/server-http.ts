@@ -28,6 +28,48 @@ async function resolveSession() {
   };
 }
 
+/** Platform admin APIs (tenants, domains, system-users) — no X-Tenant. */
+export async function serverPlatformJsonFetch<TResponse>(
+  url: string,
+  init?: RequestInit & { cacheMode?: ServerFetchCacheMode },
+): Promise<TResponse> {
+  const session = await getServerSession();
+  if (!session?.token) {
+    throw new Error("Unauthorized");
+  }
+
+  const cacheMode = init?.cacheMode ?? "default";
+  const cacheInit = serverFetchCacheInit(cacheMode);
+  const { cacheMode: _cm, ...restInit } = init ?? {};
+
+  const headers: Record<string, string> = {
+    "Content-Type": "application/json",
+    Authorization: `Bearer ${session.token}`,
+    ...(init?.headers as Record<string, string> | undefined),
+  };
+
+  const res = await fetch(url, {
+    ...restInit,
+    headers,
+    ...cacheInit,
+    cache: restInit.cache ?? cacheInit.cache,
+    next: restInit.next ?? cacheInit.next,
+  });
+  const data = await res.json().catch(() => ({}));
+
+  if (!res.ok) {
+    const message =
+      typeof (data as { message?: unknown }).message === "string"
+        ? (data as { message: string }).message
+        : Array.isArray((data as { message?: unknown }).message)
+          ? ((data as { message: string[] }).message).join(", ")
+          : "Request failed";
+    throw new Error(message);
+  }
+
+  return data as TResponse;
+}
+
 export async function serverJsonFetch<TResponse>(
   url: string,
   init?: ServerJsonFetchInit,

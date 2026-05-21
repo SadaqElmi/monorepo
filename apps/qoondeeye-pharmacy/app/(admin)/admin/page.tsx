@@ -1,4 +1,4 @@
-import { requireServerSession } from "@/lib/auth-server";
+import { requireSystemSession } from "@/lib/auth-server";
 import {
   getDomainsServer,
   getSystemUsersServer,
@@ -8,7 +8,7 @@ import {
 import Client from "./admin-dashboard-client";
 
 export default async function Page() {
-  await requireServerSession();
+  await requireSystemSession();
 
   let initialDashboard = null;
   let serverPrefetched = false;

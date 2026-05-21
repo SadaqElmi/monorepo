@@ -1,4 +1,4 @@
-import { requireServerSession } from "@/lib/auth-server";
+import { requireSystemSession } from "@/lib/auth-server";
 import {
   getDomainsServer,
   getTenantsServer,
@@ -7,7 +7,7 @@ import {
 import Client from "./domains-client";
 
 export default async function Page() {
-  await requireServerSession();
+  await requireSystemSession();
 
   let initialDomains = null;
   let initialTenants = null;

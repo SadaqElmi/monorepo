@@ -17,6 +17,7 @@ import {
   Users2,
 } from "lucide-react";
 
+import { AdminCardTableLoading } from "@/components/admin/admin-loading";
 import { Button } from "@/components/ui/button";
 import {
   Card,
@@ -126,7 +127,7 @@ export default function AdminStaffPage() {
   });
   const allUsers = staffQuery.data?.allUsers ?? [];
   const tenants = staffQuery.data?.tenants ?? [];
-  const loading = staffQuery.isPending;
+  const loading = staffQuery.isLoading;
   const loadError = staffQuery.error;
   const [error, setError] = useState<string | null>(null);
   const displayError =
@@ -519,10 +520,11 @@ export default function AdminStaffPage() {
             </CardHeader>
             <CardContent>
               {loading ? (
-                <div className="flex items-center justify-center gap-2 py-10 text-sm text-muted-foreground">
-                  <Loader2 className="h-4 w-4 animate-spin" />
-                  Loading all users…
-                </div>
+                <AdminCardTableLoading
+                  message="Loading staff across clients…"
+                  rows={10}
+                  cols={6}
+                />
               ) : sortedUsers.length === 0 ? (
                 <div className="flex flex-col items-center justify-center gap-2 py-10 text-center text-sm text-muted-foreground">
                   <p>No users yet.</p>

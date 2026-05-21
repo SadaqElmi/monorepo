@@ -35,6 +35,25 @@ async function readServerSession(): Promise<ServerSession | null> {
 /** Deduped per RSC request — safe to call from page + serverJsonFetch. */
 export const getServerSession = cache(readServerSession);
 
+export function isSystemUser(
+  session: AuthCookiePayload | null | undefined,
+): boolean {
+  if (!session) return false;
+  if (session.userType === "system") return true;
+  return session.role?.toLowerCase() === "super_admin";
+}
+
+export async function requireSystemSession(): Promise<ServerSession> {
+  const session = await getServerSession();
+  if (!session?.token) {
+    redirect("/login");
+  }
+  if (!isSystemUser(session)) {
+    redirect("/dashboard");
+  }
+  return session;
+}
+
 export async function requireServerSession(): Promise<ServerSession> {
   const session = await getServerSession();
   if (!session?.token || !session.tenantSlug) {

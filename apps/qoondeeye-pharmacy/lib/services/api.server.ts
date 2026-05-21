@@ -34,6 +34,7 @@ import {
 import {
   serverJsonFetch,
   serverJsonFetchWithSession,
+  serverPlatformJsonFetch,
 } from "@/lib/services/server-http";
 import type { Branch } from "@/lib/services/branches";
 import type { StaffMember } from "@/lib/services/staff";
@@ -77,7 +78,7 @@ import type {
 } from "@/lib/services/reconciliation";
 import type { PosSessionCurrentResponse } from "@/lib/services/pos-sessions";
 
-export { serverJsonFetch, serverJsonFetchWithSession };
+export { serverJsonFetch, serverJsonFetchWithSession, serverPlatformJsonFetch };
 
 const cachedTenantGet = cache(
   async <T>(tenantSlug: string, url: string, init?: RequestInit): Promise<T> =>
@@ -171,7 +172,7 @@ export async function getRolesServer(tenantSlug: string): Promise<Role[]> {
 }
 
 export async function getTenantsServer(): Promise<Tenant[]> {
-  return serverJsonFetch<Tenant[]>(TENANTS_PREFIX, {});
+  return serverPlatformJsonFetch<Tenant[]>(TENANTS_PREFIX, { method: "GET" });
 }
 
 export async function getDomainsServer(
@@ -180,11 +181,15 @@ export async function getDomainsServer(
   const qs = input?.tenantId
     ? `?tenantId=${encodeURIComponent(input.tenantId)}`
     : "";
-  return serverJsonFetch<Domain[]>(`${DOMAINS_PREFIX}${qs}`, {});
+  return serverPlatformJsonFetch<Domain[]>(`${DOMAINS_PREFIX}${qs}`, {
+    method: "GET",
+  });
 }
 
 export async function getSystemUsersServer(): Promise<SystemUser[]> {
-  return serverJsonFetch<SystemUser[]>(SYSTEM_USERS_PREFIX, {});
+  return serverPlatformJsonFetch<SystemUser[]>(SYSTEM_USERS_PREFIX, {
+    method: "GET",
+  });
 }
 
 export async function getChartOfAccountsServer(

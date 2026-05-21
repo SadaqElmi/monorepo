@@ -1,10 +1,10 @@
-import { requireServerSession } from "@/lib/auth-server";
+import { requireSystemSession } from "@/lib/auth-server";
 import { getTenantsServer } from "@/lib/services/api.server";
 
 import Client from "./tenants-client";
 
 export default async function Page() {
-  await requireServerSession();
+  await requireSystemSession();
 
   let initialTenants = null;
   let serverPrefetched = false;
