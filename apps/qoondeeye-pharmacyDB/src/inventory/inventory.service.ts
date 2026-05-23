@@ -1,5 +1,6 @@
 import { BadRequestException, Injectable } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
+import { toPagedResult, type PagedResult } from '../common/pagination.util';
 import { PrismaService } from '../prisma/prisma.service';
 
 export interface InventoryLockRow {
@@ -74,6 +75,34 @@ export class InventoryService {
         allowedBranchIds,
       ),
     );
+  }
+
+  /** Not cached — stock levels must stay fresh for picking and POS. */
+  async findAllPaged(
+    schemaName: string,
+    allowedBranchIds: string[],
+    skip: number,
+    take: number,
+  ): Promise<PagedResult<InventoryListRow>> {
+    return this.prisma.withTenantSchema(schemaName, async (tx) => {
+      const [countRow] = await tx.$queryRawUnsafe<{ c: bigint }[]>(
+        `SELECT COUNT(*)::bigint AS c FROM inventory WHERE branch_id = ANY($1::uuid[])`,
+        allowedBranchIds,
+      );
+      const total = Number(countRow?.c ?? 0);
+      const items = await tx.$queryRawUnsafe<InventoryListRow[]>(
+        `SELECT id, product_id, branch_id, quantity, reorder_level, updated_at
+         FROM inventory
+         WHERE branch_id = ANY($1::uuid[])
+         ORDER BY product_id
+         LIMIT $2 OFFSET $3`,
+        allowedBranchIds,
+        take,
+        skip,
+      );
+      const page = Math.floor(skip / take) + 1;
+      return toPagedResult(items, total, page, take);
+    });
   }
 
   /**

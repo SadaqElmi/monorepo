@@ -70,8 +70,8 @@ export default function InvoiceAnalysisReportClient({
     reportId: "invoice-analysis",
     tenantSlug,
     params: { from, to, branchId, aggregateAll },
-    queryFn: () =>
-      getInvoiceAnalysis(tenantSlug, from, to, branchId, aggregateAll),
+    queryFn: (scope) =>
+      getInvoiceAnalysis(tenantSlug, from, to, scope.branchId, scope.aggregateAll),
     initialData:
       serverPrefetched && initialData != null ? initialData : undefined,
     enabled: rangeCheck.ok,

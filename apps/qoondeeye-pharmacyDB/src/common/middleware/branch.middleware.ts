@@ -1,7 +1,8 @@
-import { ForbiddenException, Injectable, NestMiddleware } from '@nestjs/common';
-import type { NextFunction, Request, Response } from 'express';
+import { ForbiddenException, Injectable, NestMiddleware, BadRequestException } from '@nestjs/common';
+import type { FastifyRequest } from 'fastify';
 import { AuditLogService } from '../../accounting/audit-log.service';
 import { TenantContextService } from '../../tenant/tenant-context.service';
+import { TenantService } from '../../tenant/tenant.service';
 import { PrismaService } from '../../prisma/prisma.service';
 import { ConfigService } from '@nestjs/config';
 import * as jwt from 'jsonwebtoken';
@@ -11,7 +12,7 @@ import {
   requiresAssignedBranch,
 } from '../security/branch-access.policy';
 import { ALL_ACCOUNTING_PERMISSIONS } from '../security/accounting-permissions';
-import { expressRequestPathname } from '../http/express-request-path';
+import { requestPathname } from '../http/request-pathname';
 
 type JwtPayload =
   | {
@@ -69,6 +70,25 @@ function isMutationMethod(method: string | undefined): boolean {
   return m !== 'GET' && m !== 'HEAD' && m !== 'OPTIONS';
 }
 
+function normalizeBranchId(value: unknown): string | null {
+  if (value == null) return null;
+  const s = String(value).trim().toLowerCase();
+  return s.length ? s : null;
+}
+
+function branchIdsFromRows(rows: { id: unknown }[] | null | undefined): string[] {
+  const out: string[] = [];
+  const seen = new Set<string>();
+  for (const row of rows ?? []) {
+    const id = normalizeBranchId(row.id);
+    if (id && !seen.has(id)) {
+      seen.add(id);
+      out.push(id);
+    }
+  }
+  return out;
+}
+
 /** Ship (source) / receive (destination): allowed for any tenant user with a branch; TransfersService enforces branch. */
 function isStockTransferOperationalMutation(path: string): boolean {
   const p = path.split('?')[0] ?? '';
@@ -81,15 +101,6 @@ function isStockTransferOperationalMutation(path: string): boolean {
     /\/transfers\/[^/]+\/ship\/?$/i.test(p) ||
     /\/transfers\/[^/]+\/close\/?$/i.test(p)
   );
-}
-
-/** Full pathname (includes global `/api` prefix). Nest mounts middleware under `/api`, so `req.path` may be `/sales` while the client called `/api/sales`. */
-function tenantRequestPath(req: Request): string {
-  const raw = (req.originalUrl ?? `${req.baseUrl ?? ''}${req.path ?? ''}`)
-    .split('?')[0]
-    ?.trim();
-  if (raw?.startsWith('/')) return raw;
-  return '/';
 }
 
 /** GET endpoints where any tenant user may use `x-branch-id: all` for read scope (Items UI). */
@@ -108,10 +119,54 @@ export class BranchMiddleware implements NestMiddleware {
 
   constructor(
     private readonly tenantContext: TenantContextService,
+    private readonly tenantService: TenantService,
     private readonly prisma: PrismaService,
     private readonly config: ConfigService,
     private readonly auditLog: AuditLogService,
   ) {}
+
+  /** Sync tenant schema from ALS or `req.tenant` (set by tenant middleware). */
+  private resolveSchemaNameSync(req: FastifyRequest): string | null {
+    const fromContext = this.tenantContext.getSchemaName();
+    if (fromContext) return fromContext;
+    const fromReq = req.tenant?.schema_name?.trim();
+    if (!fromReq) return null;
+    this.tenantContext.setTenant({
+      id: req.tenant!.id,
+      schemaName: fromReq,
+      name: req.tenant!.name,
+      status: 'active',
+    });
+    return fromReq;
+  }
+
+  /** Resolve tenant schema from ALS, `req.tenant`, or `X-Tenant` header. */
+  private async ensureRequestSchemaName(
+    req: FastifyRequest,
+  ): Promise<string | null> {
+    const sync = this.resolveSchemaNameSync(req);
+    if (sync) return sync;
+
+    const headerRaw = req.headers['x-tenant'];
+    const slug =
+      typeof headerRaw === 'string'
+        ? headerRaw.trim()
+        : Array.isArray(headerRaw)
+          ? headerRaw[0]?.trim()
+          : '';
+    if (!slug) return null;
+
+    const tenant = await this.tenantService.findBySchemaNameInsensitive(slug);
+    if (!tenant) return null;
+
+    this.tenantContext.setTenant(tenant);
+    req.tenant = {
+      id: tenant.id,
+      schema_name: tenant.schemaName,
+      name: tenant.name,
+    };
+    return tenant.schemaName;
+  }
 
   private async appendSecurityAudit(
     schemaName: string,
@@ -289,33 +344,54 @@ export class BranchMiddleware implements NestMiddleware {
     BranchMiddleware.ensuredSchemas.add(schemaName);
   }
 
-  async use(req: Request, res: Response, next: NextFunction) {
+  /** Idempotent; used by {@link BranchScopeGuard} when middleware finishes after the handler. */
+  async ensureBranchScopeForRequest(req: FastifyRequest): Promise<void> {
+    if (req.allowedBranchIds?.length && req.userId) return;
+    await this.applyBranchScope(req);
+  }
+
+  use(req: FastifyRequest, _res: unknown, next: () => void): void {
     if ((req.method ?? '').toUpperCase() === 'OPTIONS') {
-      return next();
+      next();
+      return;
     }
+    void this.ensureBranchScopeForRequest(req)
+      .then(() => next())
+      .catch((err) => (next as (error?: unknown) => void)(err));
+  }
+
+  private async applyBranchScope(req: FastifyRequest): Promise<void> {
     // Keep these public routes branch-agnostic.
-    const pathname = expressRequestPathname(req);
+    const pathname = requestPathname(req);
     const isPublicRoute =
       pathname.startsWith('/api/auth') ||
       pathname.startsWith('/api/tenants') ||
       pathname.startsWith('/api/domains') ||
       pathname.startsWith('/api/system-users') ||
       pathname === '/api';
-    if (isPublicRoute) return next();
+    if (isPublicRoute) return;
 
     // System host / system routes: no tenant, no branch filtering.
-    if (req.isSystem) return next();
-
-    const schemaName = this.tenantContext.getSchemaName();
-    if (!schemaName) return next();
-
-    // Ensure the required branch_id columns exist for existing tenants.
-    await this.ensureBranchIsolationColumns(schemaName);
+    if (req.isSystem) return;
 
     const cookieHeader = req.headers.cookie;
     const cookies = parseCookies(cookieHeader);
-    const token =
+    const earlyToken =
       getBearerToken(req.headers.authorization) ?? cookies['auth_token'];
+
+    const schemaName =
+      this.resolveSchemaNameSync(req) ??
+      (await this.ensureRequestSchemaName(req));
+    if (!schemaName) {
+      if (earlyToken) {
+        throw new BadRequestException(
+          'Tenant context required. Use X-Tenant header (e.g. X-Tenant: pharmacy1)',
+        );
+      }
+      return;
+    }
+
+    const token = earlyToken;
     if (!token) {
       throw new ForbiddenException('Missing auth token');
     }
@@ -332,7 +408,7 @@ export class BranchMiddleware implements NestMiddleware {
     if (
       payload.type === 'tenant_user' &&
       typeof payload.tenantSchema === 'string' &&
-      payload.tenantSchema !== schemaName
+      payload.tenantSchema.toLowerCase() !== schemaName.toLowerCase()
     ) {
       throw new ForbiddenException('Tenant mismatch');
     }
@@ -343,20 +419,18 @@ export class BranchMiddleware implements NestMiddleware {
     if (payload.type === 'super_admin') {
       const superUserId = payload.sub;
       const superRoleLower = normalizeRole(payload.role);
-      const path = tenantRequestPath(req);
+      const path = requestPathname(req);
       const headerBranchValueRaw = req.headers['x-branch-id'];
       const headerBranchValue =
         typeof headerBranchValueRaw === 'string'
           ? headerBranchValueRaw.trim()
           : undefined;
 
-      const allBranchIds = await this.prisma
-        .withTenantSchema(schemaName, (tx) =>
-          tx.$queryRawUnsafe<{ id: string }[]>(
-            `SELECT id FROM branches ORDER BY name`,
-          ),
-        )
-        .then((rows) => (rows ?? []).map((r) => r.id));
+      const allBranchIds = branchIdsFromRows(
+        await this.prisma.$queryRawUnsafe<{ id: string }[]>(
+          `SELECT id FROM "${schemaName}"."branches" ORDER BY name`,
+        ),
+      );
 
       if (allBranchIds.length === 0) {
         await this.appendSecurityAudit(schemaName, {
@@ -373,21 +447,21 @@ export class BranchMiddleware implements NestMiddleware {
 
       const isBranchSuperUser = true;
       const defaultBranchId = allBranchIds[0]!;
+      const normalizedHeader = normalizeBranchId(headerBranchValue);
       const selectedBranchId = (() => {
-        if (!headerBranchValue) return defaultBranchId;
-        if (headerBranchValue.toLowerCase() === 'all') return defaultBranchId;
-        return headerBranchValue;
+        if (!normalizedHeader) return defaultBranchId;
+        if (normalizedHeader === 'all') return defaultBranchId;
+        return normalizedHeader;
       })();
 
       const allowedAllBranchesHeader = isBranchSuperUser;
       const viewAllRequested =
-        headerBranchValue?.toLowerCase() === 'all' &&
-        allowedAllBranchesHeader;
+        normalizedHeader === 'all' && allowedAllBranchesHeader;
 
       if (
-        headerBranchValue &&
-        headerBranchValue.toLowerCase() !== 'all' &&
-        !allBranchIds.includes(headerBranchValue)
+        normalizedHeader &&
+        normalizedHeader !== 'all' &&
+        !allBranchIds.includes(normalizedHeader)
       ) {
         await this.appendSecurityAudit(schemaName, {
           userId: superUserId,
@@ -422,26 +496,26 @@ export class BranchMiddleware implements NestMiddleware {
       req.userCanViewAllBranches = true;
       req.permissionCodes = [...ALL_ACCOUNTING_PERMISSIONS];
 
-      return next();
+      return;
     }
 
     // ------- Resolve user branch permissions -------
     const userId = payload.sub;
-    const userRow = await this.prisma.withTenantSchema(schemaName, (tx) =>
-      tx.$queryRawUnsafe<{ branch_id: string | null }[]>(
-        `SELECT branch_id FROM users WHERE id = $1`,
-        userId,
-      ),
+    const userRows = await this.prisma.$queryRawUnsafe<
+      { branch_id: string | null }[]
+    >(
+      `SELECT branch_id FROM "${schemaName}"."users" WHERE id = $1::uuid`,
+      userId,
     );
 
-    const userBranchId: string | null = userRow?.[0]?.branch_id ?? null;
+    const userBranchId = normalizeBranchId(userRows?.[0]?.branch_id);
     const roleLower = normalizeRole(payload.role);
     const isBranchSuperUser = hasGlobalBranchAccess(
       roleLower,
       payload.type === 'tenant_user' ? payload.canViewAllBranches : undefined,
     );
 
-    const path = tenantRequestPath(req);
+    const path = requestPathname(req);
     const headerBranchValueRaw = req.headers['x-branch-id'];
     const headerBranchValue =
       typeof headerBranchValueRaw === 'string'
@@ -507,13 +581,11 @@ export class BranchMiddleware implements NestMiddleware {
       isBranchSuperUser ||
       (tenantWantsAllBranchesRead && Boolean(userBranchId));
     const allBranchIds: string[] = needsTenantBranchList
-      ? await this.prisma
-          .withTenantSchema(schemaName, (tx) =>
-            tx.$queryRawUnsafe<{ id: string }[]>(
-              `SELECT id FROM branches ORDER BY name`,
-            ),
-          )
-          .then((rows) => (rows ?? []).map((r) => r.id))
+      ? branchIdsFromRows(
+          await this.prisma.$queryRawUnsafe<{ id: string }[]>(
+            `SELECT id FROM "${schemaName}"."branches" ORDER BY name`,
+          ),
+        )
       : [];
 
     if (
@@ -569,10 +641,11 @@ export class BranchMiddleware implements NestMiddleware {
       throw new ForbiddenException('No default branch available');
     }
 
+    const normalizedHeader = normalizeBranchId(headerBranchValue);
     const selectedBranchId = (() => {
-      if (!headerBranchValue) return defaultBranchId;
-      if (headerBranchValue.toLowerCase() === 'all') return defaultBranchId;
-      return headerBranchValue;
+      if (!normalizedHeader) return defaultBranchId;
+      if (normalizedHeader === 'all') return defaultBranchId;
+      return normalizedHeader;
     })();
 
     const allowedAllBranchesHeader =
@@ -580,7 +653,7 @@ export class BranchMiddleware implements NestMiddleware {
       (tenantWantsAllBranchesRead && Boolean(userBranchId));
 
     const viewAllRequested =
-      headerBranchValue?.toLowerCase() === 'all' && allowedAllBranchesHeader;
+      normalizedHeader === 'all' && allowedAllBranchesHeader;
 
     // Enforce "selected branch" security before queries.
     if (!isBranchSuperUser) {
@@ -596,10 +669,7 @@ export class BranchMiddleware implements NestMiddleware {
         });
         throw new ForbiddenException('User does not have a branch assigned');
       }
-      if (
-        headerBranchValue?.toLowerCase() === 'all' &&
-        !allowedAllBranchesHeader
-      ) {
+      if (normalizedHeader === 'all' && !allowedAllBranchesHeader) {
         await this.appendSecurityAudit(schemaName, {
           userId,
           role: roleLower,
@@ -612,9 +682,9 @@ export class BranchMiddleware implements NestMiddleware {
         throw new ForbiddenException('Access denied to all branches');
       }
       if (
-        headerBranchValue &&
-        headerBranchValue.toLowerCase() !== 'all' &&
-        headerBranchValue !== userBranchId
+        normalizedHeader &&
+        normalizedHeader !== 'all' &&
+        normalizedHeader !== userBranchId
       ) {
         await this.appendSecurityAudit(schemaName, {
           userId,
@@ -630,9 +700,9 @@ export class BranchMiddleware implements NestMiddleware {
     } else {
       // Superusers: if a specific branch is requested, ensure it exists in this tenant.
       if (
-        headerBranchValue &&
-        headerBranchValue.toLowerCase() !== 'all' &&
-        !allBranchIds.includes(headerBranchValue)
+        normalizedHeader &&
+        normalizedHeader !== 'all' &&
+        !allBranchIds.includes(normalizedHeader)
       ) {
         await this.appendSecurityAudit(schemaName, {
           userId,
@@ -687,7 +757,7 @@ export class BranchMiddleware implements NestMiddleware {
     }
     req.permissionCodes = permissionCodes;
 
-    // `x-branch-id: all` is supported for superusers as a read scope. Mutations are still scoped to one branch.
-    return next();
+  // Schema patches are non-blocking for request scope; run after branch context is set.
+  void this.ensureBranchIsolationColumns(schemaName).catch(() => undefined);
   }
 }

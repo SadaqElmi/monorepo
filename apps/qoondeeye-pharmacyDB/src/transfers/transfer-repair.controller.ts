@@ -8,7 +8,7 @@ import {
   Req,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import type { Request } from 'express';
+import type { FastifyRequest } from 'fastify';
 import * as jwt from 'jsonwebtoken';
 import { FinancialReportsService } from '../accounting/financial-reports.service';
 import { PrismaService } from '../prisma/prisma.service';
@@ -66,7 +66,7 @@ export class TransferRepairController {
     return t;
   }
 
-  private ensureRepairAuthorized(req: Request) {
+  private ensureRepairAuthorized(req: FastifyRequest) {
     const jwtSecret = this.config.get<string>('JWT_SECRET') ?? 'changeme';
     const cookies = parseCookies(req.headers.cookie);
     const token = cookies['auth_token'];
@@ -97,7 +97,7 @@ export class TransferRepairController {
     return (rows ?? []).map((r) => r.id);
   }
 
-  private eventContext(req: Request) {
+  private eventContext(req: FastifyRequest) {
     const pick = (v: string | string[] | undefined | null): string | null => {
       if (typeof v === 'string' && v.trim()) return v.trim();
       return null;
@@ -111,7 +111,7 @@ export class TransferRepairController {
     };
   }
 
-  private actor(req: Request) {
+  private actor(req: FastifyRequest) {
     const jwtSecret = this.config.get<string>('JWT_SECRET') ?? 'changeme';
     const cookies = parseCookies(req.headers.cookie);
     const token = cookies['auth_token'];
@@ -136,7 +136,7 @@ export class TransferRepairController {
   async repairJournalLinks(
     @Param('id') id: string,
     @Body() body: TransferRepairConfirmDto,
-    @Req() req: Request,
+    @Req() req: FastifyRequest,
   ) {
     this.ensureRepairAuthorized(req);
     const tenant = this.ensureTenant();
@@ -156,7 +156,7 @@ export class TransferRepairController {
   async repairApprovalFromReplay(
     @Param('id') id: string,
     @Body() body: TransferRepairConfirmDto,
-    @Req() req: Request,
+    @Req() req: FastifyRequest,
   ) {
     this.ensureRepairAuthorized(req);
     const tenant = this.ensureTenant();
@@ -176,7 +176,7 @@ export class TransferRepairController {
   async recreateMissingJournals(
     @Param('id') id: string,
     @Body() body: TransferRepairConfirmDto,
-    @Req() req: Request,
+    @Req() req: FastifyRequest,
   ) {
     this.ensureRepairAuthorized(req);
     const tenant = this.ensureTenant();
@@ -193,7 +193,7 @@ export class TransferRepairController {
   }
 
   @Post('repairs/auto-fix')
-  async autoFix(@Req() req: Request) {
+  async autoFix(@Req() req: FastifyRequest) {
     this.ensureRepairAuthorized(req);
     const tenant = this.ensureTenant();
     const schema = tenant.schemaName;

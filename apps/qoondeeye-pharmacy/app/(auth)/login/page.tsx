@@ -10,11 +10,17 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { syncActiveBranchCookie } from "@/lib/branch-cookie";
-import { setAuthToken, type StoredUser } from "@/lib/auth-client";
+import { syncActiveBranchCookie, clearActiveBranchCookies } from "@/lib/branch-cookie";
+import { getResolvedStoredUser, setAuthToken, type StoredUser } from "@/lib/auth-client";
 import { login } from "@/lib/api";
+import { reconcileClientBranchSelection } from "@/lib/branch-reconcile";
+import {
+  ApiError,
+  formatApiErrorForUser,
+} from "@/lib/services/http";
 import { loginSchema, validateForSubmit } from "@/lib/validation";
 import { prefetchErpCoreAfterLogin } from "@/lib/erp-query-prefetch";
+import { useRateLimitCooldown } from "@/hooks/use-rate-limit-cooldown";
 
 export default function LoginPage() {
   const router = useRouter();
@@ -24,9 +30,11 @@ export default function LoginPage() {
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
+  const { isCoolingDown, secondsLeft, applyRateLimit } = useRateLimitCooldown();
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
+    if (loading || isCoolingDown) return;
     setError("");
     const validated = validateForSubmit(loginSchema, {
       email: email.trim(),
@@ -39,6 +47,14 @@ export default function LoginPage() {
     setLoading(true);
     try {
       const res = await login(validated.data.email, validated.data.password);
+      const previousUser = getResolvedStoredUser();
+      const previousTenant = previousUser?.tenantSlug?.trim().toLowerCase();
+      const newTenant = res.tenantSlug?.trim().toLowerCase();
+      const tenantChanged =
+        Boolean(previousTenant) &&
+        Boolean(newTenant) &&
+        previousTenant !== newTenant;
+
       const user: StoredUser = {
         id: res.user.id,
         email: res.user.email ?? "",
@@ -52,15 +68,20 @@ export default function LoginPage() {
         canViewAllBranches: res.canViewAllBranches,
       };
       setAuthToken(res.token, user);
-      // Persist default branch so the backend can filter on first load.
       try {
+        if (tenantChanged) {
+          localStorage.removeItem("branchId");
+          localStorage.removeItem("branchName");
+          clearActiveBranchCookies();
+        }
         const initialBranchId = res.assignedBranchId ?? res.defaultBranchId;
         if (initialBranchId) {
           localStorage.setItem("branchId", initialBranchId);
           syncActiveBranchCookie(initialBranchId);
-        } else {
+        } else if (tenantChanged) {
           localStorage.removeItem("branchId");
         }
+        reconcileClientBranchSelection(res.allowedBranchIds);
       } catch {
         // ignore
       }
@@ -74,7 +95,16 @@ export default function LoginPage() {
         router.push("/dashboard");
       }
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Login failed");
+      if (applyRateLimit(err) && err instanceof ApiError) {
+        const wait = err.retryAfterSeconds ?? 30;
+        setError(
+          `Too many sign-in attempts. Wait ${wait}s and try again.`,
+        );
+      } else if (err instanceof ApiError && err.status === 401) {
+        setError("Invalid email or password.");
+      } else {
+        setError(formatApiErrorForUser(err));
+      }
     } finally {
       setLoading(false);
     }
@@ -161,10 +191,14 @@ export default function LoginPage() {
 
               <Button
                 type="submit"
-                disabled={loading}
+                disabled={loading || isCoolingDown}
                 className="flex h-11 w-full items-center justify-center gap-2 shadow-md shadow-primary/20"
               >
-                {loading ? "Signing in…" : "Sign In"}
+                {loading
+                  ? "Signing in…"
+                  : isCoolingDown
+                    ? `Wait ${secondsLeft}s…`
+                    : "Sign In"}
                 <ArrowRight className="h-4 w-4" />
               </Button>
             </form>

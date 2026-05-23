@@ -85,10 +85,6 @@ type ConsolidatedMainBundle = {
 };
 
 export type ConsolidatedReportsClientProps = {
-  initialBs: ReportEnvelope<BalanceSheetResult> | null;
-  initialPnl: ReportEnvelope<IncomeStatementResult> | null;
-  initialPreview: (ConsolidationPreviewResult & { scopeMeta?: unknown }) | null;
-  serverPrefetched: boolean;
   defaultAsOf: string;
   defaultFrom: string;
   defaultTo: string;
@@ -247,10 +243,6 @@ function AccountRows({
 }
 
 export default function ConsolidatedReportsClient({
-  initialBs,
-  initialPnl,
-  initialPreview,
-  serverPrefetched,
   defaultAsOf,
   defaultFrom,
   defaultTo,
@@ -267,6 +259,7 @@ export default function ConsolidatedReportsClient({
   const [to, setTo] = React.useState(defaultTo);
   const [validationErr, setValidationErr] = React.useState<string | null>(null);
   const [previewOpen, setPreviewOpen] = React.useState(false);
+  const [submitted, setSubmitted] = React.useState(false);
   const consolidationMode: "preview" | "posted" = "posted";
 
   const asOfCheck = React.useMemo(() => validateReportAsOf(asOf), [asOf]);
@@ -274,12 +267,9 @@ export default function ConsolidatedReportsClient({
     () => validateReportDateRange(from, to, { branchId }),
     [from, to, branchId],
   );
-  const mainEnabled = canMultiBranch && asOfCheck.ok && rangeCheck.ok;
-
-  const initialMainBundle: ConsolidatedMainBundle | undefined =
-    serverPrefetched && initialBs != null && initialPnl != null
-      ? { bs: initialBs, pnl: initialPnl }
-      : undefined;
+  const filtersValid = asOfCheck.ok && rangeCheck.ok;
+  const mainEnabled =
+    submitted && canMultiBranch && filtersValid;
 
   const mainQuery = useErpReportQuery<ConsolidatedMainBundle>({
     reportId: "consolidated",
@@ -292,19 +282,18 @@ export default function ConsolidatedReportsClient({
       aggregateAll,
       consolidationMode,
     },
-    queryFn: async () => {
+    queryFn: async (scope) => {
       const [bsRes, pnlRes] = await Promise.all([
-        getBalanceSheet(tenantSlug, asOf, branchId, aggregateAll, {
+        getBalanceSheet(tenantSlug, asOf, scope.branchId, scope.aggregateAll, {
           consolidated: true,
           consolidationMode,
         }),
-        getIncomeStatement(tenantSlug, from, to, branchId, aggregateAll, {
+        getIncomeStatement(tenantSlug, from, to, scope.branchId, scope.aggregateAll, {
           consolidationMode,
         }),
       ]);
       return { bs: bsRes, pnl: pnlRes };
     },
-    initialData: initialMainBundle,
     enabled: mainEnabled,
   });
 
@@ -312,11 +301,9 @@ export default function ConsolidatedReportsClient({
     reportId: "consolidation-preview",
     tenantSlug,
     params: { asOf, branchId, aggregateAll },
-    queryFn: () =>
-      getConsolidationPreview(tenantSlug, asOf, branchId, aggregateAll),
-    initialData:
-      serverPrefetched && initialPreview != null ? initialPreview : undefined,
-    enabled: canMultiBranch && asOfCheck.ok,
+    queryFn: (scope) =>
+      getConsolidationPreview(tenantSlug, asOf, scope.branchId, scope.aggregateAll),
+    enabled: submitted && canMultiBranch && asOfCheck.ok && previewOpen,
   });
 
   React.useEffect(() => {
@@ -530,14 +517,26 @@ export default function ConsolidatedReportsClient({
             <Button
               type="button"
               size="sm"
-              variant="secondary"
               className="h-8"
-              disabled={loading}
-              onClick={() => void mainQuery.refetch()}
+              disabled={!canMultiBranch || !filtersValid || loading}
+              onClick={() => {
+                setSubmitted(true);
+                if (submitted) void mainQuery.refetch();
+              }}
             >
               {loading ? (
                 <Loader2 className="mr-2 h-3.5 w-3.5 animate-spin" />
               ) : null}
+              Run report
+            </Button>
+            <Button
+              type="button"
+              size="sm"
+              variant="secondary"
+              className="h-8"
+              disabled={!submitted || loading}
+              onClick={() => void mainQuery.refetch()}
+            >
               Refresh
             </Button>
             <Button

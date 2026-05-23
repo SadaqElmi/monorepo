@@ -8,7 +8,7 @@ import {
   Req,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import type { Request } from 'express';
+import type { FastifyRequest } from 'fastify';
 import * as jwt from 'jsonwebtoken';
 import { assertAllowedBranches } from '../common/branch-scope';
 import { TenantContextService } from '../tenant/tenant-context.service';
@@ -62,7 +62,7 @@ export class ReconciliationController {
     return t;
   }
 
-  private ensureRunAuthorized(req: Request) {
+  private ensureRunAuthorized(req: FastifyRequest) {
     const jwtSecret = this.config.get<string>('JWT_SECRET') ?? 'changeme';
     const cookies = parseCookies(req.headers.cookie);
     const token = cookies['auth_token'];
@@ -85,7 +85,7 @@ export class ReconciliationController {
   }
 
   @Post('run')
-  async run(@Req() req: Request) {
+  async run(@Req() req: FastifyRequest) {
     this.ensureRunAuthorized(req);
     const tenant = this.ensureTenant();
     const allowedBranchIds = assertAllowedBranches(req);
@@ -101,7 +101,7 @@ export class ReconciliationController {
 
   @Get('logs')
   async logs(
-    @Req() req: Request,
+    @Req() req: FastifyRequest,
     @Query('runId') runId?: string,
     @Query('severity') severity?: string,
     @Query('type') type?: string,
@@ -194,7 +194,7 @@ export class ReconciliationController {
 
   @Get('health-snapshots')
   async healthSnapshots(
-    @Req() req: Request,
+    @Req() req: FastifyRequest,
     @Query('from') from?: string,
     @Query('to') to?: string,
     @Query('checkKey') checkKey?: string,

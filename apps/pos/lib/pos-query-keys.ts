@@ -3,6 +3,12 @@
 export const posKeys = {
   catalog: (tenant: string, facet: string) =>
     ["pos", "catalog", tenant, facet] as const,
+  catalogProducts: (tenant: string, facet: string) =>
+    ["pos", "catalog", "products", tenant, facet] as const,
+  catalogBatches: (tenant: string, facet: string) =>
+    ["pos", "catalog", "batches", tenant, facet] as const,
+  catalogCategories: (tenant: string, facet: string) =>
+    ["pos", "catalog", "categories", tenant, facet] as const,
   sales: (tenant: string, facet: string, page: number, limit: number) =>
     ["pos", "sales", tenant, facet, page, limit] as const,
   session: (tenant: string, facet: string) =>

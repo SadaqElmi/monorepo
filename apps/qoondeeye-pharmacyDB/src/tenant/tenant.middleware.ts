@@ -4,10 +4,21 @@ import {
   NestMiddleware,
   NotFoundException,
 } from '@nestjs/common';
-import { Request, Response, NextFunction } from 'express';
-import { expressRequestPathname } from '../common/http/express-request-path';
+import type { FastifyRequest } from 'fastify';
+import type { Tenant } from '@prisma/client';
+import { requestPathname } from '../common/http/request-pathname';
 import { TenantService } from './tenant.service';
 import { TenantContextService } from './tenant-context.service';
+
+function isPublicTenantRoute(path: string): boolean {
+  return (
+    path.startsWith('/api/auth') ||
+    path.startsWith('/api/tenants') ||
+    path.startsWith('/api/domains') ||
+    path.startsWith('/api/system-users') ||
+    path === '/api'
+  );
+}
 
 @Injectable()
 export class TenantMiddleware implements NestMiddleware {
@@ -16,46 +27,50 @@ export class TenantMiddleware implements NestMiddleware {
     private readonly tenantContext: TenantContextService,
   ) {}
 
-  async use(req: Request, res: Response, next: NextFunction) {
+  async use(req: FastifyRequest, _res: unknown, next: () => void): Promise<void> {
     if ((req.method ?? '').toUpperCase() === 'OPTIONS') {
-      return next();
-    }
-    // Skip tenant resolution for public routes (auth, tenants, system users)
-    const path = expressRequestPathname(req);
-    const isPublicRoute =
-      path.startsWith('/api/auth') ||
-      path.startsWith('/api/tenants') ||
-      path.startsWith('/api/domains') ||
-      path.startsWith('/api/system-users') ||
-      path === '/api';
-    if (isPublicRoute) {
-      return next();
+      next();
+      return;
     }
 
-    // 1. Local dev: resolve from X-Tenant header (e.g. X-Tenant: pharmacy1)
+    try {
+      await this.resolveTenantForRequest(req);
+      next();
+    } catch (err) {
+      (next as (error?: unknown) => void)(err);
+    }
+  }
+
+  private async resolveTenantForRequest(req: FastifyRequest): Promise<void> {
+    const path = requestPathname(req);
+    if (isPublicTenantRoute(path)) {
+      return;
+    }
+
     const headerTenant = req.headers['x-tenant'] as string | undefined;
     if (headerTenant) {
       const slug = headerTenant.trim();
-      const tenant = await this.tenantService.findBySchemaName(slug);
+      const tenant = await this.tenantService.findBySchemaNameInsensitive(slug);
       if (tenant) {
-        this.tenantContext.setTenant(tenant);
-        await this.tenantService.applyTenantSchemaPatches(tenant.schemaName);
-        return next();
+        await this.applyTenantToRequest(req, tenant);
+        return;
       }
+
       const anyTenant = await this.tenantService.findBySchemaNameAny(slug);
       if (anyTenant && anyTenant.status !== 'active') {
         throw new ForbiddenException('Tenant is inactive');
       }
+
+      throw new NotFoundException(`Tenant not found for X-Tenant: ${slug}`);
     }
 
-    // 2. Resolve from subdomain: pharmacy1.yourapp.com -> pharmacy1
     const host = req.headers.host ?? req.hostname ?? '';
-    const parts = host.replace(/:\d+$/, '').split('.'); // strip port
+    const parts = host.replace(/:\d+$/, '').split('.');
     const subdomain = parts.length >= 2 ? parts[0] : null;
 
     if (!subdomain || subdomain === 'www' || subdomain === 'api') {
       this.tenantContext.clear();
-      return next();
+      return;
     }
 
     const tenant =
@@ -70,8 +85,19 @@ export class TenantMiddleware implements NestMiddleware {
       throw new NotFoundException(`Tenant not found for: ${host}`);
     }
 
+    await this.applyTenantToRequest(req, tenant);
+  }
+
+  private async applyTenantToRequest(
+    req: FastifyRequest,
+    tenant: Tenant,
+  ): Promise<void> {
     this.tenantContext.setTenant(tenant);
+    req.tenant = {
+      id: tenant.id,
+      schema_name: tenant.schemaName,
+      name: tenant.name,
+    };
     await this.tenantService.applyTenantSchemaPatches(tenant.schemaName);
-    next();
   }
 }

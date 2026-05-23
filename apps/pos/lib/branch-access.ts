@@ -51,12 +51,17 @@ export function getEffectiveClientBranchId(): string | undefined {
  */
 export function getClientBranchIdHeaderForApi(): string | undefined {
   if (typeof window === "undefined") return undefined;
+  const user = getResolvedStoredUser();
+  if (user && isRestrictedToAssignedBranch(user.role)) {
+    const assigned = getAssignedBranchIdFromUser();
+    if (assigned) return assigned;
+    return undefined;
+  }
   try {
     const raw = localStorage.getItem("branchId")?.trim();
     if (raw?.toLowerCase() === "all") {
-      const user = getResolvedStoredUser();
       if (!hasGlobalBranchAccess(user?.role, user?.canViewAllBranches)) {
-        return undefined;
+        return getAssignedBranchIdFromUser();
       }
       return "all";
     }

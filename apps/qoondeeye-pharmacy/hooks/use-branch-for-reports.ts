@@ -26,11 +26,18 @@ function readAllBranchesSelected(): boolean {
   }
 }
 
-export function getReportBranchSnapshot(): {
+/** Branch scope passed to report API queryFns — read at fetch time, not from render closure. */
+export type ReportBranchScope = {
   branchId: string | undefined;
   aggregateAll: boolean;
   branchName?: string;
-} {
+};
+
+/**
+ * Current branch scope from localStorage + user role. Call at the start of every
+ * `/api/reports/*` queryFn so `branchId` query params match `x-branch-id`.
+ */
+export function getReportBranchSnapshot(): ReportBranchScope {
   return computeReportBranch();
 }
 

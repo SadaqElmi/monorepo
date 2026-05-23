@@ -1,5 +1,6 @@
 import { BadRequestException, Injectable } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
+import { toPagedResult, type PagedResult } from '../common/pagination.util';
 import { PrismaService } from '../prisma/prisma.service';
 import { InventoryService } from '../inventory/inventory.service';
 import { TenantService } from '../tenant/tenant.service';
@@ -97,6 +98,33 @@ export class SaleReturnsService {
         allowedBranchIds,
       ),
     );
+  }
+
+  async findAllPaged(
+    schemaName: string,
+    allowedBranchIds: string[],
+    skip: number,
+    take: number,
+  ): Promise<PagedResult<SaleReturnListRow>> {
+    return this.prisma.withTenantSchema(schemaName, async (tx) => {
+      const [countRow] = await tx.$queryRawUnsafe<{ c: bigint }[]>(
+        `SELECT COUNT(*)::bigint AS c FROM sale_returns WHERE branch_id = ANY($1::uuid[])`,
+        allowedBranchIds,
+      );
+      const total = Number(countRow?.c ?? 0);
+      const items = await tx.$queryRawUnsafe<SaleReturnListRow[]>(
+        `SELECT id, sale_id, branch_id, reason, return_date, refund_method, refund_amount
+         FROM sale_returns
+         WHERE branch_id = ANY($1::uuid[])
+         ORDER BY return_date DESC
+         LIMIT $2 OFFSET $3`,
+        allowedBranchIds,
+        take,
+        skip,
+      );
+      const page = Math.floor(skip / take) + 1;
+      return toPagedResult(items, total, page, take);
+    });
   }
 
   async findOne(schemaName: string, id: string, allowedBranchIds: string[]) {

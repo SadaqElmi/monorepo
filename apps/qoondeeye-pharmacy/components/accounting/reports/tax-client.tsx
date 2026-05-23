@@ -69,7 +69,8 @@ export default function TaxReportClient({
     reportId: "tax",
     tenantSlug,
     params: { from, to, branchId, aggregateAll },
-    queryFn: () => getTaxReport(tenantSlug, from, to, branchId, aggregateAll),
+    queryFn: (scope) =>
+      getTaxReport(tenantSlug, from, to, scope.branchId, scope.aggregateAll),
     initialData:
       serverPrefetched && initialData != null ? initialData : undefined,
     enabled: rangeCheck.ok,

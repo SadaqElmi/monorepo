@@ -4,12 +4,16 @@ import type { SharedRedisClient } from './redis.types';
 import { REDIS_CLIENT } from './redis.constants';
 
 const TAG_INDEX_PREFIX = 'pharmcare:v1:cache-tag:';
+const DEGRADED_LOG_INTERVAL_MS = 60_000;
 
 @Injectable()
 export class TaggedCacheService {
   private readonly logger = new Logger(TaggedCacheService.name);
   /** Fallback tag → cache keys when Redis is unavailable (per-process only). */
   private readonly memoryTagIndex = new Map<string, Set<string>>();
+  private cacheGetDegradedLoggedAt = 0;
+  private cacheSetDegradedLoggedAt = 0;
+  private redisTagDegradedLoggedAt = 0;
 
   constructor(
     @Inject(CACHE_MANAGER) private readonly cache: Cache,
@@ -20,9 +24,27 @@ export class TaggedCacheService {
     return `${TAG_INDEX_PREFIX}${tag}`;
   }
 
+  private logDegradedOnce(
+    kind: 'get' | 'set' | 'redis-tag',
+    message: string,
+  ): void {
+    const now = Date.now();
+    const last =
+      kind === 'get'
+        ? this.cacheGetDegradedLoggedAt
+        : kind === 'set'
+          ? this.cacheSetDegradedLoggedAt
+          : this.redisTagDegradedLoggedAt;
+    if (now - last < DEGRADED_LOG_INTERVAL_MS) return;
+    if (kind === 'get') this.cacheGetDegradedLoggedAt = now;
+    else if (kind === 'set') this.cacheSetDegradedLoggedAt = now;
+    else this.redisTagDegradedLoggedAt = now;
+    this.logger.warn(message);
+  }
+
   /**
    * Reads through cache; on miss runs factory, stores with TTL, registers tag index for invalidation.
-   * Redis/cache errors never throw — falls back to running the factory.
+   * Redis/cache errors never throw — falls back to running the factory (database).
    */
   async getOrSet<T>(
     key: string,
@@ -36,8 +58,9 @@ export class TaggedCacheService {
         return hit as T;
       }
     } catch (e) {
-      this.logger.warn(
-        `cache get failed for "${key}": ${e instanceof Error ? e.message : String(e)}`,
+      this.logDegradedOnce(
+        'get',
+        `Cache read degraded (using database): ${e instanceof Error ? e.message : String(e)}`,
       );
     }
 
@@ -45,8 +68,9 @@ export class TaggedCacheService {
     try {
       await this.setWithTags(key, value, ttlMs, tags);
     } catch (e) {
-      this.logger.warn(
-        `cache set failed for "${key}": ${e instanceof Error ? e.message : String(e)}`,
+      this.logDegradedOnce(
+        'set',
+        `Cache write skipped after database read: ${e instanceof Error ? e.message : String(e)}`,
       );
     }
     return value;
@@ -75,8 +99,9 @@ export class TaggedCacheService {
           await this.redis.sAdd(this.tagIndexKey(t), key);
         }
       } catch (e) {
-        this.logger.warn(
-          `Redis SADD tag index failed: ${e instanceof Error ? e.message : String(e)}`,
+        this.logDegradedOnce(
+          'redis-tag',
+          `Redis tag index degraded (in-memory fallback): ${e instanceof Error ? e.message : String(e)}`,
         );
         for (const t of unique) {
           this.registerKeyMemory(t, key);
@@ -116,8 +141,9 @@ export class TaggedCacheService {
       try {
         keys = await this.redis.sMembers(idx);
       } catch (e) {
-        this.logger.warn(
-          `Redis SMEMBERS tag index failed for "${tag}": ${e instanceof Error ? e.message : String(e)}`,
+        this.logDegradedOnce(
+          'redis-tag',
+          `Redis SMEMBERS failed for "${tag}": ${e instanceof Error ? e.message : String(e)}`,
         );
         keys = [...(this.memoryTagIndex.get(tag) ?? [])];
       }
@@ -131,7 +157,8 @@ export class TaggedCacheService {
       await Promise.all(
         chunk.map((k) =>
           this.cache.del(k).catch((e) => {
-            this.logger.warn(
+            this.logDegradedOnce(
+              'get',
               `cache del "${k}": ${e instanceof Error ? e.message : String(e)}`,
             );
           }),
@@ -146,7 +173,8 @@ export class TaggedCacheService {
         }
         await this.redis.del(idx);
       } catch (e) {
-        this.logger.warn(
+        this.logDegradedOnce(
+          'redis-tag',
           `Redis DEL tag index failed for "${tag}": ${e instanceof Error ? e.message : String(e)}`,
         );
       }

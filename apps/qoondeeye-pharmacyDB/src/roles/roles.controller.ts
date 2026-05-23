@@ -18,18 +18,20 @@ export class RolesController {
     private readonly tenantContext: TenantContextService,
   ) {}
 
-  private ensureTenant() {
-    if (!this.tenantContext.getTenant()) {
+  private ensureTenant(): { schema: string; tenantId: string } {
+    const tenant = this.tenantContext.getTenant();
+    if (!tenant) {
       throw new BadRequestException(
         'Tenant context required. Use X-Tenant header (e.g. X-Tenant: pharmacy1)',
       );
     }
+    return { schema: tenant.schemaName, tenantId: tenant.id };
   }
 
   @Get()
   findAll() {
-    this.ensureTenant();
-    return this.rolesService.findAll(this.tenantContext.getSchemaName()!);
+    const { schema, tenantId } = this.ensureTenant();
+    return this.rolesService.findAll(schema, tenantId);
   }
 
   @Post()
@@ -40,8 +42,8 @@ export class RolesController {
       permissions: string[];
     },
   ) {
-    this.ensureTenant();
-    return this.rolesService.create(this.tenantContext.getSchemaName()!, body);
+    const { schema, tenantId } = this.ensureTenant();
+    return this.rolesService.create(schema, tenantId, body);
   }
 
   @Patch(':id')
@@ -53,17 +55,13 @@ export class RolesController {
       permissions?: string[];
     },
   ) {
-    this.ensureTenant();
-    return this.rolesService.update(
-      this.tenantContext.getSchemaName()!,
-      id,
-      body,
-    );
+    const { schema, tenantId } = this.ensureTenant();
+    return this.rolesService.update(schema, tenantId, id, body);
   }
 
   @Delete(':id')
   remove(@Param('id') id: string) {
-    this.ensureTenant();
-    return this.rolesService.remove(this.tenantContext.getSchemaName()!, id);
+    const { schema, tenantId } = this.ensureTenant();
+    return this.rolesService.remove(schema, tenantId, id);
   }
 }

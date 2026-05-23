@@ -4,7 +4,7 @@ import {
   Logger,
 } from '@nestjs/common';
 import { createHash } from 'crypto';
-import type { Request } from 'express';
+import type { FastifyRequest } from 'fastify';
 import { readScopeBranchIdsFromRequest } from './branch-read-scope.util';
 import { hasGlobalBranchAccess } from '../security/branch-access.policy';
 
@@ -29,7 +29,7 @@ function pushMetricAndGetRecentCount(
 }
 
 /** Throws 403 if the request has no authorized branch scope. */
-export function assertAllowedBranches(req: Request): string[] {
+export function assertAllowedBranches(req: FastifyRequest): string[] {
   const allowed = readScopeBranchIdsFromRequest(req);
   if (!allowed.length) {
     throw new ForbiddenException('Access denied to this branch');
@@ -99,7 +99,7 @@ export function buildBranchScopeHash(
  * - else: single branch from branchId query or req.branchId
  */
 export function resolveReportBranchScope(
-  req: Request,
+  req: FastifyRequest,
   opts: ResolveReportBranchOptions,
 ): ReportScopeMeta {
   const allowed = assertAllowedBranches(req);
@@ -231,7 +231,7 @@ export function resolveReportBranchScope(
 }
 
 export function resolveReportBranchIds(
-  req: Request,
+  req: FastifyRequest,
   opts: ResolveReportBranchOptions,
 ): string[] {
   return resolveReportBranchScope(req, opts).branchIds;
@@ -239,7 +239,7 @@ export function resolveReportBranchIds(
 
 /** Single-branch selection for mutations and legacy endpoints (one explicit branch). */
 export function resolveSingleBranchId(
-  req: Request,
+  req: FastifyRequest,
   queryBranchId?: string,
 ): string {
   const [id] = resolveReportBranchIds(req, { branchId: queryBranchId });
@@ -247,7 +247,7 @@ export function resolveSingleBranchId(
 }
 
 export function assertDtoBranchAllowed(
-  req: Request,
+  req: FastifyRequest,
   dtoBranchId: string | undefined,
 ): void {
   const allowed = assertAllowedBranches(req);
@@ -284,6 +284,6 @@ export function branchColumnPredicate(
 }
 
 /** True when the user is admin/owner (global branch visibility policy). */
-export function isGlobalBranchRole(req: Request): boolean {
+export function isGlobalBranchRole(req: FastifyRequest): boolean {
   return hasGlobalBranchAccess(req.userRole, req.userCanViewAllBranches);
 }

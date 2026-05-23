@@ -32,9 +32,34 @@ export class PrismaService
     const adapter = createPrismaPgFromPool(pool);
     super({
       adapter,
-      log: ['error', 'warn'],
+      log: [
+        { emit: 'event', level: 'query' },
+        { emit: 'stdout', level: 'error' },
+        { emit: 'stdout', level: 'warn' },
+      ],
     });
     this.pgPool = pool;
+    this.attachSlowQueryLogging();
+  }
+
+  private attachSlowQueryLogging(): void {
+    const slowMs = (() => {
+      const raw = process.env.PRISMA_SLOW_QUERY_MS;
+      if (raw === undefined || raw === '') return 400;
+      const n = Number.parseInt(raw, 10);
+      return Number.isFinite(n) && n > 0 ? n : 400;
+    })();
+
+    this.$on('query' as never, (event: { duration: number; target: string }) => {
+      if (event.duration < slowMs) return;
+      this.logger.warn(
+        JSON.stringify({
+          kind: 'prisma_slow_query',
+          target: event.target,
+          durationMs: event.duration,
+        }),
+      );
+    });
   }
 
   async onModuleInit() {

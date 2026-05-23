@@ -34,7 +34,10 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { ReportScopeBadge } from "@/components/accounting/report-scope-badge";
-import { useReportBranchQuery } from "@/hooks/use-branch-for-reports";
+import {
+  getReportBranchSnapshot,
+  useReportBranchQuery,
+} from "@/hooks/use-branch-for-reports";
 import { money } from "@/lib/accounting-display";
 import { getStoredUser } from "@/lib/auth-client";
 import { cn } from "@/lib/utils";
@@ -158,24 +161,27 @@ export function AccountingDashboard({
         "yyyy-MM-dd",
       );
       const to = asOf;
+      const { branchId: bid, aggregateAll: agg } = getReportBranchSnapshot();
+      const reportBranchId = bid ?? effectiveBranchId;
+      const reportAggregateAll = agg || effectiveAggregateAll;
       try {
         const [bs, je, ex] = await Promise.all([
-          getBalanceSheet(tenantSlug, asOf, effectiveBranchId, effectiveAggregateAll),
-          effectiveBranchId
-            ? getJournalEntries(tenantSlug, effectiveBranchId, 8)
+          getBalanceSheet(tenantSlug, asOf, reportBranchId, reportAggregateAll),
+          reportBranchId
+            ? getJournalEntries(tenantSlug, reportBranchId, 8)
             : Promise.resolve([] as JournalEntryRow[]),
           getExecutiveSummary(
             tenantSlug,
             from,
             to,
-            effectiveBranchId,
-            effectiveAggregateAll,
+            reportBranchId,
+            reportAggregateAll,
           ),
         ]);
         let trail: AuditLogRow[] = [];
-        if (effectiveBranchId) {
+        if (reportBranchId) {
           try {
-            trail = await getAuditTrail(tenantSlug, effectiveBranchId, 6);
+            trail = await getAuditTrail(tenantSlug, reportBranchId, 6);
           } catch {
             trail = [];
           }

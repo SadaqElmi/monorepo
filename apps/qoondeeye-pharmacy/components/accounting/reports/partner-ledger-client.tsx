@@ -124,15 +124,15 @@ export default function PartnerLedgerReportClient({
       partnerKind,
       partnerId: trimmedPartnerId,
     },
-    queryFn: () =>
+    queryFn: (scope) =>
       getPartnerLedger(
         tenantSlug,
-        branchId,
+        scope.branchId,
         partnerKind,
         trimmedPartnerId,
         from,
         to,
-        aggregateAll,
+        scope.aggregateAll,
       ),
     initialData:
       serverPrefetched &&

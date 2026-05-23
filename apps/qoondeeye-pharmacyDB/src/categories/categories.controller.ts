@@ -7,9 +7,11 @@ import {
   Patch,
   Delete,
   Req,
+  Query,
   BadRequestException,
 } from '@nestjs/common';
-import type { Request } from 'express';
+import type { FastifyRequest } from 'fastify';
+import { parsePagedQueryParam } from '../common/pagination.util';
 import { CategoriesService } from './categories.service';
 import { TenantContextService } from '../tenant/tenant-context.service';
 import { CreateCategoryDto } from './dto/create-category.dto';
@@ -23,27 +25,38 @@ export class CategoriesController {
   ) {}
 
   @Get()
-  findAll(@Req() req: Request) {
-    this.ensureTenant();
-    return this.categoriesService.findAll(
-      this.tenantContext.getSchemaName()!,
-      req.allowedBranchIds ?? [],
-    );
+  findAll(
+    @Req() req: FastifyRequest,
+    @Query('page') page?: string,
+    @Query('limit') limit?: string,
+  ) {
+    const { schema, tenantId } = this.ensureTenant();
+    const allowedBranchIds = req.allowedBranchIds ?? [];
+    const paged = parsePagedQueryParam(page, limit);
+    if (paged) {
+      return this.categoriesService.findAllPaged(
+        schema,
+        allowedBranchIds,
+        paged.skip,
+        paged.limit,
+      );
+    }
+    return this.categoriesService.findAll(schema, tenantId, allowedBranchIds);
   }
 
   @Get(':id')
-  findOne(@Req() req: Request, @Param('id') id: string) {
-    this.ensureTenant();
+  findOne(@Req() req: FastifyRequest, @Param('id') id: string) {
+    const { schema } = this.ensureTenant();
     return this.categoriesService.findOne(
-      this.tenantContext.getSchemaName()!,
+      schema,
       id,
       req.allowedBranchIds ?? [],
     );
   }
 
   @Post()
-  create(@Req() req: Request, @Body() dto: CreateCategoryDto) {
-    this.ensureTenant();
+  create(@Req() req: FastifyRequest, @Body() dto: CreateCategoryDto) {
+    const { schema, tenantId } = this.ensureTenant();
     const global = dto.global !== false;
     if (!global && !req.branchId) {
       throw new BadRequestException(
@@ -51,7 +64,8 @@ export class CategoriesController {
       );
     }
     return this.categoriesService.create(
-      this.tenantContext.getSchemaName()!,
+      schema,
+      tenantId,
       dto,
       global ? null : req.branchId!,
     );
@@ -59,13 +73,14 @@ export class CategoriesController {
 
   @Patch(':id')
   update(
-    @Req() req: Request,
+    @Req() req: FastifyRequest,
     @Param('id') id: string,
     @Body() dto: UpdateCategoryDto,
   ) {
-    this.ensureTenant();
+    const { schema, tenantId } = this.ensureTenant();
     return this.categoriesService.update(
-      this.tenantContext.getSchemaName()!,
+      schema,
+      tenantId,
       id,
       dto,
       req.allowedBranchIds ?? [],
@@ -73,20 +88,23 @@ export class CategoriesController {
   }
 
   @Delete(':id')
-  remove(@Req() req: Request, @Param('id') id: string) {
-    this.ensureTenant();
+  remove(@Req() req: FastifyRequest, @Param('id') id: string) {
+    const { schema, tenantId } = this.ensureTenant();
     return this.categoriesService.remove(
-      this.tenantContext.getSchemaName()!,
+      schema,
+      tenantId,
       id,
       req.allowedBranchIds ?? [],
     );
   }
 
-  private ensureTenant() {
-    if (!this.tenantContext.getTenant()) {
+  private ensureTenant(): { schema: string; tenantId: string } {
+    const tenant = this.tenantContext.getTenant();
+    if (!tenant) {
       throw new BadRequestException(
         'Tenant context required. Use X-Tenant header (e.g. X-Tenant: pharmacy1) or subdomain.',
       );
     }
+    return { schema: tenant.schemaName, tenantId: tenant.id };
   }
 }

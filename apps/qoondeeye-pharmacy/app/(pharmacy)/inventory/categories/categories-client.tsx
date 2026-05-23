@@ -21,7 +21,11 @@ import {
   deleteCategory,
   updateCategory,
 } from "@/lib/api";
-import { useErpCategories } from "@/hooks/queries/use-erp-categories";
+import { CachedQueryToolbar } from "@/components/api/cached-query-toolbar";
+import { ListPagination } from "@/components/api/list-pagination";
+import { ApiErrorAlert } from "@/components/api/api-error-alert";
+import { useErpCategoriesPaged } from "@/hooks/queries/use-erp-categories-paged";
+import { useErpBranchFacet } from "@/hooks/use-erp-branch-facet";
 import { erpKeys } from "@/lib/erp-query-keys";
 
 type FormMode = "create" | "edit";
@@ -33,26 +37,18 @@ type EditableCategory = {
   slug: string;
 };
 
-export type CategoriesPageClientProps = {
-  initialCategories?: Category[] | null;
-  serverPrefetched?: boolean;
-};
-
-export default function CategoriesPage({
-  initialCategories = null,
-  serverPrefetched = false,
-}: CategoriesPageClientProps) {
+export default function CategoriesPage() {
   const queryClient = useQueryClient();
+  const branchFacet = useErpBranchFacet();
   const [tenantSlug, setTenantSlug] = useState(() =>
     getStoredUser()?.tenantSlug ?? "pharmacy1",
   );
-  const categoriesQuery = useErpCategories(tenantSlug, {
-    initialData:
-      serverPrefetched && initialCategories ? initialCategories : undefined,
-  });
-  const categories = categoriesQuery.data ?? [];
+  const [page, setPage] = useState(1);
+  const categoriesQuery = useErpCategoriesPaged(tenantSlug, page, 50);
+  const categories = categoriesQuery.data?.items ?? [];
   const loading = categoriesQuery.isPending;
   const loadError = categoriesQuery.error;
+  const totalPages = categoriesQuery.data?.totalPages ?? 1;
   const [error, setError] = useState<string | null>(null);
 
   const [formOpen, setFormOpen] = useState(false);
@@ -72,13 +68,7 @@ export default function CategoriesPage({
     return () => window.removeEventListener("activeBranchChanged", handler);
   }, []);
 
-  const displayError =
-    error ??
-    (loadError instanceof Error
-      ? loadError.message
-      : loadError
-        ? "Failed to load categories"
-        : null);
+  const displayError = error ?? (loadError ? loadError : null);
 
   const handleRefresh = () => {
     if (!tenantSlug.trim()) {
@@ -87,7 +77,7 @@ export default function CategoriesPage({
     }
     setTenantSlug((prev) => prev.trim());
     void queryClient.invalidateQueries({
-      queryKey: erpKeys.categories(tenantSlug, ""),
+      queryKey: erpKeys.categories(tenantSlug, branchFacet),
       exact: false,
     });
   };
@@ -223,23 +213,15 @@ export default function CategoriesPage({
                 <span className="font-medium text-foreground/80">Tenant</span>
                 <code className="font-mono">{tenantSlug || "Not set"}</code>
               </div>
-              <Button
-                size="sm"
-                variant="outline"
-                className="h-8"
-                onClick={handleRefresh}
-                disabled={!tenantSlug || !tenantSlug.trim() || loading}
-              >
-                Refresh
-              </Button>
+              <CachedQueryToolbar
+                dataUpdatedAt={categoriesQuery.dataUpdatedAt}
+                isFetching={categoriesQuery.isFetching}
+                onRefresh={handleRefresh}
+              />
             </div>
           </div>
 
-          {displayError && (
-            <p className="rounded-md border border-destructive/40 bg-destructive/5 px-3 py-2 text-sm text-destructive">
-              {displayError}
-            </p>
-          )}
+          <ApiErrorAlert error={displayError} />
 
           <Card>
             <CardHeader className="flex flex-row items-center justify-between gap-4">
@@ -338,6 +320,15 @@ export default function CategoriesPage({
                   </table>
                 </div>
               )}
+              {tenantSlug && !loading && sortedCategories.length > 0 ? (
+                <ListPagination
+                  className="mt-4"
+                  page={page}
+                  totalPages={totalPages}
+                  total={categoriesQuery.data?.total}
+                  onPageChange={setPage}
+                />
+              ) : null}
             </CardContent>
           </Card>
 

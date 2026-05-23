@@ -247,8 +247,8 @@ export default function BalanceSheetReportClient({
       branchId,
       aggregateAll,
     },
-    queryFn: () =>
-      getBalanceSheet(tenantSlug, asOf, branchId, aggregateAll, {
+    queryFn: (scope) =>
+      getBalanceSheet(tenantSlug, asOf, scope.branchId, scope.aggregateAll, {
         compareAsOf: compareAsOf || undefined,
         compareSnapshot: compareSnapshot || undefined,
       }),

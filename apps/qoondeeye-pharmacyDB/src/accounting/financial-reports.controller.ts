@@ -17,7 +17,7 @@ import {
   UseGuards,
 } from '@nestjs/common';
 import archiver from 'archiver';
-import type { Request, Response } from 'express';
+import type { FastifyReply, FastifyRequest } from 'fastify';
 import { createReadStream, existsSync } from 'node:fs';
 import * as path from 'node:path';
 import { PrismaService } from '../prisma/prisma.service';
@@ -151,7 +151,7 @@ export class FinancialReportsController {
    * or `aggregateAll` over the entire allowed read scope from middleware.
    */
   private reportBranchScope(
-    req: Request,
+    req: FastifyRequest,
     branchId?: string,
     branchIds?: string,
     aggregateAll?: string,
@@ -213,7 +213,7 @@ export class FinancialReportsController {
   }
 
   private async reportValidation(
-    req: Request,
+    req: FastifyRequest,
     schemaName: string,
     branchIds: string[],
     dateScope: { fromDate?: string; toDate?: string; asOfDate?: string },
@@ -371,7 +371,7 @@ export class FinancialReportsController {
   }
 
   private async incomeStatementPayload(
-    req: Request,
+    req: FastifyRequest,
     from: string,
     to: string,
     branchId?: string,
@@ -699,7 +699,7 @@ export class FinancialReportsController {
 
   @Get('income-statement')
   async incomeStatement(
-    @Req() req: Request,
+    @Req() req: FastifyRequest,
     @Query('from') from: string,
     @Query('to') to: string,
     @Query('branchId') branchId?: string,
@@ -732,7 +732,7 @@ export class FinancialReportsController {
 
   @Get('profit-loss')
   async profitLoss(
-    @Req() req: Request,
+    @Req() req: FastifyRequest,
     @Query('from') from: string,
     @Query('to') to: string,
     @Query('branchId') branchId?: string,
@@ -765,7 +765,7 @@ export class FinancialReportsController {
 
   @Get('pnl')
   async pnlAlias(
-    @Req() req: Request,
+    @Req() req: FastifyRequest,
     @Query('from') from: string,
     @Query('to') to: string,
     @Query('branchId') branchId?: string,
@@ -798,7 +798,7 @@ export class FinancialReportsController {
 
   @Get('balance-sheet')
   async balanceSheet(
-    @Req() req: Request,
+    @Req() req: FastifyRequest,
     @Query('asOf') asOf: string,
     @Query('branchId') branchId?: string,
     @Query('branchIds') branchIds?: string,
@@ -1091,7 +1091,7 @@ export class FinancialReportsController {
 
   @Get('interbranch-mismatches')
   async interbranchMismatches(
-    @Req() req: Request,
+    @Req() req: FastifyRequest,
     @Query('branchId') branchId?: string,
     @Query('branchIds') branchIds?: string,
     @Query('aggregateAll') aggregateAll?: string,
@@ -1120,7 +1120,7 @@ export class FinancialReportsController {
 
   @Get('stuck-transfers')
   async stuckTransfers(
-    @Req() req: Request,
+    @Req() req: FastifyRequest,
     @Query('branchId') branchId?: string,
     @Query('branchIds') branchIds?: string,
     @Query('aggregateAll') aggregateAll?: string,
@@ -1163,7 +1163,7 @@ export class FinancialReportsController {
 
   @Get('consolidation-preview')
   async consolidationPreview(
-    @Req() req: Request,
+    @Req() req: FastifyRequest,
     @Query('asOf') asOf: string,
     @Query('branchId') branchId?: string,
     @Query('branchIds') branchIds?: string,
@@ -1208,7 +1208,7 @@ export class FinancialReportsController {
   @UseGuards(PermissionGuard)
   @RequirePermissions('run_consolidation')
   async runConsolidation(
-    @Req() req: Request,
+    @Req() req: FastifyRequest,
     @Body() body: CreateConsolidationRunDto,
   ) {
     this.ensureTenant();
@@ -1245,7 +1245,7 @@ export class FinancialReportsController {
   @UseGuards(PermissionGuard)
   @RequirePermissions('reverse_consolidation')
   async reverseConsolidation(
-    @Req() req: Request,
+    @Req() req: FastifyRequest,
     @Param('runId') runId: string,
     @Body() body: ReverseConsolidationRunDto,
   ) {
@@ -1268,7 +1268,7 @@ export class FinancialReportsController {
   @UseGuards(PermissionGuard)
   @RequirePermissions('finalize_consolidation')
   async finalizeConsolidationRun(
-    @Req() req: Request,
+    @Req() req: FastifyRequest,
     @Param('runId') runId: string,
   ) {
     this.ensureTenant();
@@ -1289,7 +1289,7 @@ export class FinancialReportsController {
   @UseGuards(PermissionGuard)
   @RequirePermissions('view_consolidation_history')
   async consolidationRuns(
-    @Req() req: Request,
+    @Req() req: FastifyRequest,
     @Query('scopeHash') scopeHash?: string,
     @Query('entityId') entityId?: string,
     @Query('periodKey') periodKey?: string,
@@ -1324,7 +1324,7 @@ export class FinancialReportsController {
   @UseGuards(PermissionGuard)
   @RequirePermissions('view_consolidation_history')
   async consolidationRunDetail(
-    @Req() _req: Request,
+    @Req() _req: FastifyRequest,
     @Param('runId') runId: string,
   ) {
     this.ensureTenant();
@@ -1423,8 +1423,8 @@ export class FinancialReportsController {
   @UseGuards(PermissionGuard)
   @RequirePermissions('export_audit_package')
   async auditPackage(
-    @Req() req: Request,
-    @Res() res: Response,
+    @Req() req: FastifyRequest,
+    @Res() res: FastifyReply,
     @Query('from') fromTs?: string,
     @Query('to') toTs?: string,
     @Query('scopeHash') scopeHash?: string,
@@ -1480,8 +1480,8 @@ export class FinancialReportsController {
       fromTs,
       toTs,
     });
-    res.setHeader('Content-Type', 'application/zip');
-    res.setHeader(
+    res.header('Content-Type', 'application/zip');
+    res.header(
       'Content-Disposition',
       'attachment; filename="audit-package.zip"',
     );
@@ -1489,7 +1489,7 @@ export class FinancialReportsController {
     archive.on('error', (err: Error) => {
       throw err;
     });
-    archive.pipe(res);
+    archive.pipe(res.raw);
     archive.append(JSON.stringify({ ...verify, scopeMeta: scope }, null, 2), {
       name: 'audit-verify.json',
     });
@@ -1561,7 +1561,7 @@ export class FinancialReportsController {
 
   @Post('fx-rates')
   async upsertFxRate(
-    @Req() req: Request,
+    @Req() req: FastifyRequest,
     @Body()
     body: {
       fromCurrency: string;
@@ -1664,7 +1664,7 @@ export class FinancialReportsController {
   @UseGuards(PermissionGuard)
   @RequirePermissions('run_consolidation')
   async createConsolidationAdjustment(
-    @Req() req: Request,
+    @Req() req: FastifyRequest,
     @Body()
     body: {
       periodKey: string;
@@ -1724,7 +1724,7 @@ export class FinancialReportsController {
   @UseGuards(PermissionGuard)
   @RequirePermissions('approve_consolidation_adjustments')
   async approveConsolidationAdjustment(
-    @Req() req: Request,
+    @Req() req: FastifyRequest,
     @Param('id') id: string,
   ) {
     this.ensureTenant();
@@ -1770,7 +1770,7 @@ export class FinancialReportsController {
 
   @Get('trial-balance')
   async trialBalance(
-    @Req() req: Request,
+    @Req() req: FastifyRequest,
     @Query('asOf') asOf: string,
     @Query('branchId') branchId?: string,
     @Query('branchIds') branchIds?: string,
@@ -1801,7 +1801,7 @@ export class FinancialReportsController {
 
   @Get('dashboard-series')
   async dashboardSeries(
-    @Req() req: Request,
+    @Req() req: FastifyRequest,
     @Query('from') from: string,
     @Query('to') to: string,
     @Query('branchId') branchId?: string,
@@ -1834,7 +1834,7 @@ export class FinancialReportsController {
 
   @Get('inventory-valuation')
   async inventoryValuation(
-    @Req() req: Request,
+    @Req() req: FastifyRequest,
     @Query('branchId') branchId?: string,
     @Query('branchIds') branchIds?: string,
     @Query('aggregateAll') aggregateAll?: string,
@@ -1855,7 +1855,7 @@ export class FinancialReportsController {
 
   @Get('inventory-gl-sync')
   async inventoryGlSync(
-    @Req() req: Request,
+    @Req() req: FastifyRequest,
     @Query('asOf') asOf?: string,
     @Query('branchId') branchId?: string,
     @Query('branchIds') branchIds?: string,
@@ -1881,7 +1881,7 @@ export class FinancialReportsController {
 
   @Get('alerts')
   async alerts(
-    @Req() req: Request,
+    @Req() req: FastifyRequest,
     @Query('branchId') branchId?: string,
     @Query('branchIds') branchIds?: string,
     @Query('aggregateAll') aggregateAll?: string,
@@ -1909,7 +1909,7 @@ export class FinancialReportsController {
 
   @Get('variance-analysis')
   async varianceAnalysis(
-    @Req() req: Request,
+    @Req() req: FastifyRequest,
     @Query('from') from: string,
     @Query('to') to: string,
     @Query('accountKey') accountKey: string,
@@ -1943,7 +1943,7 @@ export class FinancialReportsController {
 
   @Get('explain')
   async explain(
-    @Req() req: Request,
+    @Req() req: FastifyRequest,
     @Query('accountKey') accountKey: string,
     @Query('asOf') asOf?: string,
     @Query('branchId') branchId?: string,
@@ -1974,7 +1974,7 @@ export class FinancialReportsController {
 
   @Get('top-products')
   async topProducts(
-    @Req() req: Request,
+    @Req() req: FastifyRequest,
     @Query('from') from: string,
     @Query('to') to: string,
     @Query('branchId') branchId?: string,
@@ -2014,7 +2014,7 @@ export class FinancialReportsController {
 
   @Get('cash-flow')
   async cashFlow(
-    @Req() req: Request,
+    @Req() req: FastifyRequest,
     @Query('from') from: string,
     @Query('to') to: string,
     @Query('branchId') branchId?: string,
@@ -2257,7 +2257,7 @@ export class FinancialReportsController {
 
   @Get('partner-ledger')
   async partnerLedger(
-    @Req() req: Request,
+    @Req() req: FastifyRequest,
     @Query('partnerKind') partnerKind: string,
     @Query('partnerId') partnerId: string,
     @Query('from') from: string,
@@ -2298,7 +2298,7 @@ export class FinancialReportsController {
 
   @Get('aged-receivable')
   async agedReceivable(
-    @Req() req: Request,
+    @Req() req: FastifyRequest,
     @Query('asOf') asOf: string,
     @Query('branchId') branchId?: string,
     @Query('branchIds') branchIds?: string,
@@ -2329,7 +2329,7 @@ export class FinancialReportsController {
 
   @Get('aged-payable')
   async agedPayable(
-    @Req() req: Request,
+    @Req() req: FastifyRequest,
     @Query('asOf') asOf: string,
     @Query('branchId') branchId?: string,
     @Query('branchIds') branchIds?: string,
@@ -2360,7 +2360,7 @@ export class FinancialReportsController {
 
   @Get('tax')
   async taxReport(
-    @Req() req: Request,
+    @Req() req: FastifyRequest,
     @Query('from') from: string,
     @Query('to') to: string,
     @Query('branchId') branchId?: string,
@@ -2393,7 +2393,7 @@ export class FinancialReportsController {
 
   @Get('fiscal')
   async fiscalReport(
-    @Req() req: Request,
+    @Req() req: FastifyRequest,
     @Query('from') from: string,
     @Query('to') to: string,
     @Query('branchId') branchId?: string,
@@ -2426,7 +2426,7 @@ export class FinancialReportsController {
 
   @Get('executive-summary')
   async executiveSummary(
-    @Req() req: Request,
+    @Req() req: FastifyRequest,
     @Query('from') from: string,
     @Query('to') to: string,
     @Query('branchId') branchId?: string,
@@ -2459,7 +2459,7 @@ export class FinancialReportsController {
 
   @Get('invoice-analysis')
   async invoiceAnalysis(
-    @Req() req: Request,
+    @Req() req: FastifyRequest,
     @Query('from') from: string,
     @Query('to') to: string,
     @Query('branchId') branchId?: string,
@@ -2492,7 +2492,7 @@ export class FinancialReportsController {
 
   @Get('analytic')
   async analyticReport(
-    @Req() req: Request,
+    @Req() req: FastifyRequest,
     @Query('from') from: string,
     @Query('to') to: string,
     @Query('branchId') branchId?: string,
@@ -2525,7 +2525,7 @@ export class FinancialReportsController {
 
   @Get('journal-audit')
   async journalAudit(
-    @Req() req: Request,
+    @Req() req: FastifyRequest,
     @Query('asOf') asOf: string,
     @Query('branchId') branchId?: string,
     @Query('branchIds') branchIds?: string,
@@ -2548,7 +2548,7 @@ export class FinancialReportsController {
 
   @Post('exports')
   async enqueueReportExport(
-    @Req() req: Request,
+    @Req() req: FastifyRequest,
     @Body() body: CreateReportExportJobDto,
   ) {
     this.ensureTenant();
@@ -2602,7 +2602,7 @@ export class FinancialReportsController {
   }
 
   @Get('exports/:jobId')
-  async reportExportStatus(@Req() req: Request, @Param('jobId') jobId: string) {
+  async reportExportStatus(@Req() req: FastifyRequest, @Param('jobId') jobId: string) {
     this.ensureTenant();
     if (!/^[0-9a-f-]{36}$/i.test(jobId)) {
       throw new BadRequestException('Invalid job id');
@@ -2630,9 +2630,9 @@ export class FinancialReportsController {
 
   @Get('exports/:jobId/download')
   async downloadReportExport(
-    @Req() req: Request,
+    @Req() req: FastifyRequest,
     @Param('jobId') jobId: string,
-    @Res({ passthrough: false }) res: Response,
+    @Res({ passthrough: false }) res: FastifyReply,
   ): Promise<void> {
     this.ensureTenant();
     if (!/^[0-9a-f-]{36}$/i.test(jobId)) {
@@ -2661,16 +2661,16 @@ export class FinancialReportsController {
       throw new NotFoundException('Export file missing');
     }
     const isPdf = job.storagePath.toLowerCase().endsWith('.pdf');
-    res.setHeader(
+    res.header(
       'Content-Type',
       isPdf
         ? 'application/pdf'
         : 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
     );
-    res.setHeader(
+    res.header(
       'Content-Disposition',
       `attachment; filename="report-${jobId.slice(0, 8)}.${isPdf ? 'pdf' : 'xlsx'}"`,
     );
-    createReadStream(full).pipe(res);
+    createReadStream(full).pipe(res.raw);
   }
 }

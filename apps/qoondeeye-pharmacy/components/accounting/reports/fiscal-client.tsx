@@ -62,8 +62,8 @@ export default function FiscalReportClient({
     reportId: "fiscal",
     tenantSlug,
     params: { from, to, branchId, aggregateAll },
-    queryFn: () =>
-      getFiscalReport(tenantSlug, from, to, branchId, aggregateAll),
+    queryFn: (scope) =>
+      getFiscalReport(tenantSlug, from, to, scope.branchId, scope.aggregateAll),
     initialData:
       serverPrefetched && initialData != null ? initialData : undefined,
     enabled: rangeCheck.ok,

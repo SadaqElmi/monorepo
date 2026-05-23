@@ -9,7 +9,7 @@ import {
   Query,
   Req,
 } from '@nestjs/common';
-import type { Request } from 'express';
+import type { FastifyRequest } from 'fastify';
 import { TenantContextService } from '../tenant/tenant-context.service';
 import { CreateTransferDto } from './dto/create-transfer.dto';
 import { RejectTransferDto } from './dto/reject-transfer.dto';
@@ -32,7 +32,7 @@ export class TransfersController {
     }
   }
 
-  private eventContext(req: Request) {
+  private eventContext(req: FastifyRequest) {
     const pick = (v: string | string[] | undefined | null): string | null => {
       if (typeof v === 'string' && v.trim()) return v.trim();
       return null;
@@ -48,7 +48,7 @@ export class TransfersController {
 
   @Get()
   list(
-    @Req() req: Request,
+    @Req() req: FastifyRequest,
     @Query('status') status?: string,
     @Query('from_branch_id') fromBranchId?: string,
     @Query('to_branch_id') toBranchId?: string,
@@ -83,7 +83,7 @@ export class TransfersController {
   }
 
   @Get('monitoring/overview')
-  monitoringOverview(@Req() req: Request) {
+  monitoringOverview(@Req() req: FastifyRequest) {
     this.ensureTenant();
     return this.transfersService.monitoringOverview(
       this.tenantContext.getSchemaName()!,
@@ -94,7 +94,7 @@ export class TransfersController {
   /** GET counts per status (optional `branch_id` = either endpoint). */
   @Get('summary/status-counts')
   statusCounts(
-    @Req() req: Request,
+    @Req() req: FastifyRequest,
     @Query('branch_id') branchScopeId?: string,
   ) {
     this.ensureTenant();
@@ -109,7 +109,7 @@ export class TransfersController {
 
   /** Must be registered before @Get(':id') */
   @Get(':id/events')
-  getEvents(@Param('id') id: string, @Req() req: Request) {
+  getEvents(@Param('id') id: string, @Req() req: FastifyRequest) {
     this.ensureTenant();
     return this.transfersService.getEvents(
       this.tenantContext.getSchemaName()!,
@@ -119,7 +119,7 @@ export class TransfersController {
   }
 
   @Get(':id')
-  getOne(@Param('id') id: string, @Req() req: Request) {
+  getOne(@Param('id') id: string, @Req() req: FastifyRequest) {
     this.ensureTenant();
     return this.transfersService.findOne(
       this.tenantContext.getSchemaName()!,
@@ -129,7 +129,7 @@ export class TransfersController {
   }
 
   @Post()
-  create(@Body() dto: CreateTransferDto, @Req() req: Request) {
+  create(@Body() dto: CreateTransferDto, @Req() req: FastifyRequest) {
     this.ensureTenant();
     return this.transfersService.create(
       this.tenantContext.getSchemaName()!,
@@ -145,7 +145,7 @@ export class TransfersController {
   update(
     @Param('id') id: string,
     @Body() dto: UpdateTransferDto,
-    @Req() req: Request,
+    @Req() req: FastifyRequest,
   ) {
     this.ensureTenant();
     return this.transfersService.update(
@@ -160,7 +160,7 @@ export class TransfersController {
   }
 
   @Post(':id/confirm')
-  confirm(@Param('id') id: string, @Req() req: Request) {
+  confirm(@Param('id') id: string, @Req() req: FastifyRequest) {
     this.ensureTenant();
     return this.transfersService.confirm(
       this.tenantContext.getSchemaName()!,
@@ -173,7 +173,7 @@ export class TransfersController {
   }
 
   @Post(':id/request-approval')
-  requestApproval(@Param('id') id: string, @Req() req: Request) {
+  requestApproval(@Param('id') id: string, @Req() req: FastifyRequest) {
     this.ensureTenant();
     return this.transfersService.requestApproval(
       this.tenantContext.getSchemaName()!,
@@ -186,7 +186,7 @@ export class TransfersController {
   }
 
   @Post(':id/approve')
-  approve(@Param('id') id: string, @Req() req: Request) {
+  approve(@Param('id') id: string, @Req() req: FastifyRequest) {
     this.ensureTenant();
     return this.transfersService.approve(
       this.tenantContext.getSchemaName()!,
@@ -202,7 +202,7 @@ export class TransfersController {
   reject(
     @Param('id') id: string,
     @Body() body: RejectTransferDto,
-    @Req() req: Request,
+    @Req() req: FastifyRequest,
   ) {
     this.ensureTenant();
     return this.transfersService.reject(
@@ -217,7 +217,7 @@ export class TransfersController {
   }
 
   @Post(':id/ship')
-  ship(@Param('id') id: string, @Req() req: Request) {
+  ship(@Param('id') id: string, @Req() req: FastifyRequest) {
     this.ensureTenant();
     return this.transfersService.ship(
       this.tenantContext.getSchemaName()!,
@@ -230,7 +230,7 @@ export class TransfersController {
   }
 
   @Post(':id/receive')
-  receive(@Param('id') id: string, @Req() req: Request) {
+  receive(@Param('id') id: string, @Req() req: FastifyRequest) {
     this.ensureTenant();
     return this.transfersService.receive(
       this.tenantContext.getSchemaName()!,
@@ -243,7 +243,7 @@ export class TransfersController {
   }
 
   @Post(':id/close')
-  close(@Param('id') id: string, @Req() req: Request) {
+  close(@Param('id') id: string, @Req() req: FastifyRequest) {
     this.ensureTenant();
     return this.transfersService.close(
       this.tenantContext.getSchemaName()!,
@@ -259,7 +259,7 @@ export class TransfersController {
   reverse(
     @Param('id') id: string,
     @Body() body: RejectTransferDto,
-    @Req() req: Request,
+    @Req() req: FastifyRequest,
   ) {
     this.ensureTenant();
     return this.transfersService.reverse(

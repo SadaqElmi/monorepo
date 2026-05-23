@@ -17,7 +17,7 @@ import { PurchasesService } from './purchases.service';
 import { CreatePurchaseDto } from './dto/create-purchase.dto';
 import { UpdatePurchaseDto } from './dto/update-purchase.dto';
 import { CreatePurchaseRefundDto } from './dto/create-purchase-refund.dto';
-import type { Request } from 'express';
+import type { FastifyRequest } from 'fastify';
 
 @Controller('purchases')
 export class PurchasesController {
@@ -36,7 +36,7 @@ export class PurchasesController {
 
   @Get()
   findAll(
-    @Req() req: Request,
+    @Req() req: FastifyRequest,
     @Query('page') page?: string,
     @Query('limit') limit?: string,
   ) {
@@ -61,7 +61,7 @@ export class PurchasesController {
   }
 
   @Get('line-pricing-by-product')
-  linePricingByProduct(@Req() req: Request) {
+  linePricingByProduct(@Req() req: FastifyRequest) {
     this.ensureTenant();
     const allowedBranchIds = req.allowedBranchIds ?? [];
     if (!allowedBranchIds.length) {
@@ -77,7 +77,7 @@ export class PurchasesController {
   createRefund(
     @Param('id') id: string,
     @Body() dto: CreatePurchaseRefundDto,
-    @Req() req: Request,
+    @Req() req: FastifyRequest,
   ) {
     this.ensureTenant();
     const allowed = req.allowedBranchIds ?? [];
@@ -95,7 +95,7 @@ export class PurchasesController {
   }
 
   @Get(':id')
-  findOne(@Param('id') id: string, @Req() req: Request) {
+  findOne(@Param('id') id: string, @Req() req: FastifyRequest) {
     this.ensureTenant();
     return this.purchasesService.findOne(
       this.tenantContext.getSchemaName()!,
@@ -105,7 +105,7 @@ export class PurchasesController {
   }
 
   @Post()
-  create(@Body() dto: CreatePurchaseDto, @Req() req: Request) {
+  create(@Body() dto: CreatePurchaseDto, @Req() req: FastifyRequest) {
     this.ensureTenant();
     const allowed = req.allowedBranchIds ?? [];
     const targetBranchId = dto.branchId ?? req.branchId!;
@@ -126,7 +126,7 @@ export class PurchasesController {
   update(
     @Param('id') id: string,
     @Body() dto: UpdatePurchaseDto,
-    @Req() req: Request,
+    @Req() req: FastifyRequest,
   ) {
     this.ensureTenant();
     return this.purchasesService.update(
@@ -140,7 +140,7 @@ export class PurchasesController {
   }
 
   @Delete(':id')
-  remove(@Param('id') id: string, @Req() req: Request) {
+  remove(@Param('id') id: string, @Req() req: FastifyRequest) {
     this.ensureTenant();
     return this.purchasesService.remove(
       this.tenantContext.getSchemaName()!,
@@ -151,7 +151,7 @@ export class PurchasesController {
   }
 
   @Delete(':id/items')
-  removeItems(@Param('id') id: string, @Req() req: Request) {
+  removeItems(@Param('id') id: string, @Req() req: FastifyRequest) {
     this.ensureTenant();
     const allowedBranchIds = req.allowedBranchIds ?? [];
     if (!allowedBranchIds.length) {

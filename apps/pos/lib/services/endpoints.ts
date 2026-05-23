@@ -5,11 +5,12 @@
 
 export const getBaseUrl = () =>
   //process.env.NEXT_PUBLIC_API_URL_LOCAL ?? "http://localhost:5555";
-  process.env.NEXT_PUBLIC_API_URL ?? "https://api.qoondeeye.online";
+  process.env.NEXT_PUBLIC_API_URL ??
+  "https://backend-production-1dc6.up.railway.app";
 
 export const API_BASE = getBaseUrl();
 
-/** Join API host with a path segment (no leading/trailing slashes on segment). */
+/** Join API host with a path segment (no leading/trailing slashes on segment)cls. */
 function apiUrl(pathSegment: string): string {
   const base = API_BASE.replace(/\/$/, "");
   const seg = pathSegment.replace(/^\/+/, "").replace(/\/+$/, "");
@@ -22,6 +23,7 @@ export const PRODUCTS_PREFIX = `${API_BASE}/api/products`;
 export const BATCHES_PREFIX = `${API_BASE}/api/batches`;
 export const SALES_PREFIX = `${API_BASE}/api/sales`;
 export const RETURN_VOUCHERS_PREFIX = `${API_BASE}/api/return-vouchers`;
+export const POS_PREFIX = `${API_BASE}/api/pos`;
 export const TRANSFERS_PREFIX = apiUrl(
   process.env.NEXT_PUBLIC_TRANSFERS_API_PATH ?? "api/transfers",
 );

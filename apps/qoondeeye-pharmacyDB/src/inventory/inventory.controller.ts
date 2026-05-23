@@ -9,13 +9,14 @@ import {
   Req,
   Sse,
 } from '@nestjs/common';
+import { SkipThrottle } from '@nestjs/throttler';
 import { TenantContextService } from '../tenant/tenant-context.service';
 import { TenantService } from '../tenant/tenant.service';
 import { assertAllowedBranches } from '../common/branch-scope';
 import { parsePagedQueryParam } from '../common/pagination.util';
 import { InventoryHistoryService } from './inventory-history.service';
 import { InventoryService } from './inventory.service';
-import type { Request } from 'express';
+import type { FastifyRequest } from 'fastify';
 import { Observable, from, interval } from 'rxjs';
 import { map, startWith, switchMap } from 'rxjs/operators';
 
@@ -37,8 +38,9 @@ export class InventoryController {
   }
 
   /** Periodic inventory snapshot for the current branch scope (MVP "real-time"). */
+  @SkipThrottle()
   @Sse('stream')
-  inventoryStream(@Req() req: Request): Observable<MessageEvent> {
+  inventoryStream(@Req() req: FastifyRequest): Observable<MessageEvent> {
     this.ensureTenant();
     const allowedBranchIds = req.allowedBranchIds ?? [];
     if (!allowedBranchIds.length) {
@@ -60,22 +62,33 @@ export class InventoryController {
   }
 
   @Get()
-  findAll(@Req() req: Request) {
+  findAll(
+    @Req() req: FastifyRequest,
+    @Query('page') page?: string,
+    @Query('limit') limit?: string,
+  ) {
     this.ensureTenant();
     const allowedBranchIds = req.allowedBranchIds ?? [];
     if (!allowedBranchIds.length) {
       throw new ForbiddenException('Access denied to this branch');
     }
-    return this.inventoryService.findAll(
-      this.tenantContext.getSchemaName()!,
-      allowedBranchIds,
-    );
+    const schemaName = this.tenantContext.getSchemaName()!;
+    const paged = parsePagedQueryParam(page, limit);
+    if (paged) {
+      return this.inventoryService.findAllPaged(
+        schemaName,
+        allowedBranchIds,
+        paged.skip,
+        paged.limit,
+      );
+    }
+    return this.inventoryService.findAll(schemaName, allowedBranchIds);
   }
 
   /** Paginated unified stock movement timeline (sales, purchases, returns, transfers). */
   @Get('history')
   async history(
-    @Req() req: Request,
+    @Req() req: FastifyRequest,
     @Query('page') page?: string,
     @Query('limit') limit?: string,
     @Query('branch_id') branch_id?: string,
@@ -135,7 +148,7 @@ export class InventoryController {
   }
 
   @Get('product/:productId/stock')
-  stockByProduct(@Param('productId') productId: string, @Req() req: Request) {
+  stockByProduct(@Param('productId') productId: string, @Req() req: FastifyRequest) {
     this.ensureTenant();
     const allowedBranchIds = req.allowedBranchIds ?? [];
     if (!allowedBranchIds.length) {
@@ -149,7 +162,7 @@ export class InventoryController {
   }
 
   @Get(':id')
-  findOne(@Param('id') id: string, @Req() req: Request) {
+  findOne(@Param('id') id: string, @Req() req: FastifyRequest) {
     this.ensureTenant();
     return this.inventoryService.findOne(
       this.tenantContext.getSchemaName()!,

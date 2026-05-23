@@ -2,6 +2,10 @@
 
 import { useQuery } from "@tanstack/react-query";
 
+import {
+  getReportBranchSnapshot,
+  type ReportBranchScope,
+} from "@/hooks/use-branch-for-reports";
 import { useErpBranchFacet } from "@/hooks/use-erp-branch-facet";
 import { erpKeys } from "@/lib/erp-query-keys";
 import { erpQueryOptions } from "@/lib/erp-query-options";
@@ -10,12 +14,13 @@ export function useErpReportQuery<T>(options: {
   reportId: string;
   tenantSlug: string;
   params: unknown;
-  queryFn: () => Promise<T>;
+  queryFn: (scope: ReportBranchScope) => Promise<T>;
   initialData?: T | null;
   enabled?: boolean;
 }) {
   const branchFacet = useErpBranchFacet();
-  const enabled = options.enabled !== false && Boolean(options.tenantSlug);
+  const enabled =
+    options.enabled !== false && Boolean(options.tenantSlug && branchFacet);
 
   return useQuery({
     queryKey: erpKeys.report(
@@ -24,7 +29,7 @@ export function useErpReportQuery<T>(options: {
       branchFacet,
       options.params,
     ),
-    queryFn: options.queryFn,
+    queryFn: () => options.queryFn(getReportBranchSnapshot()),
     enabled,
     ...erpQueryOptions.report,
     initialData:

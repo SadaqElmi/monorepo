@@ -8,7 +8,7 @@ import {
   Post,
   Req,
 } from '@nestjs/common';
-import type { Request } from 'express';
+import type { FastifyRequest } from 'fastify';
 import { PosSessionsService } from './pos-sessions.service';
 import { TenantContextService } from '../tenant/tenant-context.service';
 import { OpenPosSessionDto } from './dto/open-pos-session.dto';
@@ -30,7 +30,7 @@ export class PosSessionsController {
   }
 
   @Post('sessions/open')
-  openSession(@Body() dto: OpenPosSessionDto, @Req() req: Request) {
+  openSession(@Body() dto: OpenPosSessionDto, @Req() req: FastifyRequest) {
     this.ensureTenant();
     if (!req.branchId) {
       throw new BadRequestException('Branch required (x-branch-id header)');
@@ -47,7 +47,7 @@ export class PosSessionsController {
   }
 
   @Get('sessions/current')
-  getCurrent(@Req() req: Request) {
+  getCurrent(@Req() req: FastifyRequest) {
     this.ensureTenant();
     if (!req.branchId) {
       throw new BadRequestException('Branch required (x-branch-id header)');
@@ -60,7 +60,7 @@ export class PosSessionsController {
   }
 
   @Post('sessions/:sessionId/open-statement')
-  openStatement(@Param('sessionId') sessionId: string, @Req() req: Request) {
+  openStatement(@Param('sessionId') sessionId: string, @Req() req: FastifyRequest) {
     this.ensureTenant();
     if (!req.branchId) {
       throw new BadRequestException('Branch required (x-branch-id header)');
@@ -74,7 +74,7 @@ export class PosSessionsController {
   }
 
   @Get('sessions/:sessionId/x-report')
-  xReport(@Param('sessionId') sessionId: string, @Req() req: Request) {
+  xReport(@Param('sessionId') sessionId: string, @Req() req: FastifyRequest) {
     this.ensureTenant();
     if (!req.branchId) {
       throw new BadRequestException('Branch required (x-branch-id header)');
@@ -88,7 +88,7 @@ export class PosSessionsController {
   }
 
   @Get('sessions/:sessionId/z-report')
-  zReport(@Param('sessionId') sessionId: string, @Req() req: Request) {
+  zReport(@Param('sessionId') sessionId: string, @Req() req: FastifyRequest) {
     this.ensureTenant();
     if (!req.branchId) {
       throw new BadRequestException('Branch required (x-branch-id header)');
@@ -102,7 +102,7 @@ export class PosSessionsController {
   }
 
   @Post('sessions/:sessionId/close')
-  closeSession(@Param('sessionId') sessionId: string, @Req() req: Request) {
+  closeSession(@Param('sessionId') sessionId: string, @Req() req: FastifyRequest) {
     this.ensureTenant();
     if (!req.branchId) {
       throw new BadRequestException('Branch required (x-branch-id header)');
@@ -120,7 +120,7 @@ export class PosSessionsController {
     @Param('statementId') statementId: string,
     @Param('lineId') lineId: string,
     @Body() dto: PatchStatementLineDto,
-    @Req() req: Request,
+    @Req() req: FastifyRequest,
   ) {
     this.ensureTenant();
     if (!req.branchId) {
@@ -137,7 +137,7 @@ export class PosSessionsController {
   }
 
   @Get('statements/:statementId')
-  getStatement(@Param('statementId') statementId: string, @Req() req: Request) {
+  getStatement(@Param('statementId') statementId: string, @Req() req: FastifyRequest) {
     this.ensureTenant();
     if (!req.branchId) {
       throw new BadRequestException('Branch required (x-branch-id header)');
@@ -153,7 +153,7 @@ export class PosSessionsController {
   @Post('statements/:statementId/post')
   postStatement(
     @Param('statementId') statementId: string,
-    @Req() req: Request,
+    @Req() req: FastifyRequest,
   ) {
     this.ensureTenant();
     if (!req.branchId) {

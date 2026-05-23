@@ -272,16 +272,12 @@ async function prefetchReconciliationHints(
   }
 }
 
-/** Warm dashboard, catalog, and inventory list after ERP login. */
+/** Warm catalog + branches after ERP login (avoid heavy dashboard prefetch). */
 export async function prefetchErpCoreAfterLogin(
   queryClient: QueryClient,
   tenantSlug: string,
 ): Promise<void> {
-  await Promise.all([
-    prefetchDashboardAfterLogin(queryClient, tenantSlug),
-    prefetchErpStaticCatalog(queryClient, tenantSlug),
-    prefetchErpInventoryList(queryClient, tenantSlug),
-  ]);
+  await prefetchErpStaticCatalog(queryClient, tenantSlug);
 }
 
 /** Stock page: prefetch inventory, products, and branches in parallel. */

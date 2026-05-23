@@ -21,7 +21,7 @@ import {
 } from "@/lib/pos-utils";
 import { createSale } from "@/lib/api";
 import type { CreateSaleInput, Sale } from "@repo/types";
-import { getBranchQueryKeyFacet } from "@/lib/query-branch-key";
+import { invalidatePosAfterSale } from "@/lib/invalidate-pos-after-sale";
 import {
   getCurrentPosSession,
   openPosSession,
@@ -35,6 +35,7 @@ import {
   isManagerTierRole,
   maxDiscountPercentForRole,
 } from "@/features/register/model/discount-policy";
+import { formatApiErrorForUser } from "@/lib/services/http";
 import { posToast } from "@/lib/pos-toast";
 
 type PosContextType = {
@@ -115,90 +116,25 @@ type CreateSaleMutatePayload = {
   optimisticReceiptId: string;
 };
 
-type CreateSaleMutationCtx = {
-  previous: Sale[] | undefined;
-  queryKey: readonly unknown[];
-};
-
 export function PosProvider({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const queryClient = useQueryClient();
 
+  const salePostingRef = React.useRef(false);
+
   const createSaleMutation = useMutation<
     Sale,
     Error,
-    CreateSaleMutatePayload,
-    CreateSaleMutationCtx
+    CreateSaleMutatePayload
   >({
     mutationFn: async (payload) =>
       createSale(payload.tenantSlug, payload.body),
-    onMutate: async (variables) => {
-      const facet = getBranchQueryKeyFacet();
-      const queryKey = [
-        "pos",
-        "sales",
-        variables.tenantSlug,
-        facet,
-        1,
-        200,
-      ] as const;
-      await queryClient.cancelQueries({ queryKey });
-      const previous = queryClient.getQueryData<Sale[]>(queryKey);
-      const optimisticSale: Sale = {
-        id: variables.optimisticSaleId,
-        branch_id: null,
-        receipt_number: variables.optimisticReceiptId,
-        total_amount: variables.body.totalAmount ?? null,
-        discount: variables.body.discount ?? null,
-        tax: variables.body.tax ?? null,
-        sale_date: new Date().toISOString(),
-        payment_method: variables.body.paymentMethod,
-        items: [],
-      };
-      queryClient.setQueryData<Sale[]>(queryKey, (old) => {
-        const base = old ?? [];
-        const filtered = base.filter(
-          (s) => s.id !== variables.optimisticSaleId,
-        );
-        return [optimisticSale, ...filtered].slice(0, 200);
-      });
-      return { previous, queryKey };
-    },
-    onSuccess: (data, variables) => {
-      const facet = getBranchQueryKeyFacet();
-      const queryKey = [
-        "pos",
-        "sales",
-        variables.tenantSlug,
-        facet,
-        1,
-        200,
-      ] as const;
-      queryClient.setQueryData<Sale[]>(queryKey, (old) => {
-        if (!old) return old;
-        return old.map((row) =>
-          row.id === variables.optimisticSaleId ? data : row,
-        );
-      });
-    },
-    onError: (_e, variables, context) => {
-      const qk = context?.queryKey;
-      if (!qk) return;
-      if (context?.previous !== undefined) {
-        queryClient.setQueryData(qk, context.previous);
-      } else {
-        queryClient.setQueryData<Sale[]>(qk, (old) => {
-          if (!old) return old;
-          return old.filter((s) => s.id !== variables.optimisticSaleId);
-        });
-      }
-    },
-    onSettled: (_d, _e, variables) => {
+    onSuccess: (_data, variables) => {
       if (!variables?.tenantSlug) return;
-      const facet = getBranchQueryKeyFacet();
-      void queryClient.invalidateQueries({
-        queryKey: ["pos", "sales", variables.tenantSlug, facet],
-      });
+      invalidatePosAfterSale(queryClient, variables.tenantSlug);
+    },
+    onSettled: () => {
+      salePostingRef.current = false;
     },
   });
   const [mainTab, setMainTab] = useState<"register" | "returns">("register");
@@ -310,7 +246,12 @@ export function PosProvider({ children }: { children: React.ReactNode }) {
 
   useEffect(() => {
     void ensurePosSessionWithAutoOpen();
-  }, [pathname, ensurePosSessionWithAutoOpen]);
+  }, [
+    currentUser?.tenantSlug,
+    currentUser?.userType,
+    currentUser?.id,
+    ensurePosSessionWithAutoOpen,
+  ]);
 
   useEffect(() => {
     setTransactions(loadPosTransactions());
@@ -530,6 +471,13 @@ export function PosProvider({ children }: { children: React.ReactNode }) {
       }
 
       if (tenantSlug) {
+        if (salePostingRef.current || createSaleMutation.isPending) {
+          posToast.warning(
+            "Sale in progress",
+            "Please wait for the current sale to finish.",
+          );
+          return;
+        }
         if (!posSessionId) {
           posToast.warning(
             "No open shift",
@@ -549,30 +497,12 @@ export function PosProvider({ children }: { children: React.ReactNode }) {
         }
         const changeRounded =
           Math.round(Math.max(0, tendered - tot) * 100) / 100;
-        const optimisticId = `opt-${Date.now()}`;
-        const optimisticEntry: PosTransaction = {
-          receiptId: newReceiptId(),
-          saleId: optimisticId,
-          createdAt: Date.now(),
-          paymentMethod: paymentLabel,
-          lines: cloneLines(billable),
-          discount,
-          subtotal: s,
-          tax: t,
-          total: tot,
-          amountTendered: tendered,
-          changeDue: changeRounded,
-        };
-        setTransactions((prev) => {
-          const next = [optimisticEntry, ...prev].slice(0, 500);
-          persistPosTransactions(next);
-          return next;
-        });
+        salePostingRef.current = true;
         try {
           const sale = await createSaleMutation.mutateAsync({
             tenantSlug,
-            optimisticSaleId: optimisticId,
-            optimisticReceiptId: optimisticEntry.receiptId,
+            optimisticSaleId: `pending-${Date.now()}`,
+            optimisticReceiptId: newReceiptId(),
             body: {
               totalAmount: tot,
               discount,
@@ -596,7 +526,7 @@ export function PosProvider({ children }: { children: React.ReactNode }) {
           });
           const receiptNum =
             (sale.receipt_number as string | null | undefined)?.trim() ||
-            optimisticEntry.receiptId;
+            newReceiptId();
           const entry: PosTransaction = {
             receiptId: receiptNum,
             saleId: sale.id,
@@ -612,9 +542,7 @@ export function PosProvider({ children }: { children: React.ReactNode }) {
           };
           const changeDue = changeRounded;
           setTransactions((prev) => {
-            const next = prev
-              .map((row) => (row.saleId === optimisticId ? entry : row))
-              .slice(0, 500);
+            const next = [entry, ...prev].slice(0, 500);
             persistPosTransactions(next);
             return next;
           });
@@ -632,17 +560,12 @@ export function PosProvider({ children }: { children: React.ReactNode }) {
               .join(" · "),
           );
         } catch (e) {
-          setTransactions((prev) => {
-            const next = prev.filter((row) => row.saleId !== optimisticId);
-            persistPosTransactions(next);
-            return next;
-          });
           posToast.error(
             "Could not save sale",
-            e instanceof Error
-              ? e.message
-              : "Check your connection and try again. The sale was not posted.",
+            formatApiErrorForUser(e),
           );
+        } finally {
+          salePostingRef.current = false;
         }
         return;
       }

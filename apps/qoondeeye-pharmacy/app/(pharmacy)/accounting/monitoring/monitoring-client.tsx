@@ -64,11 +64,11 @@ export default function TransferMonitoringPage() {
   const overviewQuery = useQuery({
     queryKey: erpKeys.transferMonitoring(tenantSlug ?? "", branchFacet),
     queryFn: () => getTransferMonitoringOverview(tenantSlug!),
-    enabled: Boolean(tenantSlug),
+    enabled: Boolean(tenantSlug && branchFacet),
     staleTime: ERP_STALE_LIST,
   });
   const branchesQuery = useErpBranches(tenantSlug, {
-    enabled: Boolean(tenantSlug),
+    enabled: Boolean(tenantSlug && branchFacet),
   });
 
   const overview = overviewQuery.data ?? null;

@@ -6,6 +6,8 @@ import {
   QueryClientProvider as TanstackQueryClientProvider,
 } from "@tanstack/react-query";
 
+import { queryRetryPolicy } from "@repo/utils";
+
 import { POS_GC_TIME, POS_STALE_SALES } from "@/lib/pos-query-keys";
 
 function makeQueryClient() {
@@ -15,7 +17,10 @@ function makeQueryClient() {
         staleTime: POS_STALE_SALES,
         gcTime: POS_GC_TIME,
         refetchOnWindowFocus: false,
-        retry: 1,
+        retry: queryRetryPolicy,
+      },
+      mutations: {
+        retry: false,
       },
     },
   });

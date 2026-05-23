@@ -7,7 +7,7 @@ import {
 import { createHash } from 'crypto';
 import { Observable, from, of, throwError } from 'rxjs';
 import { catchError, mergeMap } from 'rxjs/operators';
-import type { Request, Response } from 'express';
+import type { FastifyReply, FastifyRequest } from 'fastify';
 import { IdempotencyService } from '../services/idempotency.service';
 
 @Injectable()
@@ -16,8 +16,8 @@ export class IdempotencyInterceptor implements NestInterceptor {
 
   intercept(context: ExecutionContext, next: CallHandler): Observable<unknown> {
     const http = context.switchToHttp();
-    const req = http.getRequest<Request>();
-    const res = http.getResponse<Response>();
+    const req = http.getRequest<FastifyRequest>();
+    const res = http.getResponse<FastifyReply>();
     const method = (req.method ?? '').toUpperCase();
     const isMutation =
       method === 'POST' || method === 'PATCH' || method === 'PUT';
@@ -32,7 +32,7 @@ export class IdempotencyInterceptor implements NestInterceptor {
 
     const fingerprint = this.fingerprint({
       method,
-      path: req.originalUrl || req.url || '',
+      path: requestPath(req),
       body: req.body,
     });
 
@@ -41,13 +41,13 @@ export class IdempotencyInterceptor implements NestInterceptor {
         idempotencyKey,
         requestFingerprint: fingerprint,
         method,
-        path: req.originalUrl || req.url || '',
+        path: requestPath(req),
       }),
     ).pipe(
       mergeMap((state) => {
         if (state.kind === 'replay') {
           res.status(state.statusCode);
-          res.setHeader('X-Idempotency-Replayed', '1');
+          res.header('X-Idempotency-Replayed', '1');
           return of(state.responseBody);
         }
         req.idempotencyKey = idempotencyKey;
@@ -122,4 +122,10 @@ export class IdempotencyInterceptor implements NestInterceptor {
     }
     return 'Request failed';
   }
+}
+
+function requestPath(req: FastifyRequest): string {
+  const raw = req.url ?? req.raw?.url ?? '';
+  const q = raw.indexOf('?');
+  return q === -1 ? raw : raw.slice(0, q);
 }

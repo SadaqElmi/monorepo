@@ -29,3 +29,20 @@ export function branchStatsBranchTags(
   }
   return unique.map((b) => `branch-stats:${schemaName}:branch:${b}`);
 }
+
+/** Product/category list caches — public tenant id + branch for targeted invalidation. */
+export function catalogBranchTags(
+  tenantId: string,
+  branchIds: readonly string[],
+): string[] {
+  const unique = [...new Set(branchIds.filter(Boolean))].sort();
+  if (unique.length === 0) {
+    return [`tenant:${tenantId}:branch:none:catalog`];
+  }
+  return unique.map((b) => `tenant:${tenantId}:branch:${b}:catalog`);
+}
+
+/** Tenant-wide catalog (roles, full tenant product catalog, branches list). */
+export function catalogTenantTags(tenantId: string): string[] {
+  return [`tenant:${tenantId}:catalog`];
+}

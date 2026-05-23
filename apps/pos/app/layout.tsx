@@ -16,6 +16,8 @@ export const metadata: Metadata = {
   description: "PharmaCare point of sale frontend",
 };
 
+import { BranchReconcileHost } from "@/components/branch-reconcile-host";
+import { GlobalErrorBoundary } from "@/components/global-error-boundary";
 import { PosCatalogSync } from "@/components/pos-catalog-sync";
 import { PosProvider } from "@/components/pos-context";
 import { QueryClientProvider } from "@/components/query-provider";
@@ -31,6 +33,8 @@ export default function RootLayout({
     <html lang="en" className={cn("h-full", "font-sans", geist.variable)}>
       <body className={`${geist.variable} ${geistMono.variable} h-full flex flex-col overflow-hidden`}>
         <QueryClientProvider>
+          <GlobalErrorBoundary>
+          <BranchReconcileHost />
           <PosCatalogSync />
           <PosProvider>
             <TooltipProvider>
@@ -41,6 +45,7 @@ export default function RootLayout({
             <Footer />
             <Toaster position="top-center" />
           </PosProvider>
+          </GlobalErrorBoundary>
         </QueryClientProvider>
       </body>
     </html>

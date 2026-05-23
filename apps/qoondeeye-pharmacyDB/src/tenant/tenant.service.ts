@@ -30,12 +30,27 @@ export class TenantService {
   }
 
   /**
-   * Find tenant by schema name
+   * Find tenant by schema name (active only).
    */
   async findBySchemaName(schemaName: string): Promise<Tenant | null> {
-    // Only return active tenants (used for tenant-scoped access).
     return this.prisma.tenant.findFirst({
       where: { schemaName, status: 'active' },
+    });
+  }
+
+  /**
+   * Case-insensitive schema name lookup for X-Tenant header (active only).
+   */
+  async findBySchemaNameInsensitive(
+    schemaName: string,
+  ): Promise<Tenant | null> {
+    const slug = schemaName.trim();
+    if (!slug) return null;
+    return this.prisma.tenant.findFirst({
+      where: {
+        schemaName: { equals: slug, mode: 'insensitive' },
+        status: 'active',
+      },
     });
   }
 
@@ -833,6 +848,26 @@ export class TenantService {
       `CREATE INDEX IF NOT EXISTS idx_products_branch_id
        ON "${schemaName}"."products"(branch_id)`,
     );
+    await this.prisma.$executeRawUnsafe(
+      `CREATE INDEX IF NOT EXISTS idx_products_created_at
+       ON "${schemaName}"."products"(created_at DESC)`,
+    );
+    await this.prisma.$executeRawUnsafe(
+      `CREATE INDEX IF NOT EXISTS idx_products_category_id
+       ON "${schemaName}"."products"(category_id)`,
+    );
+    await this.prisma.$executeRawUnsafe(
+      `CREATE INDEX IF NOT EXISTS idx_products_branch_created
+       ON "${schemaName}"."products"(branch_id, created_at DESC)`,
+    );
+    await this.prisma.$executeRawUnsafe(
+      `CREATE INDEX IF NOT EXISTS idx_inventory_branch_id
+       ON "${schemaName}"."inventory"(branch_id)`,
+    );
+    await this.prisma.$executeRawUnsafe(
+      `CREATE INDEX IF NOT EXISTS idx_product_categories_branch_name
+       ON "${schemaName}"."product_categories"(branch_id, name)`,
+    );
   }
 
   /**
@@ -858,6 +893,11 @@ export class TenantService {
       `CREATE INDEX IF NOT EXISTS idx_payments_sale_id ON "${schemaName}"."payments"(sale_id)`,
       `CREATE INDEX IF NOT EXISTS idx_expenses_branch_id ON "${schemaName}"."expenses"(branch_id)`,
       `CREATE INDEX IF NOT EXISTS idx_expenses_created_at ON "${schemaName}"."expenses"(created_at DESC)`,
+      `CREATE INDEX IF NOT EXISTS idx_products_created_at ON "${schemaName}"."products"(created_at DESC)`,
+      `CREATE INDEX IF NOT EXISTS idx_products_category_id ON "${schemaName}"."products"(category_id)`,
+      `CREATE INDEX IF NOT EXISTS idx_products_branch_created ON "${schemaName}"."products"(branch_id, created_at DESC)`,
+      `CREATE INDEX IF NOT EXISTS idx_inventory_branch_id ON "${schemaName}"."inventory"(branch_id)`,
+      `CREATE INDEX IF NOT EXISTS idx_product_categories_branch_name ON "${schemaName}"."product_categories"(branch_id, name)`,
     ];
     for (const sql of stmts) {
       await this.prisma.$executeRawUnsafe(sql);

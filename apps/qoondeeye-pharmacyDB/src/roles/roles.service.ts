@@ -1,5 +1,10 @@
 import { Injectable } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
+import { resolveRolesCacheTtlMs } from '../cache/cache-catalog.config';
+import { CacheInvalidationService } from '../cache/cache-invalidation.service';
+import { catalogListCacheKey } from '../cache/cache-keys';
+import { catalogTenantTags } from '../cache/cache-tags';
+import { TaggedCacheService } from '../cache/tagged-cache.service';
 import { PrismaService } from '../prisma/prisma.service';
 
 export type RoleWithPermissions = {
@@ -9,9 +14,21 @@ export type RoleWithPermissions = {
   createdAt: Date | null;
 };
 
+type RoleListRow = {
+  id: string;
+  name: string;
+  permissions: string[] | null;
+};
+
 @Injectable()
 export class RolesService {
-  constructor(private readonly prisma: PrismaService) {}
+  private readonly rolesTtlMs = resolveRolesCacheTtlMs();
+
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly taggedCache: TaggedCacheService,
+    private readonly cacheInvalidation: CacheInvalidationService,
+  ) {}
 
   private normalizePermissions(input: string[] | undefined) {
     return (input ?? []).map((p) => p.trim()).filter((p) => p.length > 0);
@@ -23,7 +40,6 @@ export class RolesService {
   ) {
     if (names.length === 0) return [];
 
-    // Create any missing permissions (idempotent).
     await tx.permission.createMany({
       data: names.map((name) => ({ name })),
       skipDuplicates: true,
@@ -31,41 +47,62 @@ export class RolesService {
 
     return tx.permission.findMany({
       where: { name: { in: names } },
+      select: { id: true, name: true },
     });
   }
 
-  async findAll(schemaName: string): Promise<RoleWithPermissions[]> {
-    return this.prisma.withTenantSchema(schemaName, async (tx) => {
-      const roles = await tx.role.findMany({
-        include: {
-          rolePermissions: {
-            include: {
-              permission: true,
-            },
-          },
-        },
-        orderBy: { name: 'asc' },
-      });
+  private mapRoleRows(rows: RoleListRow[]): RoleWithPermissions[] {
+    return rows.map((row) => ({
+      id: row.id,
+      name: row.name,
+      permissions: Array.isArray(row.permissions)
+        ? row.permissions.filter(Boolean)
+        : [],
+      createdAt: null,
+    }));
+  }
 
-      return roles.map((role) => ({
-        id: role.id,
-        name: role.name,
-        permissions: role.rolePermissions.map((rp) => rp.permission.name),
-        createdAt: null,
-      }));
-    });
+  async findAll(
+    schemaName: string,
+    tenantId: string,
+  ): Promise<RoleWithPermissions[]> {
+    const key = catalogListCacheKey(tenantId, 'all', 'roles');
+    const tags = catalogTenantTags(tenantId);
+    return this.taggedCache.getOrSet(key, tags, this.rolesTtlMs, () =>
+      this.findAllUncached(schemaName),
+    );
+  }
+
+  private async findAllUncached(
+    schemaName: string,
+  ): Promise<RoleWithPermissions[]> {
+    const rows = await this.prisma.withTenantSchema(schemaName, (tx) =>
+      tx.$queryRawUnsafe<RoleListRow[]>(
+        `SELECT r.id, r.name,
+                COALESCE(
+                  array_agg(DISTINCT p.name ORDER BY p.name)
+                    FILTER (WHERE p.name IS NOT NULL),
+                  '{}'
+                ) AS permissions
+         FROM roles r
+         LEFT JOIN role_permissions rp ON rp.role_id = r.id
+         LEFT JOIN permissions p ON p.id = rp.permission_id
+         GROUP BY r.id, r.name
+         ORDER BY r.name`,
+      ),
+    );
+    return this.mapRoleRows(rows);
   }
 
   async create(
     schemaName: string,
+    tenantId: string,
     input: { name: string; permissions: string[] },
   ): Promise<RoleWithPermissions> {
-    return this.prisma.withTenantSchema(schemaName, async (tx) => {
+    const result = await this.prisma.withTenantSchema(schemaName, async (tx) => {
       const permissionNames = this.normalizePermissions(input.permissions);
       const role = await tx.role.create({
-        data: {
-          name: input.name,
-        },
+        data: { name: input.name },
       });
 
       if (permissionNames.length) {
@@ -83,30 +120,33 @@ export class RolesService {
         });
       }
 
-      const full = await tx.role.findUnique({
-        where: { id: role.id },
-        include: {
-          rolePermissions: {
-            include: { permission: true },
-          },
-        },
-      });
-
-      return {
-        id: full!.id,
-        name: full!.name,
-        permissions: full!.rolePermissions.map((rp) => rp.permission.name),
-        createdAt: null,
-      };
+      const [row] = await tx.$queryRawUnsafe<RoleListRow[]>(
+        `SELECT r.id, r.name,
+                COALESCE(
+                  array_agg(DISTINCT p.name ORDER BY p.name)
+                    FILTER (WHERE p.name IS NOT NULL),
+                  '{}'
+                ) AS permissions
+         FROM roles r
+         LEFT JOIN role_permissions rp ON rp.role_id = r.id
+         LEFT JOIN permissions p ON p.id = rp.permission_id
+         WHERE r.id = $1::uuid
+         GROUP BY r.id, r.name`,
+        role.id,
+      );
+      return this.mapRoleRows(row ? [row] : [])[0]!;
     });
+    await this.cacheInvalidation.invalidateCatalogTenant(tenantId);
+    return result;
   }
 
   async update(
     schemaName: string,
+    tenantId: string,
     id: string,
     input: { name?: string; permissions?: string[] },
   ): Promise<RoleWithPermissions | null> {
-    return this.prisma.withTenantSchema(schemaName, async (tx) => {
+    const result = await this.prisma.withTenantSchema(schemaName, async (tx) => {
       const existing = await tx.role.findUnique({ where: { id } });
       if (!existing) return null;
 
@@ -139,35 +179,40 @@ export class RolesService {
         }
       }
 
-      const full = await tx.role.findUnique({
-        where: { id },
-        include: {
-          rolePermissions: {
-            include: { permission: true },
-          },
-        },
-      });
-
-      if (!full) return null;
-
-      return {
-        id: full.id,
-        name: full.name,
-        permissions: full.rolePermissions.map((rp) => rp.permission.name),
-        createdAt: null,
-      };
+      const [row] = await tx.$queryRawUnsafe<RoleListRow[]>(
+        `SELECT r.id, r.name,
+                COALESCE(
+                  array_agg(DISTINCT p.name ORDER BY p.name)
+                    FILTER (WHERE p.name IS NOT NULL),
+                  '{}'
+                ) AS permissions
+         FROM roles r
+         LEFT JOIN role_permissions rp ON rp.role_id = r.id
+         LEFT JOIN permissions p ON p.id = rp.permission_id
+         WHERE r.id = $1::uuid
+         GROUP BY r.id, r.name`,
+        id,
+      );
+      return row ? this.mapRoleRows([row])[0]! : null;
     });
+    await this.cacheInvalidation.invalidateCatalogTenant(tenantId);
+    return result;
   }
 
-  async remove(schemaName: string, id: string): Promise<{ deleted: boolean }> {
-    return this.prisma.withTenantSchema(schemaName, async (tx) => {
+  async remove(
+    schemaName: string,
+    tenantId: string,
+    id: string,
+  ): Promise<{ deleted: boolean }> {
+    await this.prisma.withTenantSchema(schemaName, async (tx) => {
       await tx.rolePermission.deleteMany({
         where: { roleId: id },
       });
       await tx.role.delete({
         where: { id },
       });
-      return { deleted: true };
     });
+    await this.cacheInvalidation.invalidateCatalogTenant(tenantId);
+    return { deleted: true };
   }
 }

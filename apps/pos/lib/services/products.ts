@@ -1,6 +1,8 @@
+import { unwrapListResponse } from "@repo/utils";
+import type { PagedList, Product } from "@repo/types";
+
 import { PRODUCTS_PREFIX } from "./endpoints";
-import { type JsonHeaders, jsonFetch } from "./http";
-import type { Product } from "@repo/types";
+import { jsonFetch } from "./http";
 
 export type { Product };
 
@@ -8,14 +10,14 @@ export async function getProducts(
   tenantSlug: string,
   init?: Pick<RequestInit, "signal">,
 ): Promise<Product[]> {
-  return jsonFetch<Product[]>(PRODUCTS_PREFIX, {
+  const data = await jsonFetch<Product[] | PagedList<Product>>(PRODUCTS_PREFIX, {
     method: "GET",
-    headers: { "X-Tenant": tenantSlug } as JsonHeaders,
+    tenantSlug,
     signal: init?.signal,
   });
+  return unwrapListResponse(data).items;
 }
 
-/** Barcode / SKU lookup; throws if not found. */
 export async function getProductByBarcode(
   tenantSlug: string,
   barcode: string,
@@ -23,6 +25,6 @@ export async function getProductByBarcode(
   const b = encodeURIComponent(barcode.trim());
   return jsonFetch<Product>(`${PRODUCTS_PREFIX}/barcode/${b}`, {
     method: "GET",
-    headers: { "X-Tenant": tenantSlug } as JsonHeaders,
+    tenantSlug,
   });
 }

@@ -85,11 +85,11 @@ export default function InterbranchMismatchesClient({
     reportId: "interbranch-mismatches",
     tenantSlug,
     params: { branchId, aggregateAll },
-    queryFn: async () => {
+    queryFn: async (scope) => {
       const res = await getInterbranchMismatches(
         tenantSlug,
-        branchId,
-        aggregateAll,
+        scope.branchId,
+        scope.aggregateAll,
       );
       return res.items ?? [];
     },

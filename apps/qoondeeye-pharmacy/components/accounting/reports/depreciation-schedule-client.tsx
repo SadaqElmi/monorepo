@@ -64,8 +64,8 @@ export default function DepreciationScheduleReportClient({
     reportId: "depreciation-schedule",
     tenantSlug,
     params: { asOf, branchId, aggregateAll },
-    queryFn: async () => {
-      const all = await getTrialBalance(tenantSlug, asOf, branchId, aggregateAll);
+    queryFn: async (scope) => {
+      const all = await getTrialBalance(tenantSlug, asOf, scope.branchId, scope.aggregateAll);
       return filterDepreciationTrialBalanceLines(all);
     },
     initialData:

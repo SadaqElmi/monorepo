@@ -148,17 +148,17 @@ export default function PharmacyStaffPage() {
   const staffQuery = useQuery({
     queryKey: erpKeys.staff(tenantSlug, branchFacet),
     queryFn: () => getStaff(tenantSlug),
-    enabled: Boolean(tenantSlug),
+    enabled: Boolean(tenantSlug && branchFacet),
     staleTime: ERP_STALE_LIST,
   });
   const rolesQuery = useQuery({
     queryKey: erpKeys.roles(tenantSlug, branchFacet),
     queryFn: () => getRoles(tenantSlug),
-    enabled: Boolean(tenantSlug),
+    enabled: Boolean(tenantSlug && branchFacet),
     staleTime: ERP_STALE_STATIC,
   });
   const branchesQuery = useErpBranches(tenantSlug, {
-    enabled: Boolean(tenantSlug),
+    enabled: Boolean(tenantSlug && branchFacet),
   });
 
   const staff = staffQuery.data ?? [];

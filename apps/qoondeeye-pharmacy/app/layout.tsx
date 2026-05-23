@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { Geist_Mono, Roboto } from "next/font/google";
 import "./globals.css";
+import { GlobalErrorBoundary } from "@/components/global-error-boundary";
 import { QueryClientProvider } from "@/components/query-provider";
 import { TooltipProvider } from "@/components/ui/tooltip";
 
@@ -31,7 +32,9 @@ export default function RootLayout({
         className={`${roboto.variable} ${geistMono.variable}`}
       >
         <QueryClientProvider>
-          <TooltipProvider>{children}</TooltipProvider>
+          <GlobalErrorBoundary>
+            <TooltipProvider>{children}</TooltipProvider>
+          </GlobalErrorBoundary>
         </QueryClientProvider>
       </body>
     </html>

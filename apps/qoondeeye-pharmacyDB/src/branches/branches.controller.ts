@@ -20,51 +20,43 @@ export class BranchesController {
     private readonly tenantContext: TenantContextService,
   ) {}
 
-  private ensureTenant() {
-    if (!this.tenantContext.getTenant()) {
+  private ensureTenant(): { schema: string; tenantId: string } {
+    const tenant = this.tenantContext.getTenant();
+    if (!tenant) {
       throw new BadRequestException(
         'Tenant context required. Use X-Tenant header (e.g. X-Tenant: pharmacy1)',
       );
     }
+    return { schema: tenant.schemaName, tenantId: tenant.id };
   }
 
   @Get()
   findAll() {
-    this.ensureTenant();
-    return this.branchesService.findAll(this.tenantContext.getSchemaName()!);
+    const { schema, tenantId } = this.ensureTenant();
+    return this.branchesService.findAll(schema, tenantId);
   }
 
   @Get(':id')
   findOne(@Param('id') id: string) {
-    this.ensureTenant();
-    return this.branchesService.findOne(
-      this.tenantContext.getSchemaName()!,
-      id,
-    );
+    const { schema } = this.ensureTenant();
+    return this.branchesService.findOne(schema, id);
   }
 
   @Post()
   create(@Body() dto: CreateBranchDto) {
-    this.ensureTenant();
-    return this.branchesService.create(
-      this.tenantContext.getSchemaName()!,
-      dto,
-    );
+    const { schema, tenantId } = this.ensureTenant();
+    return this.branchesService.create(schema, tenantId, dto);
   }
 
   @Patch(':id')
   update(@Param('id') id: string, @Body() dto: UpdateBranchDto) {
-    this.ensureTenant();
-    return this.branchesService.update(
-      this.tenantContext.getSchemaName()!,
-      id,
-      dto,
-    );
+    const { schema, tenantId } = this.ensureTenant();
+    return this.branchesService.update(schema, tenantId, id, dto);
   }
 
   @Delete(':id')
   remove(@Param('id') id: string) {
-    this.ensureTenant();
-    return this.branchesService.remove(this.tenantContext.getSchemaName()!, id);
+    const { schema } = this.ensureTenant();
+    return this.branchesService.remove(schema, id);
   }
 }

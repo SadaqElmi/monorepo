@@ -69,8 +69,8 @@ export default function AnalyticReportClient({
     reportId: "analytic",
     tenantSlug,
     params: { from, to, branchId, aggregateAll },
-    queryFn: () =>
-      getAnalyticReport(tenantSlug, from, to, branchId, aggregateAll),
+    queryFn: (scope) =>
+      getAnalyticReport(tenantSlug, from, to, scope.branchId, scope.aggregateAll),
     initialData:
       serverPrefetched && initialData != null ? initialData : undefined,
     enabled: rangeCheck.ok,

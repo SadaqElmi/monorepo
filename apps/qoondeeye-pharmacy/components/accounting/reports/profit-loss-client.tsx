@@ -112,9 +112,9 @@ export default function ProfitLossReportClient({
       compareTo,
       compareSnapshot,
     },
-    queryFn: async () => {
+    queryFn: async (scope) => {
       const [res, driverRes] = await Promise.all([
-        getIncomeStatement(tenantSlug, from, to, branchId, aggregateAll, {
+        getIncomeStatement(tenantSlug, from, to, scope.branchId, scope.aggregateAll, {
           breakdown: monthly ? "monthly" : undefined,
           compareFrom: compareFrom || undefined,
           compareTo: compareTo || undefined,
@@ -125,8 +125,8 @@ export default function ProfitLossReportClient({
           from,
           to,
           "inventory",
-          branchId,
-          aggregateAll,
+          scope.branchId,
+          scope.aggregateAll,
         ),
       ]);
       return { data: res, varianceDrivers: driverRes.rows?.[0] ?? null };

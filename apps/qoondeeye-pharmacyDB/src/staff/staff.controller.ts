@@ -10,7 +10,7 @@ import {
   ForbiddenException,
   Req,
 } from '@nestjs/common';
-import type { Request } from 'express';
+import type { FastifyRequest } from 'fastify';
 import { TenantContextService } from '../tenant/tenant-context.service';
 import { StaffService } from './staff.service';
 import { CreateStaffDto } from './dto/create-staff.dto';
@@ -44,7 +44,7 @@ export class StaffController {
   }
 
   @Post()
-  create(@Body() dto: CreateStaffDto, @Req() req: Request) {
+  create(@Body() dto: CreateStaffDto, @Req() req: FastifyRequest) {
     this.ensureTenant();
     const allowedBranchIds = req.allowedBranchIds ?? [];
     if (!allowedBranchIds.length || !req.branchId) {
@@ -63,7 +63,7 @@ export class StaffController {
   update(
     @Param('id') id: string,
     @Body() dto: UpdateStaffDto,
-    @Req() req: Request,
+    @Req() req: FastifyRequest,
   ) {
     this.ensureTenant();
     const allowedBranchIds = req.allowedBranchIds ?? [];

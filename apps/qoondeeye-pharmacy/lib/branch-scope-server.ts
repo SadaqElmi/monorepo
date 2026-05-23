@@ -6,7 +6,7 @@ import {
   ACTIVE_BRANCH_AGGREGATE_COOKIE,
   ACTIVE_BRANCH_ID_COOKIE,
 } from "@/lib/branch-cookie";
-import { hasGlobalBranchAccess, normalizeRole } from "@/lib/branch-access";
+import { reconcileBranchSelection } from "@/lib/branch-reconcile-core";
 import { sanitizeBranchIdForQuery } from "@/lib/branch-scope";
 
 export type ServerBranchScope = {
@@ -15,49 +15,27 @@ export type ServerBranchScope = {
   branchHeader: string | undefined;
 };
 
-function isRestrictedToAssignedBranch(
-  role?: string | null,
-  canViewAllBranches?: boolean | null,
-): boolean {
-  const normalized = normalizeRole(role);
-  if (!normalized) return false;
-  if (hasGlobalBranchAccess(normalized, canViewAllBranches)) return false;
-  return true;
-}
-
 async function resolveServerBranchScope(
   user: AuthCookiePayload,
 ): Promise<ServerBranchScope> {
   const jar = await cookies();
-  const assigned = user.assignedBranchId?.trim() || undefined;
-  const restricted = isRestrictedToAssignedBranch(
-    user.role,
-    user.canViewAllBranches,
-  );
-
-  if (restricted && assigned) {
-    return {
-      branchId: sanitizeBranchIdForQuery(assigned),
-      aggregateAll: false,
-      branchHeader: assigned,
-    };
-  }
-
   const aggregateCookie = jar.get(ACTIVE_BRANCH_AGGREGATE_COOKIE)?.value === "1";
   const branchCookie = jar.get(ACTIVE_BRANCH_ID_COOKIE)?.value?.trim();
 
-  if (
-    aggregateCookie &&
-    hasGlobalBranchAccess(user.role, user.canViewAllBranches)
-  ) {
-    return { branchId: undefined, aggregateAll: true, branchHeader: "all" };
-  }
+  const reconciled = reconcileBranchSelection({
+    role: user.role,
+    canViewAllBranches: user.canViewAllBranches,
+    assignedBranchId: user.assignedBranchId,
+    allowedBranchIds: user.allowedBranchIds,
+    rawSelection: branchCookie,
+    aggregateAllRequested: aggregateCookie,
+  });
 
-  const branchId = sanitizeBranchIdForQuery(branchCookie) ?? assigned;
+  const branchId = sanitizeBranchIdForQuery(reconciled.branchId);
   return {
     branchId,
-    aggregateAll: false,
-    branchHeader: branchId,
+    aggregateAll: reconciled.aggregateAll,
+    branchHeader: reconciled.branchHeader,
   };
 }
 

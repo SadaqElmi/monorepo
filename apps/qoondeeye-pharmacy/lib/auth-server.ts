@@ -73,7 +73,10 @@ export function sessionToDisplayUser(session: ServerSession) {
     tenantSlug: session.tenantSlug ?? null,
     assignedBranchId: session.assignedBranchId ?? null,
     allowedBranchIds: session.allowedBranchIds ?? [],
-    canViewAllBranches: Boolean(session.canViewAllBranches),
+    canViewAllBranches:
+      typeof session.canViewAllBranches === "boolean"
+        ? session.canViewAllBranches
+        : undefined,
     permissions: session.permissions ?? [],
   };
 }

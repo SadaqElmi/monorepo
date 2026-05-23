@@ -65,8 +65,8 @@ export default function TrialBalanceReportClient({
     reportId: "trial-balance",
     tenantSlug,
     params: { asOf, branchId, aggregateAll },
-    queryFn: () =>
-      getTrialBalance(tenantSlug, asOf, branchId, aggregateAll),
+    queryFn: (scope) =>
+      getTrialBalance(tenantSlug, asOf, scope.branchId, scope.aggregateAll),
     initialData:
       serverPrefetched && initialRows != null ? initialRows : undefined,
     enabled: asOfCheck.ok,

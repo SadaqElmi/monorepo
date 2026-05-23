@@ -5,7 +5,7 @@ import {
   Post,
   Req,
 } from '@nestjs/common';
-import type { Request } from 'express';
+import type { FastifyRequest } from 'fastify';
 import { CreateSaleReturnDto } from '../sale-returns/dto/create-sale-return.dto';
 import { SaleReturnsService } from '../sale-returns/sale-returns.service';
 import { TenantContextService } from '../tenant/tenant-context.service';
@@ -18,7 +18,7 @@ export class ReturnsController {
   ) {}
 
   @Post()
-  create(@Body() dto: CreateSaleReturnDto, @Req() req: Request) {
+  create(@Body() dto: CreateSaleReturnDto, @Req() req: FastifyRequest) {
     if (!this.tenantContext.getTenant()) {
       throw new BadRequestException(
         'Tenant context required. Use X-Tenant header (e.g. X-Tenant: pharmacy1)',

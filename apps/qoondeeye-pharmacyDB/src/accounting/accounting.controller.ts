@@ -9,7 +9,7 @@ import {
   Query,
   Req,
 } from '@nestjs/common';
-import type { Request } from 'express';
+import type { FastifyRequest } from 'fastify';
 import {
   assertAllowedBranches,
   assertDtoBranchAllowed,
@@ -113,7 +113,7 @@ export class AccountingController {
     }
   }
 
-  private branchOrThrow(req: Request, branchId?: string): string {
+  private branchOrThrow(req: FastifyRequest, branchId?: string): string {
     return resolveSingleBranchId(req, branchId);
   }
 
@@ -129,7 +129,7 @@ export class AccountingController {
 
   @Get('supplier-payments')
   async listSupplierPayments(
-    @Req() req: Request,
+    @Req() req: FastifyRequest,
     @Query('branchId') branchId?: string,
     @Query('limit') limit?: string,
   ) {
@@ -143,7 +143,7 @@ export class AccountingController {
 
   @Post('supplier-payments')
   async createSupplierPayment(
-    @Req() req: Request,
+    @Req() req: FastifyRequest,
     @Body() dto: CreateSupplierPaymentDto,
   ) {
     this.ensureTenant();
@@ -157,7 +157,7 @@ export class AccountingController {
 
   @Get('customer-payments')
   async listCustomerPayments(
-    @Req() req: Request,
+    @Req() req: FastifyRequest,
     @Query('branchId') branchId?: string,
     @Query('limit') limit?: string,
   ) {
@@ -171,7 +171,7 @@ export class AccountingController {
 
   @Post('customer-payments')
   async createCustomerPayment(
-    @Req() req: Request,
+    @Req() req: FastifyRequest,
     @Body() dto: CreateCustomerPaymentDto,
   ) {
     this.ensureTenant();
@@ -185,7 +185,7 @@ export class AccountingController {
 
   @Get('journal-books')
   async listJournalBooks(
-    @Req() req: Request,
+    @Req() req: FastifyRequest,
     @Query('branchId') branchId?: string,
   ) {
     this.ensureTenant();
@@ -200,7 +200,7 @@ export class AccountingController {
 
   @Get('journal-lines')
   async journalLines(
-    @Req() req: Request,
+    @Req() req: FastifyRequest,
     @Query('branchId') branchId?: string,
     @Query('branchIds') branchIds?: string,
     @Query('aggregateAll') aggregateAll?: string,
@@ -278,7 +278,7 @@ export class AccountingController {
 
   @Get('journal-audit')
   async journalAudit(
-    @Req() req: Request,
+    @Req() req: FastifyRequest,
     @Query('branchId') branchId?: string,
     @Query('asOf') asOf?: string,
   ) {
@@ -292,7 +292,7 @@ export class AccountingController {
 
   @Get('audit-trail')
   async auditTrail(
-    @Req() req: Request,
+    @Req() req: FastifyRequest,
     @Query('branchId') branchId?: string,
     @Query('limit') limit?: string,
     @Query('page') page?: string,
@@ -351,7 +351,7 @@ export class AccountingController {
 
   @Get('close-readiness')
   async closeReadiness(
-    @Req() req: Request,
+    @Req() req: FastifyRequest,
     @Query('branchId') branchId?: string,
     @Query('branchIds') branchIds?: string,
     @Query('aggregateAll') aggregateAll?: string,
@@ -379,7 +379,7 @@ export class AccountingController {
 
   @Post('period/approve')
   async approvePeriod(
-    @Req() req: Request,
+    @Req() req: FastifyRequest,
     @Body()
     body: {
       asOf?: string;
@@ -409,7 +409,7 @@ export class AccountingController {
 
   @Post('period/reopen')
   async reopenPeriod(
-    @Req() req: Request,
+    @Req() req: FastifyRequest,
     @Body()
     body: {
       asOf?: string;
@@ -439,7 +439,7 @@ export class AccountingController {
 
   @Get('chart-of-accounts')
   async chartOfAccounts(
-    @Req() req: Request,
+    @Req() req: FastifyRequest,
     @Query('branchId') branchId?: string,
   ) {
     this.ensureTenant();
@@ -458,7 +458,7 @@ export class AccountingController {
   }
 
   @Get('journal-entries/:id')
-  async journalEntryById(@Req() req: Request, @Param('id') id: string) {
+  async journalEntryById(@Req() req: FastifyRequest, @Param('id') id: string) {
     this.ensureTenant();
     const allowed = assertAllowedBranches(req);
     const schema = this.tenantContext.getSchemaName()!;
@@ -489,7 +489,7 @@ export class AccountingController {
 
   @Get('journal-entries')
   async journalEntries(
-    @Req() req: Request,
+    @Req() req: FastifyRequest,
     @Query('branchId') branchId?: string,
     @Query('limit') limit?: string,
     @Query('sourceType') sourceType?: string,
@@ -567,7 +567,7 @@ export class AccountingController {
    */
   @Post('chart-of-accounts/merge')
   async mergeChartOfAccounts(
-    @Req() req: Request,
+    @Req() req: FastifyRequest,
     @Body() dto: MergeChartOfAccountsDto,
   ) {
     this.ensureTenant();
@@ -589,7 +589,7 @@ export class AccountingController {
 
   @Post('journal-entries')
   async createManualJournal(
-    @Req() req: Request,
+    @Req() req: FastifyRequest,
     @Body() dto: CreateManualJournalDto,
   ) {
     this.ensureTenant();
@@ -647,7 +647,7 @@ export class AccountingController {
 
   @Get('payment-terms')
   async listPaymentTerms(
-    @Req() req: Request,
+    @Req() req: FastifyRequest,
     @Query('branchId') branchId?: string,
   ) {
     this.ensureTenant();
@@ -667,7 +667,7 @@ export class AccountingController {
 
   @Post('payment-terms')
   async createPaymentTerm(
-    @Req() req: Request,
+    @Req() req: FastifyRequest,
     @Body() dto: CreatePaymentTermDto,
   ) {
     this.ensureTenant();
@@ -689,7 +689,7 @@ export class AccountingController {
 
   @Get('follow-up-levels')
   async listFollowUpLevels(
-    @Req() req: Request,
+    @Req() req: FastifyRequest,
     @Query('branchId') branchId?: string,
   ) {
     this.ensureTenant();
@@ -709,7 +709,7 @@ export class AccountingController {
 
   @Post('follow-up-levels')
   async createFollowUpLevel(
-    @Req() req: Request,
+    @Req() req: FastifyRequest,
     @Body() dto: CreateFollowUpLevelDto,
   ) {
     this.ensureTenant();
@@ -731,7 +731,7 @@ export class AccountingController {
 
   @Get('configuration/summary')
   async configurationSummary(
-    @Req() req: Request,
+    @Req() req: FastifyRequest,
     @Query('branchId') branchId?: string,
   ) {
     this.ensureTenant();
@@ -774,7 +774,7 @@ export class AccountingController {
 
   @Get('security/branch-access-metrics')
   async branchAccessMetrics(
-    @Req() req: Request,
+    @Req() req: FastifyRequest,
     @Query('branchId') branchId?: string,
     @Query('from') from?: string,
     @Query('to') to?: string,

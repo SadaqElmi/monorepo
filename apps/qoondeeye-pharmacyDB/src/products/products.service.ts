@@ -3,6 +3,15 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
+import { toPagedResult, type PagedResult } from '../common/pagination.util';
+import { resolveCatalogCacheTtlMs } from '../cache/cache-catalog.config';
+import { CacheInvalidationService } from '../cache/cache-invalidation.service';
+import {
+  catalogListCacheKey,
+  normalizeBranchScope,
+} from '../cache/cache-keys';
+import { catalogBranchTags, catalogTenantTags } from '../cache/cache-tags';
+import { TaggedCacheService } from '../cache/tagged-cache.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { CreateProductDto } from './dto/create-product.dto';
 import { UpdateProductDto } from './dto/update-product.dto';
@@ -62,7 +71,13 @@ export interface ProductTransferCatalogRow extends ProductJoinedRow {
 
 @Injectable()
 export class ProductsService {
-  constructor(private readonly prisma: PrismaService) {}
+  private readonly catalogTtlMs = resolveCatalogCacheTtlMs();
+
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly taggedCache: TaggedCacheService,
+    private readonly cacheInvalidation: CacheInvalidationService,
+  ) {}
 
   /** `paramIndex` is the placeholder number for the uuid[] (use 2 when $1 is already barcode/id). */
   private branchVisibilityClause(allowedBranchIds: string[], paramIndex = 1) {
@@ -76,7 +91,33 @@ export class ProductsService {
     };
   }
 
-  async findAll(schemaName: string, allowedBranchIds: string[]) {
+  private catalogTags(tenantId: string, allowedBranchIds: string[]) {
+    return [
+      ...catalogBranchTags(tenantId, allowedBranchIds),
+      ...catalogTenantTags(tenantId),
+    ];
+  }
+
+  async findAll(
+    schemaName: string,
+    tenantId: string,
+    allowedBranchIds: string[],
+  ) {
+    const scope = normalizeBranchScope(allowedBranchIds);
+    const key = catalogListCacheKey(tenantId, scope, 'products');
+    const tags = this.catalogTags(tenantId, allowedBranchIds);
+    return this.taggedCache.getOrSet(
+      key,
+      tags,
+      this.catalogTtlMs,
+      () => this.findAllUncached(schemaName, allowedBranchIds),
+    );
+  }
+
+  private async findAllUncached(
+    schemaName: string,
+    allowedBranchIds: string[],
+  ) {
     const vis = this.branchVisibilityClause(allowedBranchIds);
     return this.prisma.withTenantSchema(schemaName, async (tx) => {
       return tx.$queryRawUnsafe<ProductRow[]>(
@@ -89,8 +130,47 @@ export class ProductsService {
     });
   }
 
+  async findAllPaged(
+    schemaName: string,
+    allowedBranchIds: string[],
+    skip: number,
+    take: number,
+  ): Promise<PagedResult<ProductRow>> {
+    const vis = this.branchVisibilityClause(allowedBranchIds);
+    return this.prisma.withTenantSchema(schemaName, async (tx) => {
+      const [countRow] = await tx.$queryRawUnsafe<{ c: bigint }[]>(
+        `SELECT COUNT(*)::bigint AS c FROM products WHERE ${vis.sql}`,
+        ...vis.params,
+      );
+      const total = Number(countRow?.c ?? 0);
+      const items = await tx.$queryRawUnsafe<ProductRow[]>(
+        `SELECT ${productSelect.replace(/\s+/g, ' ').trim()}
+         FROM products
+         WHERE ${vis.sql}
+         ORDER BY created_at DESC
+         LIMIT $${vis.params.length + 1} OFFSET $${vis.params.length + 2}`,
+        ...vis.params,
+        take,
+        skip,
+      );
+      const page = Math.floor(skip / take) + 1;
+      return toPagedResult(items, total, page, take);
+    });
+  }
+
   /** Full tenant catalog: global product visibility for every branch/user. */
-  async findAllTenantCatalog(schemaName: string) {
+  async findAllTenantCatalog(schemaName: string, tenantId: string) {
+    const key = catalogListCacheKey(tenantId, 'all', 'products:catalog');
+    const tags = catalogTenantTags(tenantId);
+    return this.taggedCache.getOrSet(
+      key,
+      tags,
+      this.catalogTtlMs,
+      () => this.findAllTenantCatalogUncached(schemaName),
+    );
+  }
+
+  private async findAllTenantCatalogUncached(schemaName: string) {
     return this.prisma.withTenantSchema(schemaName, async (tx) => {
       return tx.$queryRawUnsafe<ProductJoinedRow[]>(
         `SELECT ${productSelectJoined.replace(/\s+/g, ' ').trim()}
@@ -101,7 +181,7 @@ export class ProductsService {
     });
   }
 
-  /** Transfer catalog scoped to active branch visibility + inventory presence. */
+  /** Transfer catalog scoped to active branch visibility + inventory presence. Not cached (live stock). */
   async findTransferCatalog(schemaName: string, allowedBranchIds: string[]) {
     if (!allowedBranchIds.length) return [];
     return this.prisma.withTenantSchema(schemaName, async (tx) => {
@@ -225,10 +305,18 @@ export class ProductsService {
     });
   }
 
-  async create(schemaName: string, dto: CreateProductDto) {
-    return this.prisma.withTenantSchema(schemaName, async (tx) => {
+  private async invalidateCatalog(
+    schemaName: string,
+    tenantId: string,
+    branchIds: string[],
+  ) {
+    await this.cacheInvalidation.invalidateCatalogForBranches(tenantId, branchIds);
+  }
+
+  async create(schemaName: string, tenantId: string, dto: CreateProductDto) {
+    const row = await this.prisma.withTenantSchema(schemaName, async (tx) => {
       try {
-        const [row] = await tx.$queryRawUnsafe<ProductRow[]>(
+        const [created] = await tx.$queryRawUnsafe<ProductRow[]>(
           `INSERT INTO products (branch_id, name, generic_name, barcode, list_price, strength, formulation, category_id, unit, description)
            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
            RETURNING ${productSelect.replace(/\s+/g, ' ').trim()}`,
@@ -248,9 +336,9 @@ export class ProductsService {
            SELECT $1::uuid, b.id, 0, 10
            FROM branches b
            ON CONFLICT (product_id, branch_id) DO NOTHING`,
-          row.id,
+          created.id,
         );
-        return row;
+        return created;
       } catch (e: unknown) {
         const msg = e instanceof Error ? e.message : String(e);
         if (msg.includes('products_barcode_unique') || msg.includes('unique')) {
@@ -261,15 +349,19 @@ export class ProductsService {
         throw e;
       }
     });
+    const branchIds = await this.allBranchIds(schemaName);
+    await this.invalidateCatalog(schemaName, tenantId, branchIds);
+    return row;
   }
 
   async update(
     schemaName: string,
+    tenantId: string,
     id: string,
     dto: UpdateProductDto,
     allowedBranchIds: string[],
   ) {
-    return this.prisma.withTenantSchema(schemaName, async (tx) => {
+    const row = await this.prisma.withTenantSchema(schemaName, async (tx) => {
       const name = dto.name;
       const genericName = dto.genericName;
       const barcode = dto.barcode ?? dto.sku;
@@ -281,7 +373,7 @@ export class ProductsService {
       const skipListPrice = dto.listPrice === undefined;
 
       try {
-        const [row] = await tx.$queryRawUnsafe<ProductRow[]>(
+        const [updated] = await tx.$queryRawUnsafe<ProductRow[]>(
           `UPDATE products SET
            name = CASE WHEN $2::text IS NULL THEN name ELSE $2 END,
            generic_name = CASE WHEN $3::text IS NULL THEN generic_name ELSE $3 END,
@@ -309,7 +401,7 @@ export class ProductsService {
           description ?? null,
           allowedBranchIds,
         );
-        return row ?? null;
+        return updated ?? null;
       } catch (e: unknown) {
         const msg = e instanceof Error ? e.message : String(e);
         if (msg.includes('products_barcode_unique') || msg.includes('unique')) {
@@ -320,38 +412,35 @@ export class ProductsService {
         throw e;
       }
     });
+    await this.invalidateCatalog(schemaName, tenantId, allowedBranchIds);
+    return row;
   }
 
-  async remove(schemaName: string, id: string, allowedBranchIds: string[]) {
-    return this.prisma.withTenantSchema(schemaName, async (tx) => {
+  async remove(
+    schemaName: string,
+    tenantId: string,
+    id: string,
+    allowedBranchIds: string[],
+  ) {
+    await this.prisma.withTenantSchema(schemaName, async (tx) => {
       await tx.$executeRawUnsafe(
-        `UPDATE purchase_items
-         SET product_id = NULL
-         WHERE product_id = $1`,
+        `UPDATE purchase_items SET product_id = NULL WHERE product_id = $1`,
         id,
       );
       await tx.$executeRawUnsafe(
-        `UPDATE batches
-         SET product_id = NULL
-         WHERE product_id = $1`,
+        `UPDATE batches SET product_id = NULL WHERE product_id = $1`,
         id,
       );
       await tx.$executeRawUnsafe(
-        `UPDATE inventory
-         SET product_id = NULL
-         WHERE product_id = $1`,
+        `UPDATE inventory SET product_id = NULL WHERE product_id = $1`,
         id,
       );
       await tx.$executeRawUnsafe(
-        `UPDATE sale_items
-         SET product_id = NULL
-         WHERE product_id = $1`,
+        `UPDATE sale_items SET product_id = NULL WHERE product_id = $1`,
         id,
       );
       await tx.$executeRawUnsafe(
-        `UPDATE sale_return_items
-         SET product_id = NULL
-         WHERE product_id = $1`,
+        `UPDATE sale_return_items SET product_id = NULL WHERE product_id = $1`,
         id,
       );
       const deletedCount = await tx.$executeRawUnsafe(
@@ -363,7 +452,15 @@ export class ProductsService {
       if (deletedCount === 0) {
         throw new NotFoundException('Product not found');
       }
-      return { deleted: true };
     });
+    await this.invalidateCatalog(schemaName, tenantId, allowedBranchIds);
+    return { deleted: true };
+  }
+
+  private async allBranchIds(schemaName: string): Promise<string[]> {
+    const rows = await this.prisma.withTenantSchema(schemaName, (tx) =>
+      tx.$queryRawUnsafe<{ id: string }[]>(`SELECT id FROM branches`),
+    );
+    return rows.map((r) => r.id);
   }
 }

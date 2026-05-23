@@ -178,7 +178,7 @@ export default function BatchesPage({
   const batchesQuery = useQuery({
     queryKey: erpKeys.batches(tenantSlug, branchFacet),
     queryFn: () => getBatches(tenantSlug),
-    enabled: Boolean(tenantSlug),
+    enabled: Boolean(tenantSlug && branchFacet),
     staleTime: ERP_STALE_LIST,
     initialData:
       serverPrefetched && initialBatches ? initialBatches : undefined,

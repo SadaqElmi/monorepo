@@ -1,4 +1,13 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
+import { toPagedResult, type PagedResult } from '../common/pagination.util';
+import { resolveCatalogCacheTtlMs } from '../cache/cache-catalog.config';
+import { CacheInvalidationService } from '../cache/cache-invalidation.service';
+import {
+  catalogListCacheKey,
+  normalizeBranchScope,
+} from '../cache/cache-keys';
+import { catalogBranchTags, catalogTenantTags } from '../cache/cache-tags';
+import { TaggedCacheService } from '../cache/tagged-cache.service';
 import { PrismaService } from '../prisma/prisma.service';
 
 const categorySelect = `
@@ -20,9 +29,34 @@ export interface ProductCategoryRow {
 
 @Injectable()
 export class CategoriesService {
-  constructor(private readonly prisma: PrismaService) {}
+  private readonly catalogTtlMs = resolveCatalogCacheTtlMs();
 
-  async findAll(schemaName: string, allowedBranchIds: string[]) {
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly taggedCache: TaggedCacheService,
+    private readonly cacheInvalidation: CacheInvalidationService,
+  ) {}
+
+  async findAll(
+    schemaName: string,
+    tenantId: string,
+    allowedBranchIds: string[],
+  ) {
+    const scope = normalizeBranchScope(allowedBranchIds);
+    const key = catalogListCacheKey(tenantId, scope, 'categories');
+    const tags = [
+      ...catalogBranchTags(tenantId, allowedBranchIds),
+      ...catalogTenantTags(tenantId),
+    ];
+    return this.taggedCache.getOrSet(
+      key,
+      tags,
+      this.catalogTtlMs,
+      () => this.findAllUncached(schemaName, allowedBranchIds),
+    );
+  }
+
+  private findAllUncached(schemaName: string, allowedBranchIds: string[]) {
     return this.prisma.withTenantSchema(schemaName, (tx) => {
       if (!allowedBranchIds.length) {
         return tx.$queryRawUnsafe<ProductCategoryRow[]>(
@@ -39,6 +73,51 @@ export class CategoriesService {
          ORDER BY name`,
         allowedBranchIds,
       );
+    });
+  }
+
+  async findAllPaged(
+    schemaName: string,
+    allowedBranchIds: string[],
+    skip: number,
+    take: number,
+  ): Promise<PagedResult<ProductCategoryRow>> {
+    return this.prisma.withTenantSchema(schemaName, async (tx) => {
+      if (!allowedBranchIds.length) {
+        const [countRow] = await tx.$queryRawUnsafe<{ c: bigint }[]>(
+          `SELECT COUNT(*)::bigint AS c FROM product_categories WHERE branch_id IS NULL`,
+        );
+        const total = Number(countRow?.c ?? 0);
+        const items = await tx.$queryRawUnsafe<ProductCategoryRow[]>(
+          `SELECT ${categorySelect.replace(/\s+/g, ' ').trim()}
+           FROM product_categories
+           WHERE branch_id IS NULL
+           ORDER BY name
+           LIMIT $1 OFFSET $2`,
+          take,
+          skip,
+        );
+        const page = Math.floor(skip / take) + 1;
+        return toPagedResult(items, total, page, take);
+      }
+      const [countRow] = await tx.$queryRawUnsafe<{ c: bigint }[]>(
+        `SELECT COUNT(*)::bigint AS c FROM product_categories
+         WHERE (branch_id IS NULL OR branch_id = ANY($1::uuid[]))`,
+        allowedBranchIds,
+      );
+      const total = Number(countRow?.c ?? 0);
+      const items = await tx.$queryRawUnsafe<ProductCategoryRow[]>(
+        `SELECT ${categorySelect.replace(/\s+/g, ' ').trim()}
+         FROM product_categories
+         WHERE (branch_id IS NULL OR branch_id = ANY($1::uuid[]))
+         ORDER BY name
+         LIMIT $2 OFFSET $3`,
+        allowedBranchIds,
+        take,
+        skip,
+      );
+      const page = Math.floor(skip / take) + 1;
+      return toPagedResult(items, total, page, take);
     });
   }
 
@@ -68,6 +147,7 @@ export class CategoriesService {
 
   async create(
     schemaName: string,
+    tenantId: string,
     dto: {
       name: string;
       description?: string;
@@ -76,8 +156,8 @@ export class CategoriesService {
     },
     branchId: string | null,
   ) {
-    return this.prisma.withTenantSchema(schemaName, async (tx) => {
-      const [row] = await tx.$queryRawUnsafe<ProductCategoryRow[]>(
+    const row = await this.prisma.withTenantSchema(schemaName, async (tx) => {
+      const [created] = await tx.$queryRawUnsafe<ProductCategoryRow[]>(
         `INSERT INTO product_categories (branch_id, name, description, slug, parent_id)
          VALUES ($1, $2, $3, $4, $5)
          RETURNING ${categorySelect.replace(/\s+/g, ' ').trim()}`,
@@ -87,12 +167,19 @@ export class CategoriesService {
         dto.slug ?? null,
         dto.parentId ?? null,
       );
-      return row;
+      return created;
     });
+    const branchIds = branchId ? [branchId] : [];
+    await this.cacheInvalidation.invalidateCatalogForBranches(
+      tenantId,
+      branchIds.length ? branchIds : await this.allBranchIds(schemaName),
+    );
+    return row;
   }
 
   async update(
     schemaName: string,
+    tenantId: string,
     id: string,
     dto: {
       name?: string;
@@ -105,9 +192,9 @@ export class CategoriesService {
     const parentProvided = dto.parentId !== undefined;
     const parentVal = dto.parentId ?? null;
 
-    return this.prisma.withTenantSchema(schemaName, async (tx) => {
+    const row = await this.prisma.withTenantSchema(schemaName, async (tx) => {
       if (!allowedBranchIds.length) {
-        const [row] = await tx.$queryRawUnsafe<ProductCategoryRow[]>(
+        const [updated] = await tx.$queryRawUnsafe<ProductCategoryRow[]>(
           `UPDATE product_categories
            SET
              name = COALESCE($2, name),
@@ -124,9 +211,9 @@ export class CategoriesService {
           parentProvided,
           parentVal,
         );
-        return row ?? null;
+        return updated ?? null;
       }
-      const [row] = await tx.$queryRawUnsafe<ProductCategoryRow[]>(
+      const [updated] = await tx.$queryRawUnsafe<ProductCategoryRow[]>(
         `UPDATE product_categories
          SET
            name = COALESCE($3, name),
@@ -144,12 +231,22 @@ export class CategoriesService {
         parentProvided,
         parentVal,
       );
-      return row ?? null;
+      return updated ?? null;
     });
+    await this.cacheInvalidation.invalidateCatalogForBranches(
+      tenantId,
+      allowedBranchIds,
+    );
+    return row;
   }
 
-  async remove(schemaName: string, id: string, allowedBranchIds: string[]) {
-    return this.prisma.withTenantSchema(schemaName, async (tx) => {
+  async remove(
+    schemaName: string,
+    tenantId: string,
+    id: string,
+    allowedBranchIds: string[],
+  ) {
+    await this.prisma.withTenantSchema(schemaName, async (tx) => {
       let n: number;
       if (!allowedBranchIds.length) {
         n = await tx.$executeRawUnsafe(
@@ -168,7 +265,18 @@ export class CategoriesService {
       if (!n || n < 1) {
         throw new NotFoundException('Category not found');
       }
-      return { deleted: true };
     });
+    await this.cacheInvalidation.invalidateCatalogForBranches(
+      tenantId,
+      allowedBranchIds,
+    );
+    return { deleted: true };
+  }
+
+  private async allBranchIds(schemaName: string): Promise<string[]> {
+    const rows = await this.prisma.withTenantSchema(schemaName, (tx) =>
+      tx.$queryRawUnsafe<{ id: string }[]>(`SELECT id FROM branches`),
+    );
+    return rows.map((r) => r.id);
   }
 }

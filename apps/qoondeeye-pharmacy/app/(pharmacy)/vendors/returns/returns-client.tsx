@@ -85,7 +85,7 @@ export default function ReturnsPage() {
       ]);
       return { returns: returnsData, sales: salesData };
     },
-    enabled: Boolean(tenantSlug),
+    enabled: Boolean(tenantSlug && branchFacet),
     staleTime: ERP_STALE_LIST,
   });
   const rows = returnsQuery.data?.returns ?? [];

@@ -69,6 +69,9 @@ import {
 } from "@/lib/api";
 import { useErpCategories } from "@/hooks/queries/use-erp-categories";
 import { useErpInventory } from "@/hooks/queries/use-erp-inventory";
+import { useDebouncedValue } from "@/hooks/use-debounced-value";
+import { CachedQueryToolbar } from "@/components/api/cached-query-toolbar";
+import { ListPagination } from "@/components/api/list-pagination";
 import { useErpProductsCatalog } from "@/hooks/queries/use-erp-products-catalog";
 import { invalidateErpCatalogQueries } from "@/lib/invalidate-erp-catalog";
 import type { InventoryEntry } from "@/lib/services/inventory";
@@ -139,6 +142,9 @@ export default function ProductsPage({
   const [viewProduct, setViewProduct] = useState<Product | null>(null);
   const [categoryTab, setCategoryTab] = useState<string>("__all__");
   const [query, setQuery] = useState("");
+  const debouncedQuery = useDebouncedValue(query, 300);
+  const [tablePage, setTablePage] = useState(1);
+  const TABLE_PAGE_SIZE = 25;
 
   useEffect(() => {
     const handler = () => {
@@ -156,13 +162,24 @@ export default function ProductsPage({
     return () => window.removeEventListener("activeBranchChanged", handler);
   }, []);
 
+  const dataUpdatedAt = Math.max(
+    productsQuery.dataUpdatedAt,
+    categoriesQuery.dataUpdatedAt,
+    inventoryQuery.dataUpdatedAt,
+  );
+  const isListFetching =
+    productsQuery.isFetching ||
+    categoriesQuery.isFetching ||
+    inventoryQuery.isFetching;
+
   const handleRefresh = () => {
     if (!tenantSlug.trim()) {
       setError("Enter a tenant slug to load products.");
       return;
     }
     setTenantSlug((prev) => prev.trim());
-    void queryClient.invalidateQueries({ queryKey: ["erp"] });
+    void invalidateErpCatalogQueries(queryClient);
+    void inventoryQuery.refetch();
   };
 
   const displayError =
@@ -323,7 +340,7 @@ export default function ProductsPage({
   );
 
   const filteredProducts = useMemo(() => {
-    const q = query.trim().toLowerCase();
+    const q = debouncedQuery.trim().toLowerCase();
     return [...products]
       .filter((p) =>
         categoryTab === "__all__" ? true : p.categoryId === categoryTab,
@@ -348,7 +365,21 @@ export default function ProductsPage({
       .sort((a, b) =>
         a.name.localeCompare(b.name, undefined, { sensitivity: "base" }),
       );
-  }, [categoryMap, categoryTab, products, query]);
+  }, [categoryMap, categoryTab, products, debouncedQuery]);
+
+  useEffect(() => {
+    setTablePage(1);
+  }, [debouncedQuery, categoryTab]);
+
+  const tableTotalPages = Math.max(
+    1,
+    Math.ceil(filteredProducts.length / TABLE_PAGE_SIZE),
+  );
+  const safeTablePage = Math.min(tablePage, tableTotalPages);
+  const pagedProducts = useMemo(() => {
+    const start = (safeTablePage - 1) * TABLE_PAGE_SIZE;
+    return filteredProducts.slice(start, start + TABLE_PAGE_SIZE);
+  }, [filteredProducts, safeTablePage]);
 
   const productStockMap = useMemo(() => {
     const map = new Map<string, number>();
@@ -456,9 +487,16 @@ export default function ProductsPage({
                     with <code className="font-mono text-xs">X-Tenant</code>.
                   </CardDescription>
                 </div>
-                <div className="inline-flex items-center gap-1.5 rounded-full bg-muted px-3 py-1.5 text-[11px] text-muted-foreground">
-                  <Package className="h-3.5 w-3.5" />
-                  {totalCount} product{totalCount === 1 ? "" : "s"}
+                <div className="flex flex-wrap items-center gap-2">
+                  <div className="inline-flex items-center gap-1.5 rounded-full bg-muted px-3 py-1.5 text-[11px] text-muted-foreground">
+                    <Package className="h-3.5 w-3.5" />
+                    {totalCount} product{totalCount === 1 ? "" : "s"}
+                  </div>
+                  <CachedQueryToolbar
+                    dataUpdatedAt={dataUpdatedAt}
+                    isFetching={isListFetching}
+                    onRefresh={handleRefresh}
+                  />
                 </div>
               </div>
 
@@ -554,7 +592,7 @@ export default function ProductsPage({
                       </TableRow>
                     </TableHeader>
                     <TableBody>
-                      {filteredProducts.map((prod) => {
+                      {pagedProducts.map((prod) => {
                         const categoryName =
                           (prod.categoryId
                             ? categoryMap.get(prod.categoryId)?.name
@@ -656,62 +694,14 @@ export default function ProductsPage({
                     </TableBody>
                   </Table>
 
-                  <div className="flex items-center justify-between border-t bg-muted/20 px-4 py-3">
-                    <span className="text-sm font-medium text-muted-foreground">
-                      Showing {showingCount === 0 ? 0 : 1}-{showingCount} of{" "}
-                      {totalCount.toLocaleString()} products
-                    </span>
-                    <div className="flex items-center gap-2">
-                      <Button
-                        variant="outline"
-                        size="icon-sm"
-                        className="rounded-lg"
-                        disabled
-                      >
-                        <ChevronLeft className="h-4 w-4" />
-                        <span className="sr-only">Previous</span>
-                      </Button>
-                      <div className="flex items-center gap-1">
-                        <Button size="icon-sm" className="rounded-lg" disabled>
-                          1
-                        </Button>
-                        <Button
-                          variant="outline"
-                          size="icon-sm"
-                          className="rounded-lg"
-                          disabled
-                        >
-                          2
-                        </Button>
-                        <Button
-                          variant="outline"
-                          size="icon-sm"
-                          className="rounded-lg"
-                          disabled
-                        >
-                          3
-                        </Button>
-                        <span className="px-1 text-muted-foreground">…</span>
-                        <Button
-                          variant="outline"
-                          size="icon-sm"
-                          className="rounded-lg"
-                          disabled
-                        >
-                          257
-                        </Button>
-                      </div>
-                      <Button
-                        variant="outline"
-                        size="icon-sm"
-                        className="rounded-lg"
-                        disabled
-                      >
-                        <ChevronRight className="h-4 w-4" />
-                        <span className="sr-only">Next</span>
-                      </Button>
-                    </div>
-                  </div>
+                  <ListPagination
+                    className="border-t bg-muted/20 px-4 py-3"
+                    page={safeTablePage}
+                    totalPages={tableTotalPages}
+                    total={showingCount}
+                    onPageChange={setTablePage}
+                    disabled={loading}
+                  />
                 </>
               )}
             </CardContent>

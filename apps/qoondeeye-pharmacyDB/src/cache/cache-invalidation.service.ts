@@ -2,6 +2,8 @@ import { Injectable } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import {
   branchStatsBranchTags,
+  catalogBranchTags,
+  catalogTenantTags,
   financialBranchTags,
   reconciliationTenantTags,
 } from './cache-tags';
@@ -26,6 +28,25 @@ export class CacheInvalidationService {
     return row?.id ?? null;
   }
 
+  /**
+   * Drops catalog list caches (products, categories) for affected branches.
+   * Call after product/category/price/stock mutations so POS does not see stale lists.
+   */
+  async invalidateCatalogForBranches(
+    tenantId: string,
+    branchIds: readonly string[],
+  ): Promise<void> {
+    const tags = [
+      ...catalogBranchTags(tenantId, branchIds),
+      ...catalogTenantTags(tenantId),
+    ];
+    await this.tagged.invalidateTags(tags);
+  }
+
+  async invalidateCatalogTenant(tenantId: string): Promise<void> {
+    await this.tagged.invalidateTags(catalogTenantTags(tenantId));
+  }
+
   /** After sales, purchases, transfers, inventory-related journals, etc. */
   async invalidateFinancialForBranches(
     schemaName: string,
@@ -47,7 +68,7 @@ export class CacheInvalidationService {
   }
 
   /**
-   * Typical post-mutation hook: financial + reconciliation + branch-stats views
+   * Typical post-mutation hook: financial + reconciliation + branch-stats + catalog views
    * for the affected branches. Pass `tenantId` when already known to skip a lookup.
    */
   async invalidateAfterLedgerOrInventoryMutation(input: {
@@ -63,6 +84,7 @@ export class CacheInvalidationService {
     );
     if (tenantId) {
       await this.invalidateReconciliationForTenant(tenantId);
+      await this.invalidateCatalogForBranches(tenantId, input.branchIds);
     }
     await this.invalidateBranchAccessMetrics(
       input.schemaName,
