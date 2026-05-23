@@ -1,6 +1,8 @@
+import { buildPagedQuery, unwrapListResponse } from "@repo/utils";
+import type { Category, PagedList } from "@repo/types";
+
 import { CATEGORIES_PREFIX } from "./endpoints";
-import { type JsonHeaders, jsonFetch } from "./http";
-import type { Category } from "@repo/types";
+import { jsonFetch } from "./http";
 
 export type { Category };
 
@@ -8,11 +10,28 @@ export async function getCategories(
   tenantSlug: string,
   init?: Pick<RequestInit, "signal">,
 ): Promise<Category[]> {
-  return jsonFetch<Category[]>(CATEGORIES_PREFIX, {
+  const data = await jsonFetch<Category[] | PagedList<Category>>(CATEGORIES_PREFIX, {
     method: "GET",
-    headers: { "X-Tenant": tenantSlug } as JsonHeaders,
+    tenantSlug,
     signal: init?.signal,
   });
+  return unwrapListResponse(data).items;
+}
+
+export async function getCategoriesPaged(
+  tenantSlug: string,
+  params: { page: number; limit?: number },
+  init?: Pick<RequestInit, "signal">,
+): Promise<PagedList<Category>> {
+  const q = buildPagedQuery({
+    page: params.page,
+    limit: params.limit ?? 50,
+  });
+  const data = await jsonFetch<Category[] | PagedList<Category>>(
+    `${CATEGORIES_PREFIX}${q}`,
+    { method: "GET", tenantSlug, signal: init?.signal },
+  );
+  return unwrapListResponse(data, params.page, params.limit ?? 50);
 }
 
 export async function createCategory(
@@ -21,17 +40,14 @@ export async function createCategory(
     name: string;
     description?: string;
     slug?: string;
-    /** Default true: shared across all branches. */
     global?: boolean;
     parentId?: string | null;
   },
 ) {
   return jsonFetch<Category>(CATEGORIES_PREFIX, {
     method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      "X-Tenant": tenantSlug,
-    } as JsonHeaders,
+    tenantSlug,
+    headers: { "Content-Type": "application/json" },
     body: JSON.stringify(input),
   });
 }
@@ -48,10 +64,8 @@ export async function updateCategory(
 ) {
   return jsonFetch<Category>(`${CATEGORIES_PREFIX}/${id}`, {
     method: "PATCH",
-    headers: {
-      "Content-Type": "application/json",
-      "X-Tenant": tenantSlug,
-    } as JsonHeaders,
+    tenantSlug,
+    headers: { "Content-Type": "application/json" },
     body: JSON.stringify(input),
   });
 }
@@ -59,7 +73,6 @@ export async function updateCategory(
 export async function deleteCategory(tenantSlug: string, id: string) {
   return jsonFetch<{ deleted: boolean }>(`${CATEGORIES_PREFIX}/${id}`, {
     method: "DELETE",
-    headers: { "X-Tenant": tenantSlug } as JsonHeaders,
+    tenantSlug,
   });
 }
-

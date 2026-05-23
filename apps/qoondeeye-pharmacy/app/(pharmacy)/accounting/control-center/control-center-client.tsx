@@ -34,7 +34,11 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { useReportBranchQuery } from "@/hooks/use-branch-for-reports";
+import {
+  getReportBranchSnapshot,
+  useReportBranchQuery,
+} from "@/hooks/use-branch-for-reports";
+import { useErpAccountingAlerts } from "@/hooks/queries/use-erp-accounting-alerts";
 import { useErpBranchFacet } from "@/hooks/use-erp-branch-facet";
 import { money } from "@/lib/accounting-display";
 import { getStoredUser } from "@/lib/auth-client";
@@ -42,7 +46,6 @@ import { erpKeys } from "@/lib/erp-query-keys";
 import { ERP_STALE_REPORT } from "@/lib/erp-query-options";
 import { ROUTES, inventoryTransferDetailPath } from "@/lib/routes";
 import {
-  getAccountingAlerts,
   getAuditExportUrl,
   getAuditVerify,
   getCloseReadiness,
@@ -144,11 +147,13 @@ export default function ControlCenterPage() {
     ],
   );
 
+  const { query: alertsQuery } = useErpAccountingAlerts();
+
   const controlQuery = useQuery({
     queryKey: erpKeys.controlCenter(tenantSlug, branchFacet, controlParams),
     queryFn: async () => {
+      const { branchId: bid, aggregateAll: agg } = getReportBranchSnapshot();
       const [
-        alertsRes,
         mismatchRes,
         invRes,
         readinessRes,
@@ -157,24 +162,22 @@ export default function ControlCenterPage() {
         explainRes,
         healthRes,
       ] = await Promise.all([
-        getAccountingAlerts(tenantSlug, branchId, aggregateAll),
-        getInterbranchMismatches(tenantSlug, branchId, aggregateAll),
-        getInventoryGlSync(tenantSlug, undefined, branchId, aggregateAll),
-        getCloseReadiness(tenantSlug, branchId, aggregateAll),
-        getAuditVerify(tenantSlug, { branchId, aggregateAll, limit: 10000 }),
+        getInterbranchMismatches(tenantSlug, bid, agg),
+        getInventoryGlSync(tenantSlug, undefined, bid, agg),
+        getCloseReadiness(tenantSlug, bid, agg),
+        getAuditVerify(tenantSlug, { branchId: bid, aggregateAll: agg, limit: 10000 }),
         getVarianceAnalysis(
           tenantSlug,
           defaultFrom,
           defaultTo,
           varianceAccount,
-          branchId,
-          aggregateAll,
+          bid,
+          agg,
         ),
-        getReportExplain(tenantSlug, explainAccount, defaultTo, branchId, aggregateAll),
+        getReportExplain(tenantSlug, explainAccount, defaultTo, bid, agg),
         getIntegrityHealthSnapshots(tenantSlug, { limit: 10 }),
       ]);
       return {
-        alerts: alertsRes.items ?? [],
         mismatches: mismatchRes.items ?? [],
         inventorySync: invRes.rows ?? [],
         readinessStatus: readinessRes.status as "CLEAN" | "WARNING" | "CRITICAL",
@@ -193,11 +196,11 @@ export default function ControlCenterPage() {
         })),
       };
     },
-    enabled: Boolean(tenantSlug),
+    enabled: Boolean(tenantSlug && branchFacet),
     staleTime: ERP_STALE_REPORT,
   });
 
-  const alerts = controlQuery.data?.alerts ?? [];
+  const alerts = alertsQuery.data?.items ?? [];
   const mismatches = controlQuery.data?.mismatches ?? [];
   const inventorySync = controlQuery.data?.inventorySync ?? [];
   const readinessStatus = controlQuery.data?.readinessStatus ?? "CLEAN";

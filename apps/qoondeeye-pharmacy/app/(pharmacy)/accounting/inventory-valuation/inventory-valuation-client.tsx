@@ -45,7 +45,8 @@ export default function InventoryValuationPage({
     reportId: "inventory-valuation",
     tenantSlug,
     params: { branchId, aggregateAll },
-    queryFn: () => getInventoryValuation(tenantSlug, branchId, aggregateAll),
+    queryFn: (scope) =>
+      getInventoryValuation(tenantSlug, scope.branchId, scope.aggregateAll),
     initialData:
       serverPrefetched && initialData != null ? initialData : undefined,
     enabled: Boolean(branchId || aggregateAll),

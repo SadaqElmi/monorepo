@@ -61,7 +61,7 @@ export default function LoansAnalysisReportClient({
     reportId: "loans-analysis",
     tenantSlug,
     params: { branchId, aggregateAll },
-    queryFn: () => getPatientLoans(tenantSlug),
+    queryFn: (_scope) => getPatientLoans(tenantSlug),
     initialData:
       serverPrefetched && initialLoans != null ? initialLoans : undefined,
   });

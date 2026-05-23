@@ -13,13 +13,18 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
 import { getStoredUser } from "@/lib/auth-client";
-import { createSaleReturn, getSaleReturns, type SaleReturn } from "@/lib/api";
+import { ApiErrorAlert } from "@/components/api/api-error-alert";
+import { ListPagination } from "@/components/api/list-pagination";
+import { createSaleReturn, type SaleReturn } from "@/lib/api";
+import { useErpSaleReturnsPaged } from "@/hooks/queries/use-erp-sale-returns-paged";
 
 export default function SaleReturnsPage() {
   const [tenantSlug] = React.useState(
     () => getStoredUser()?.tenantSlug ?? "pharmacy1",
   );
-  const [rows, setRows] = React.useState<SaleReturn[]>([]);
+  const [page, setPage] = React.useState(1);
+  const returnsQuery = useErpSaleReturnsPaged(tenantSlug, page, 25);
+  const rows = returnsQuery.data?.items ?? [];
   const [saleId, setSaleId] = React.useState("");
   const [saleItemId, setSaleItemId] = React.useState("");
   const [quantity, setQuantity] = React.useState("1");
@@ -27,22 +32,9 @@ export default function SaleReturnsPage() {
   const [error, setError] = React.useState<string | null>(null);
   const [saving, setSaving] = React.useState(false);
 
-  const load = React.useCallback(async () => {
-    if (!tenantSlug) return;
-    try {
-      setError(null);
-      const data = await getSaleReturns(tenantSlug);
-      setRows(data);
-    } catch (err) {
-      setError(
-        err instanceof Error ? err.message : "Failed to load sale returns",
-      );
-    }
-  }, [tenantSlug]);
-
-  React.useEffect(() => {
-    load();
-  }, [load]);
+  const load = React.useCallback(() => {
+    void returnsQuery.refetch();
+  }, [returnsQuery]);
 
   const handleCreate = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -68,7 +60,7 @@ export default function SaleReturnsPage() {
       setSaleItemId("");
       setQuantity("1");
       setReason("");
-      await load();
+      await returnsQuery.refetch();
     } catch (err) {
       setError(
         err instanceof Error ? err.message : "Failed to create sale return",
@@ -140,9 +132,7 @@ export default function SaleReturnsPage() {
                 </Button>
               </div>
             </form>
-            {error ? (
-              <p className="mt-3 text-sm text-destructive">{error}</p>
-            ) : null}
+            <ApiErrorAlert error={error} className="mt-3" />
           </CardContent>
         </Card>
 
@@ -163,6 +153,15 @@ export default function SaleReturnsPage() {
                 <p className="text-sm text-muted-foreground">No returns yet.</p>
               ) : null}
             </div>
+            <ListPagination
+              className="mt-4"
+              page={page}
+              totalPages={returnsQuery.data?.totalPages ?? 1}
+              total={returnsQuery.data?.total}
+              onPageChange={setPage}
+              disabled={returnsQuery.isFetching}
+            />
+            <ApiErrorAlert error={returnsQuery.error} className="mt-3" />
           </CardContent>
         </Card>
       </main>

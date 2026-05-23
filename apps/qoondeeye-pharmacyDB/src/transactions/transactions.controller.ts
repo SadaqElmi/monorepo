@@ -8,7 +8,7 @@ import {
   Post,
   Req,
 } from '@nestjs/common';
-import type { Request } from 'express';
+import type { FastifyRequest } from 'fastify';
 import { CreateSaleDto } from '../sales/dto/create-sale.dto';
 import { SalesService } from '../sales/sales.service';
 import { TenantContextService } from '../tenant/tenant-context.service';
@@ -29,7 +29,7 @@ export class TransactionsController {
   }
 
   @Post()
-  create(@Body() dto: CreateSaleDto, @Req() req: Request) {
+  create(@Body() dto: CreateSaleDto, @Req() req: FastifyRequest) {
     this.ensureTenant();
     if (!req.branchId) {
       throw new BadRequestException('Branch required (x-branch-id header)');
@@ -43,7 +43,7 @@ export class TransactionsController {
   }
 
   @Get(':id')
-  findOne(@Param('id') id: string, @Req() req: Request) {
+  findOne(@Param('id') id: string, @Req() req: FastifyRequest) {
     this.ensureTenant();
     const allowedBranchIds = req.allowedBranchIds ?? [];
     if (!allowedBranchIds.length) {

@@ -9,7 +9,7 @@ import {
   Req,
   UseGuards,
 } from '@nestjs/common';
-import type { Request } from 'express';
+import type { FastifyRequest } from 'fastify';
 import { TenantContextService } from '../tenant/tenant-context.service';
 import { TenantService } from '../tenant/tenant.service';
 import { ConsolidationEngineService } from './consolidation-engine.service';
@@ -42,7 +42,7 @@ export class ReportsV1Controller {
   @UseGuards(PermissionGuard)
   @RequirePermissions('run_consolidation')
   async runConsolidation(
-    @Req() req: Request,
+    @Req() req: FastifyRequest,
     @Body() body: CreateConsolidationRunDto,
   ) {
     this.ensureTenant();
@@ -78,7 +78,7 @@ export class ReportsV1Controller {
   @UseGuards(PermissionGuard)
   @RequirePermissions('reverse_consolidation')
   async reverseConsolidation(
-    @Req() req: Request,
+    @Req() req: FastifyRequest,
     @Param('runId') runId: string,
     @Body() body: ReverseConsolidationRunDto,
   ) {
@@ -101,7 +101,7 @@ export class ReportsV1Controller {
   @UseGuards(PermissionGuard)
   @RequirePermissions('finalize_consolidation')
   async finalizeConsolidation(
-    @Req() req: Request,
+    @Req() req: FastifyRequest,
     @Param('runId') runId: string,
   ) {
     this.ensureTenant();
@@ -122,7 +122,7 @@ export class ReportsV1Controller {
   @UseGuards(PermissionGuard)
   @RequirePermissions('view_consolidation_history')
   async consolidationRuns(
-    @Req() req: Request,
+    @Req() req: FastifyRequest,
     @Query('scopeHash') scopeHash?: string,
     @Query('entityId') entityId?: string,
     @Query('periodKey') periodKey?: string,

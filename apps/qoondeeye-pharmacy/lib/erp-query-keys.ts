@@ -68,6 +68,20 @@ export const erpKeys = {
     ["erp", "transfer-monitoring", tenant, facet] as const,
   controlCenter: (tenant: string, facet: string, params: unknown) =>
     ["erp", "control-center", tenant, facet, params] as const,
+  accountingAlerts: (
+    tenant: string,
+    facet: string,
+    branchId: string,
+    aggregateAll: boolean,
+  ) =>
+    [
+      "erp",
+      "accounting-alerts",
+      tenant,
+      facet,
+      branchId,
+      aggregateAll,
+    ] as const,
   posSession: (tenant: string, facet: string, branchId: string) =>
     ["erp", "pos-session", tenant, facet, branchId] as const,
   posStatement: (tenant: string, facet: string, sessionId: string) =>

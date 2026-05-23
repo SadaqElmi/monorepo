@@ -168,11 +168,25 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
   const router = useRouter();
   const queryClient = useQueryClient();
 
+  const prefetchTimerRef = React.useRef<ReturnType<typeof setTimeout> | null>(
+    null,
+  );
+
   const prefetchSidebarModule = React.useCallback(
     (title: string) => {
-      prefetchErpSidebarHints(queryClient, title);
+      if (prefetchTimerRef.current) clearTimeout(prefetchTimerRef.current);
+      prefetchTimerRef.current = setTimeout(() => {
+        prefetchErpSidebarHints(queryClient, title);
+      }, 300);
     },
     [queryClient],
+  );
+
+  React.useEffect(
+    () => () => {
+      if (prefetchTimerRef.current) clearTimeout(prefetchTimerRef.current);
+    },
+    [],
   );
 
   const onCollapsibleOpenChange = React.useCallback(

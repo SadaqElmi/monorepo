@@ -77,14 +77,24 @@ export class SalesService {
     private readonly cacheInvalidation: CacheInvalidationService,
   ) {}
 
+  private static readonly saleListSelect = `
+        SELECT s.id, s.branch_id, s.receipt_number, s.total_amount, s.discount, s.tax, s.sale_date,
+               s.customer_id, s.on_account,
+               pay.method AS payment_method
+         FROM sales s
+         LEFT JOIN LATERAL (
+           SELECT p.method
+           FROM payments p
+           WHERE p.sale_id = s.id
+           ORDER BY p.paid_at ASC NULLS LAST
+           LIMIT 1
+         ) pay ON true`;
+
   async findAll(schemaName: string, allowedBranchIds: string[]) {
     await this.tenantService.applyTenantSchemaPatches(schemaName);
     return this.prisma.withTenantSchema(schemaName, (tx) =>
       tx.$queryRawUnsafe<SaleListRow[]>(
-        `SELECT s.id, s.branch_id, s.receipt_number, s.total_amount, s.discount, s.tax, s.sale_date,
-                s.customer_id, s.on_account,
-                (SELECT p.method FROM payments p WHERE p.sale_id = s.id ORDER BY p.paid_at ASC NULLS LAST LIMIT 1) AS payment_method
-         FROM sales s
+        `${SalesService.saleListSelect}
          WHERE s.branch_id = ANY($1::uuid[])
          ORDER BY s.sale_date DESC`,
         allowedBranchIds,
@@ -106,10 +116,7 @@ export class SalesService {
       );
       const total = Number(countRow?.c ?? 0);
       const items = await tx.$queryRawUnsafe<SaleListRow[]>(
-        `SELECT s.id, s.branch_id, s.receipt_number, s.total_amount, s.discount, s.tax, s.sale_date,
-                s.customer_id, s.on_account,
-                (SELECT p.method FROM payments p WHERE p.sale_id = s.id ORDER BY p.paid_at ASC NULLS LAST LIMIT 1) AS payment_method
-         FROM sales s
+        `${SalesService.saleListSelect}
          WHERE s.branch_id = ANY($1::uuid[])
          ORDER BY s.sale_date DESC
          LIMIT $2 OFFSET $3`,

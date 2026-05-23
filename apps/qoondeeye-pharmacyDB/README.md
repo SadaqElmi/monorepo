@@ -65,17 +65,38 @@ CACHE_DEFAULT_TTL_MS=60000
 
 **Local:** install Redis locally or use Upstash; omit `REDIS_URL` to run without Redis during development.
 
-**What is cached (initial rollout):**
+**What is cached:**
 
-- Dashboard-style reads: executive summary, fiscal report, dashboard series, top products, P&amp;L / balance sheet / cash flow (see [`financial-reports.service.ts`](src/accounting/financial-reports.service.ts)).
+- **Catalog reads (30–60s TTL, `CACHE_CATALOG_TTL_MS`):** products list, tenant product catalog, categories, branches — keys like `tenant:{tenantId}:branch:{branchScope}:products:list`.
+- **Roles list (`CACHE_ROLES_TTL_MS`, default 5m):** `tenant:{tenantId}:branch:all:roles:list`.
+- **Dashboard / reports:** executive summary, fiscal report, dashboard series, top products, P&amp;L / balance sheet / cash flow (see [`financial-reports.service.ts`](src/accounting/financial-reports.service.ts)).
 - Reconciliation: latest completed run, health snapshots (see [`reconciliation.service.ts`](src/reconciliation/reconciliation.service.ts)).
 - Branch security metrics: branch access denied rollups (see [`branch-security-metrics.service.ts`](src/accounting/branch-security-metrics.service.ts)).
 
-**Multi-tenant safety:** every cache key and invalidation **tag** includes tenant schema and branch scope (normalized sorted branch ids). Keys look like `income|{schema}|{branchScope}|…` and tags like `financial:{schema}:branch:{branchId}`.
+**Not cached:** login, `POST` sales/purchases/transfers/journals, POS session posting, `GET` inventory (live stock), `GET` products/transfer-catalog.
+
+**Multi-tenant safety:** every cache key and invalidation **tag** includes public **tenantId** and branch scope. Report keys use `financial:{schema}:branch:{branchId}`; catalog tags use `tenant:{tenantId}:branch:{branchId}:catalog`.
 
 **Invalidation:** targeted only — no `FLUSHDB`. Tag sets (`pharmcare:v1:cache-tag:*`) track which keys belong to `financial:*`, `reconciliation:*`, `branch-stats:*`, etc. Mutations (sales, purchases, transfers + reconciliation runs) call [`CacheInvalidationService`](src/cache/cache-invalidation.service.ts) to drop affected tags.
 
-**Future use:** the shared Redis client and `src/cache/` layout are intended to later add rate limiting, session storage, BullMQ, WebSocket pub/sub, and POS sync — keep new Redis usage behind small services in that folder.
+**Rate limiting:** uses the same Redis client when available ([`src/common/rate-limit/`](src/common/rate-limit/)); falls back to in-memory counters per process if Redis is offline (API still starts). Keys are tenant/user/IP-aware and never shared across tenants.
+
+```env
+RATE_LIMIT_ENABLED=true
+RATE_LIMIT_LOGIN_PER_MIN=5
+RATE_LIMIT_PIN_PER_MIN=10
+RATE_LIMIT_STAFF_LOGIN_PER_MIN=10
+RATE_LIMIT_AUTH_OTHER_PER_MIN=10
+RATE_LIMIT_PUBLIC_PER_MIN=30
+RATE_LIMIT_REPORTS_PER_MIN=20
+RATE_LIMIT_API_PER_MIN=200
+LOGIN_RATE_LIMIT_TTL=60
+LOGIN_RATE_LIMIT_MAX=5
+```
+
+Skipped: `GET /api` (health), `GET /api/inventory/stream` (SSE), `OPTIONS`. Tests set `RATE_LIMIT_ENABLED=false` by default ([`test/jest-setup.ts`](test/jest-setup.ts)).
+
+**Structured HTTP logging:** [`src/common/logging/`](src/common/logging/) logs method, path, status, duration, `tenantId`, `branchId`, `userId`, `requestId` (JSON in production). Auth bodies are never logged; sensitive fields are redacted. Slow request warnings: API &gt; `LOG_SLOW_API_MS` (default 500), reports &gt; `LOG_SLOW_REPORT_MS` (default 2000). Prisma slow queries &gt; `PRISMA_SLOW_QUERY_MS` (default 400) log model/target and duration only (no SQL/params).
 
 Device-bound POS rollout flags:
 

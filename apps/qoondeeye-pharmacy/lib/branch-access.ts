@@ -1,4 +1,5 @@
 import { getResolvedStoredUser } from "@/lib/auth-client";
+import { reconcileBranchSelection } from "@/lib/branch-reconcile-core";
 
 const GLOBAL_BRANCH_ACCESS_ROLES = new Set(["admin", "owner"]);
 
@@ -10,14 +11,17 @@ export function hasGlobalBranchAccess(
   role?: string | null,
   canViewAllBranches?: boolean | null,
 ): boolean {
-  if (typeof canViewAllBranches === "boolean") return canViewAllBranches;
+  if (canViewAllBranches === true) return true;
   return GLOBAL_BRANCH_ACCESS_ROLES.has(normalizeRole(role));
 }
 
 export function isRestrictedToAssignedBranch(role?: string | null): boolean {
-  const normalized = normalizeRole(role);
+  const user = getResolvedStoredUser();
+  const normalized = normalizeRole(role ?? user?.role);
   if (!normalized) return false;
-  if (hasGlobalBranchAccess(normalized, getResolvedStoredUser()?.canViewAllBranches)) {
+  if (
+    hasGlobalBranchAccess(normalized, user?.canViewAllBranches)
+  ) {
     return false;
   }
   return true;
@@ -51,18 +55,24 @@ export function getEffectiveClientBranchId(): string | undefined {
  */
 export function getClientBranchIdHeaderForApi(): string | undefined {
   if (typeof window === "undefined") return undefined;
-  try {
-    const raw = localStorage.getItem("branchId")?.trim();
-    if (raw?.toLowerCase() === "all") {
-      const user = getResolvedStoredUser();
-      if (!hasGlobalBranchAccess(user?.role, user?.canViewAllBranches)) {
-        return undefined;
-      }
-      return "all";
-    }
-  } catch {
-    /* ignore */
-  }
-  return getEffectiveClientBranchId();
-}
+  const user = getResolvedStoredUser();
+  if (!user) return undefined;
 
+  let raw = "";
+  try {
+    raw = localStorage.getItem("branchId")?.trim() ?? "";
+  } catch {
+    return undefined;
+  }
+
+  const result = reconcileBranchSelection({
+    role: user.role,
+    canViewAllBranches: user.canViewAllBranches,
+    assignedBranchId: user.assignedBranchId,
+    allowedBranchIds: user.allowedBranchIds,
+    rawSelection: raw,
+    aggregateAllRequested: raw.toLowerCase() === "all",
+  });
+
+  return result.branchHeader;
+}

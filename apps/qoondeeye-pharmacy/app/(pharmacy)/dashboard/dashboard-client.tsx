@@ -1,7 +1,7 @@
 "use client";
 
 import * as React from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import Link from "next/link";
 import { format, startOfDay, startOfMonth } from "date-fns";
 import { DateRange } from "react-day-picker";
@@ -54,11 +54,16 @@ import {
   XAxis,
   YAxis,
 } from "recharts";
-import { hasGlobalBranchAccess } from "@/lib/branch-access";
-import { getStoredUser } from "@/lib/auth-client";
+import { getResolvedStoredUser } from "@/lib/auth-client";
+import {
+  getReportBranchSnapshot,
+  useReportBranchQuery,
+} from "@/hooks/use-branch-for-reports";
+import { formatApiErrorForUser } from "@/lib/services/http";
+import { CachedQueryToolbar } from "@/components/api/cached-query-toolbar";
 import { erpKeys } from "@/lib/erp-query-keys";
 import { ERP_STALE_LIST } from "@/lib/erp-query-options";
-import { getBranchQueryKeyFacet } from "@/lib/query-branch-key";
+import { useErpBranchFacet } from "@/hooks/use-erp-branch-facet";
 import {
   getBatches,
   getBranches,
@@ -155,68 +160,19 @@ export default function DashboardPageClient({
   const [tenantSlug] = React.useState(
     () =>
       tenantSlugProp?.trim() ||
-      getStoredUser()?.tenantSlug ||
+      getResolvedStoredUser()?.tenantSlug ||
       "pharmacy1",
   );
 
-  const [branchFacet, setBranchFacet] = React.useState(() =>
-    typeof window !== "undefined" ? getBranchQueryKeyFacet() : "",
-  );
+  const branchFacet = useErpBranchFacet();
+  const queryClient = useQueryClient();
 
   const [date, setDate] = React.useState<DateRange | undefined>(() => {
     const now = new Date();
     return { from: startOfMonth(now), to: now };
   });
 
-  const [branchId, setBranchId] = React.useState<string | null>(null);
-
-  const syncBranchFromStorage = React.useCallback(() => {
-    try {
-      const v = localStorage.getItem("branchId");
-      const t = v?.trim();
-      setBranchId(t && t !== "all" ? t : null);
-    } catch {
-      setBranchId(null);
-    }
-  }, []);
-
-  React.useEffect(() => {
-    syncBranchFromStorage();
-    const onStorage = () => syncBranchFromStorage();
-    const onBranch = (evt: Event) => {
-      const detail = (evt as CustomEvent).detail as {
-        branchId?: string | null;
-      };
-      if (detail?.branchId) setBranchId(detail.branchId.trim() || null);
-      else syncBranchFromStorage();
-    };
-    window.addEventListener("storage", onStorage);
-    window.addEventListener("activeBranchChanged", onBranch as EventListener);
-    return () => {
-      window.removeEventListener("storage", onStorage);
-      window.removeEventListener(
-        "activeBranchChanged",
-        onBranch as EventListener,
-      );
-    };
-  }, [syncBranchFromStorage]);
-
-  React.useEffect(() => {
-    setBranchFacet(getBranchQueryKeyFacet());
-  }, [branchId]);
-
-  React.useEffect(() => {
-    const sync = () => setBranchFacet(getBranchQueryKeyFacet());
-    window.addEventListener("storage", sync);
-    window.addEventListener("activeBranchChanged", sync as EventListener);
-    return () => {
-      window.removeEventListener("storage", sync);
-      window.removeEventListener(
-        "activeBranchChanged",
-        sync as EventListener,
-      );
-    };
-  }, []);
+  const { branchId, aggregateAll } = useReportBranchQuery();
 
   const bundleQuery = useQuery({
     queryKey: erpKeys.dashboardBundle(tenantSlug, branchFacet),
@@ -249,16 +205,6 @@ export default function DashboardPageClient({
     date?.from != null ? format(date.from, "yyyy-MM-dd") : "";
   const toStr = date?.to != null ? format(date.to, "yyyy-MM-dd") : "";
 
-  const acctAggregateAll = React.useMemo(() => {
-    if (branchId !== null) return false;
-    try {
-      const raw = localStorage.getItem("branchId")?.trim().toLowerCase();
-      return raw === "all" && hasGlobalBranchAccess(getStoredUser()?.role);
-    } catch {
-      return false;
-    }
-  }, [branchId, branchFacet]);
-
   const seriesQuery = useQuery({
     queryKey: erpKeys.dashboardSeries(
       tenantSlug,
@@ -266,7 +212,7 @@ export default function DashboardPageClient({
       fromStr,
       toStr,
       branchId ?? "",
-      acctAggregateAll,
+      aggregateAll,
     ),
     enabled: Boolean(
       tenantSlug &&
@@ -277,15 +223,17 @@ export default function DashboardPageClient({
     staleTime: ERP_STALE_LIST,
     initialData:
       serverPrefetched && initialSeries != null ? initialSeries : undefined,
-    queryFn: ({ signal }) =>
-      getDashboardSeries(
+    queryFn: ({ signal }) => {
+      const scope = getReportBranchSnapshot();
+      return getDashboardSeries(
         tenantSlug,
         fromStr,
         toStr,
-        branchId ?? undefined,
-        acctAggregateAll,
+        scope.branchId,
+        scope.aggregateAll,
         { signal },
-      ),
+      );
+    },
   });
 
   const topProductsQuery = useQuery({
@@ -297,31 +245,34 @@ export default function DashboardPageClient({
       branchId ?? "",
       8,
       "revenue",
-      acctAggregateAll,
+      aggregateAll,
     ),
     enabled: Boolean(
       tenantSlug &&
         (branchFacet || serverPrefetched) &&
         date?.from != null &&
         date?.to != null &&
-        (Boolean(branchId) || acctAggregateAll),
+        (Boolean(branchId) || aggregateAll) &&
+        (bundleQuery.isSuccess || (serverPrefetched && initialBundle)),
     ),
     staleTime: ERP_STALE_LIST,
     initialData:
       serverPrefetched && initialTopProducts != null
         ? initialTopProducts
         : undefined,
-    queryFn: ({ signal }) =>
-      getTopProducts(
+    queryFn: ({ signal }) => {
+      const scope = getReportBranchSnapshot();
+      return getTopProducts(
         tenantSlug,
         fromStr,
         toStr,
-        branchId ?? undefined,
+        scope.branchId,
         8,
         "revenue",
-        acctAggregateAll,
+        scope.aggregateAll,
         { signal },
-      ),
+      );
+    },
   });
 
   const sales = bundleQuery.data?.sales ?? [];
@@ -333,9 +284,7 @@ export default function DashboardPageClient({
 
   const loading = bundleQuery.isPending;
   const error = bundleQuery.error
-    ? bundleQuery.error instanceof Error
-      ? bundleQuery.error.message
-      : "Failed to load dashboard"
+    ? formatApiErrorForUser(bundleQuery.error)
     : null;
 
   const acctSeries = seriesQuery.data ?? [];
@@ -619,6 +568,25 @@ export default function DashboardPageClient({
             </p>
           </div>
           <div className="flex flex-wrap gap-3 items-center">
+            <CachedQueryToolbar
+              dataUpdatedAt={Math.max(
+                bundleQuery.dataUpdatedAt,
+                seriesQuery.dataUpdatedAt,
+                topProductsQuery.dataUpdatedAt,
+              )}
+              isFetching={
+                bundleQuery.isFetching ||
+                seriesQuery.isFetching ||
+                topProductsQuery.isFetching
+              }
+              onRefresh={() => {
+                void queryClient.invalidateQueries({
+                  queryKey: erpKeys.dashboardBundle(tenantSlug, branchFacet),
+                });
+                void seriesQuery.refetch();
+                void topProductsQuery.refetch();
+              }}
+            />
             <Popover>
               <PopoverTrigger asChild>
                 <Button
@@ -1025,7 +993,7 @@ export default function DashboardPageClient({
               </Link>
             </div>
             <div className="relative min-h-[220px]">
-              {!branchId ? (
+              {!branchId && !aggregateAll ? (
                 <p className="flex min-h-[200px] items-center justify-center text-center text-sm text-muted-foreground">
                   Select a branch (e.g. from Purchases or your location picker)
                   to see top products.

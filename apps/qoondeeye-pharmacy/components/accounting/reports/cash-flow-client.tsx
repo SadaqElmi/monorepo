@@ -136,8 +136,8 @@ export default function CashFlowReportClient({
       compareTo,
       compareSnapshot,
     },
-    queryFn: () =>
-      getCashFlowStatement(tenantSlug, from, to, branchId, aggregateAll, {
+    queryFn: (scope) =>
+      getCashFlowStatement(tenantSlug, from, to, scope.branchId, scope.aggregateAll, {
         compareFrom: compareFrom || undefined,
         compareTo: compareTo || undefined,
         compareSnapshot: compareSnapshot || undefined,

@@ -56,7 +56,7 @@ export default function AccountingJournalsPage({
       JOURNAL_LIMIT,
     ),
     queryFn: () => getJournalEntries(tenantSlug, undefined, JOURNAL_LIMIT),
-    enabled: Boolean(tenantSlug),
+    enabled: Boolean(tenantSlug && branchFacet),
     staleTime: ERP_STALE_LIST,
     initialData:
       serverPrefetched && initialJournals ? initialJournals : undefined,

@@ -209,6 +209,7 @@ model ProductCategory {
 
   @@index([branchId])
   @@index([parentId])
+  @@index([branchId, name])
   @@schema("tenant_template")
 }
 
@@ -236,6 +237,9 @@ model Product {
 
   @@index([barcode])
   @@index([branchId])
+  @@index([createdAt(sort: Desc)])
+  @@index([categoryId])
+  @@index([branchId, createdAt(sort: Desc)])
   @@schema("tenant_template")
 }
 
@@ -377,6 +381,7 @@ model Inventory {
 
   @@unique([productId, branchId])
   @@index([productId])
+  @@index([branchId])
   @@schema("tenant_template")
 }
 

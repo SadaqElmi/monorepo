@@ -1,6 +1,11 @@
 import 'dotenv/config';
 import { ValidationPipe } from '@nestjs/common';
 import { NestFactory } from '@nestjs/core';
+import {
+  FastifyAdapter,
+  NestFastifyApplication,
+} from '@nestjs/platform-fastify';
+import compress from '@fastify/compress';
 import { AppModule } from './app.module';
 import { AllExceptionsFilter } from './common/filters/all-exceptions.filter';
 
@@ -16,15 +21,17 @@ function getCorsOrigins(): string[] {
   return [
     'http://localhost:3000',
     'http://localhost:3001',
-    'https://monorepo-qoondeeye-pharmacy-2jed.vercel.app',
-    'https://monorepo-pos-bay.vercel.app',
     'https://pos.qoondeeye.online',
     'https://pharmcare.qoondeeye.online',
   ];
 }
 
 async function bootstrap() {
-  const app = await NestFactory.create(AppModule);
+  const app = await NestFactory.create<NestFastifyApplication>(
+    AppModule,
+    new FastifyAdapter({ trustProxy: true }),
+  );
+  await app.register(compress);
   const corsOrigins = getCorsOrigins();
   app.enableCors({
     origin: corsOrigins,
@@ -38,6 +45,10 @@ async function bootstrap() {
       'x-tenant',
       'x-branch-id',
       'X-Idempotency-Key',
+      'x-request-id',
+      'X-Request-Id',
+      'x-correlation-id',
+      'X-Correlation-Id',
     ],
   });
   console.log(`CORS allowed origins: ${corsOrigins.join(', ')}`);
@@ -50,7 +61,8 @@ async function bootstrap() {
       forbidNonWhitelisted: true,
     }),
   );
-  await app.listen(process.env.PORT ?? 5555, '0.0.0.0');
-  console.log(`🚀 Server running on port ${process.env.PORT ?? 5555}`);
+  const port = Number(process.env.PORT ?? 5555);
+  await app.listen(port, '0.0.0.0');
+  console.log(`🚀 Server running on port ${port}`);
 }
 void bootstrap();

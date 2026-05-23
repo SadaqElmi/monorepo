@@ -16,7 +16,7 @@ import { PatientLoansService } from './patient-loans.service';
 import { CreatePatientLoanDto } from './dto/create-patient-loan.dto';
 import { UpdatePatientLoanDto } from './dto/update-patient-loan.dto';
 import { CreatePatientLoanPaymentDto } from './dto/create-patient-loan-payment.dto';
-import type { Request } from 'express';
+import type { FastifyRequest } from 'fastify';
 import { parsePagedQueryParam } from '../common/pagination.util';
 
 @Controller('patient-loans')
@@ -37,7 +37,7 @@ export class PatientLoansController {
   @Get()
   findAll(
     @Query('status') status: string | undefined,
-    @Req() req: Request,
+    @Req() req: FastifyRequest,
     @Query('page') page?: string,
     @Query('limit') limit?: string,
   ) {
@@ -64,7 +64,7 @@ export class PatientLoansController {
   }
 
   @Get('outstanding')
-  findOutstanding(@Req() req: Request) {
+  findOutstanding(@Req() req: FastifyRequest) {
     this.ensureTenant();
     const allowedBranchIds = req.allowedBranchIds ?? [];
     return this.patientLoansService.findOutstanding(
@@ -74,7 +74,7 @@ export class PatientLoansController {
   }
 
   @Get(':id')
-  findOne(@Param('id') id: string, @Req() req: Request) {
+  findOne(@Param('id') id: string, @Req() req: FastifyRequest) {
     this.ensureTenant();
     return this.patientLoansService.findOne(
       this.tenantContext.getSchemaName()!,
@@ -84,7 +84,7 @@ export class PatientLoansController {
   }
 
   @Get(':id/payments')
-  findPayments(@Param('id') id: string, @Req() req: Request) {
+  findPayments(@Param('id') id: string, @Req() req: FastifyRequest) {
     this.ensureTenant();
     return this.patientLoansService.findPayments(
       this.tenantContext.getSchemaName()!,
@@ -94,7 +94,7 @@ export class PatientLoansController {
   }
 
   @Post()
-  create(@Body() dto: CreatePatientLoanDto, @Req() req: Request) {
+  create(@Body() dto: CreatePatientLoanDto, @Req() req: FastifyRequest) {
     this.ensureTenant();
     return this.patientLoansService.create(
       this.tenantContext.getSchemaName()!,
@@ -107,7 +107,7 @@ export class PatientLoansController {
   update(
     @Param('id') id: string,
     @Body() dto: UpdatePatientLoanDto,
-    @Req() req: Request,
+    @Req() req: FastifyRequest,
   ) {
     this.ensureTenant();
     return this.patientLoansService.update(
@@ -123,7 +123,7 @@ export class PatientLoansController {
   addPayment(
     @Param('id') id: string,
     @Body() dto: CreatePatientLoanPaymentDto,
-    @Req() req: Request,
+    @Req() req: FastifyRequest,
   ) {
     this.ensureTenant();
     return this.patientLoansService.addPayment(
@@ -135,7 +135,7 @@ export class PatientLoansController {
   }
 
   @Delete(':id')
-  remove(@Param('id') id: string, @Req() req: Request) {
+  remove(@Param('id') id: string, @Req() req: FastifyRequest) {
     this.ensureTenant();
     return this.patientLoansService.remove(
       this.tenantContext.getSchemaName()!,

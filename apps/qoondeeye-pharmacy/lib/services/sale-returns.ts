@@ -1,5 +1,8 @@
+import { buildPagedQuery, unwrapListResponse } from "@repo/utils";
+import type { PagedList } from "@repo/types";
+
 import { SALE_RETURNS_PREFIX } from "./endpoints";
-import { type JsonHeaders, jsonFetch } from "./http";
+import { jsonFetch } from "./http";
 
 export type SaleReturn = {
   id: string;
@@ -18,11 +21,31 @@ export type CreateSaleReturnInput = {
   }>;
 };
 
-export async function getSaleReturns(tenantSlug: string): Promise<SaleReturn[]> {
-  return jsonFetch<SaleReturn[]>(SALE_RETURNS_PREFIX, {
-    method: "GET",
-    headers: { "X-Tenant": tenantSlug } as JsonHeaders,
+export async function getSaleReturns(
+  tenantSlug: string,
+  init?: Pick<RequestInit, "signal">,
+): Promise<SaleReturn[]> {
+  const data = await jsonFetch<SaleReturn[] | PagedList<SaleReturn>>(
+    SALE_RETURNS_PREFIX,
+    { method: "GET", tenantSlug, signal: init?.signal },
+  );
+  return unwrapListResponse(data).items;
+}
+
+export async function getSaleReturnsPaged(
+  tenantSlug: string,
+  params: { page: number; limit?: number },
+  init?: Pick<RequestInit, "signal">,
+): Promise<PagedList<SaleReturn>> {
+  const q = buildPagedQuery({
+    page: params.page,
+    limit: params.limit ?? 25,
   });
+  const data = await jsonFetch<SaleReturn[] | PagedList<SaleReturn>>(
+    `${SALE_RETURNS_PREFIX}${q}`,
+    { method: "GET", tenantSlug, signal: init?.signal },
+  );
+  return unwrapListResponse(data, params.page, params.limit ?? 25);
 }
 
 export async function createSaleReturn(
@@ -31,10 +54,8 @@ export async function createSaleReturn(
 ): Promise<SaleReturn> {
   return jsonFetch<SaleReturn>(SALE_RETURNS_PREFIX, {
     method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      "X-Tenant": tenantSlug,
-    } as JsonHeaders,
+    tenantSlug,
+    headers: { "Content-Type": "application/json" },
     body: JSON.stringify(input),
   });
 }

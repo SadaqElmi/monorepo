@@ -16,7 +16,7 @@ import { TenantContextService } from '../tenant/tenant-context.service';
 import { SalesService } from './sales.service';
 import { CreateSaleDto } from './dto/create-sale.dto';
 import { UpdateSaleDto } from './dto/update-sale.dto';
-import type { Request } from 'express';
+import type { FastifyRequest } from 'fastify';
 import { parsePagedQueryParam } from '../common/pagination.util';
 
 @Controller('sales')
@@ -36,7 +36,7 @@ export class SalesController {
 
   @Get()
   findAll(
-    @Req() req: Request,
+    @Req() req: FastifyRequest,
     @Query('page') page?: string,
     @Query('limit') limit?: string,
   ) {
@@ -61,7 +61,7 @@ export class SalesController {
   }
 
   @Get('by-receipt')
-  findByReceipt(@Query('number') number: string, @Req() req: Request) {
+  findByReceipt(@Query('number') number: string, @Req() req: FastifyRequest) {
     this.ensureTenant();
     const allowedBranchIds = req.allowedBranchIds ?? [];
     if (!allowedBranchIds.length) {
@@ -90,7 +90,7 @@ export class SalesController {
   }
 
   @Get(':id')
-  findOne(@Param('id') id: string, @Req() req: Request) {
+  findOne(@Param('id') id: string, @Req() req: FastifyRequest) {
     this.ensureTenant();
     return this.salesService.findOne(
       this.tenantContext.getSchemaName()!,
@@ -100,7 +100,7 @@ export class SalesController {
   }
 
   @Post()
-  create(@Body() dto: CreateSaleDto, @Req() req: Request) {
+  create(@Body() dto: CreateSaleDto, @Req() req: FastifyRequest) {
     this.ensureTenant();
     return this.salesService.create(
       this.tenantContext.getSchemaName()!,
@@ -117,7 +117,7 @@ export class SalesController {
   update(
     @Param('id') id: string,
     @Body() dto: UpdateSaleDto,
-    @Req() req: Request,
+    @Req() req: FastifyRequest,
   ) {
     this.ensureTenant();
     return this.salesService.update(
@@ -131,7 +131,7 @@ export class SalesController {
   }
 
   @Delete(':id')
-  remove(@Param('id') id: string, @Req() req: Request) {
+  remove(@Param('id') id: string, @Req() req: FastifyRequest) {
     this.ensureTenant();
     return this.salesService.remove(
       this.tenantContext.getSchemaName()!,

@@ -7,7 +7,7 @@ import {
   Logger,
 } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
-import type { Response } from 'express';
+import type { FastifyReply } from 'fastify';
 
 const isProd = process.env.NODE_ENV === 'production';
 
@@ -17,7 +17,7 @@ export class AllExceptionsFilter implements ExceptionFilter {
 
   catch(exception: unknown, host: ArgumentsHost): void {
     const ctx = host.switchToHttp();
-    const response = ctx.getResponse<Response>();
+    const response = ctx.getResponse<FastifyReply>();
 
     if (exception instanceof HttpException) {
       const status = exception.getStatus();
@@ -26,7 +26,7 @@ export class AllExceptionsFilter implements ExceptionFilter {
         typeof body === 'string'
           ? { statusCode: status, message: body }
           : { statusCode: status, ...(body as object) };
-      response.status(status).json(payload);
+      response.status(status).send(payload);
       return;
     }
 
@@ -36,7 +36,7 @@ export class AllExceptionsFilter implements ExceptionFilter {
         `Prisma ${exception.code}: ${exception.message}`,
         exception.stack,
       );
-      response.status(status).json({
+      response.status(status).send({
         statusCode: status,
         message: clientMessage,
         error: code,
@@ -47,7 +47,7 @@ export class AllExceptionsFilter implements ExceptionFilter {
 
     if (exception instanceof Prisma.PrismaClientValidationError) {
       this.logger.warn(`Prisma validation: ${exception.message}`);
-      response.status(HttpStatus.BAD_REQUEST).json({
+      response.status(HttpStatus.BAD_REQUEST).send({
         statusCode: HttpStatus.BAD_REQUEST,
         message: 'Invalid request data',
         error: 'VALIDATION_ERROR',
@@ -57,7 +57,7 @@ export class AllExceptionsFilter implements ExceptionFilter {
 
     const err = exception instanceof Error ? exception : new Error(String(exception));
     this.logger.error(err.message, err.stack);
-    response.status(HttpStatus.INTERNAL_SERVER_ERROR).json({
+    response.status(HttpStatus.INTERNAL_SERVER_ERROR).send({
       statusCode: HttpStatus.INTERNAL_SERVER_ERROR,
       message: isProd ? 'Internal server error' : err.message,
       error: 'INTERNAL_ERROR',

@@ -5,6 +5,7 @@ import { createPortal } from "react-dom";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useQuery } from "@tanstack/react-query";
+import { useDebouncedValue } from "@/hooks/use-debounced-value";
 import { usePosCatalog } from "@/hooks/use-pos-catalog";
 import { usePosBranchFacet } from "@/hooks/use-pos-branch-facet";
 import { posKeys, POS_STALE_SALES } from "@/lib/pos-query-keys";
@@ -132,6 +133,7 @@ export function RegisterScreen() {
   const [activeCategory, setActiveCategory] =
     React.useState<string>(ALL_CATEGORIES_LABEL);
   const [searchQuery, setSearchQuery] = React.useState("");
+  const debouncedSearchQuery = useDebouncedValue(searchQuery, 300);
   const [isProductMenuOpen, setIsProductMenuOpen] = React.useState(false);
   const [highlightedProductIndex, setHighlightedProductIndex] =
     React.useState(0);
@@ -199,7 +201,7 @@ export function RegisterScreen() {
 
         const missingLines = next
           .filter((tx) => tx.saleId && tx.lines.length === 0)
-          .slice(0, 50);
+          .slice(0, 5);
         if (missingLines.length === 0 || ac.signal.aborted) return;
 
         const hydratedBySaleId = new Map<string, PosTransaction>();
@@ -578,7 +580,7 @@ export function RegisterScreen() {
   }, [cart, discount]);
 
   const filteredProducts = React.useMemo(() => {
-    const q = searchQuery.trim().toLowerCase();
+    const q = debouncedSearchQuery.trim().toLowerCase();
     const src = catalogProducts;
     const byCategory =
       q.length > 0
@@ -591,7 +593,7 @@ export function RegisterScreen() {
       const hay = `${p.name} ${p.sku} ${p.meta} ${p.category}`.toLowerCase();
       return hay.includes(q);
     });
-  }, [activeCategory, searchQuery, catalogProducts]);
+  }, [activeCategory, debouncedSearchQuery, catalogProducts]);
 
   const productSuggestions = React.useMemo(
     () => filteredProducts.slice(0, 8),

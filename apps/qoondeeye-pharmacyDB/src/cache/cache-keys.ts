@@ -11,3 +11,20 @@ export function stableCacheKeySegment(
 ): string {
   return parts.map((p) => String(p ?? '')).join('|');
 }
+
+/**
+ * Catalog cache keys: tenant public id + branch scope + resource (never host-only).
+ * Example: tenant:uuid:branch:uuid1,uuid2:products:list
+ */
+export function catalogListCacheKey(
+  tenantId: string,
+  branchScope: string,
+  resource:
+    | 'products'
+    | 'products:catalog'
+    | 'categories'
+    | 'branches'
+    | 'roles',
+): string {
+  return `tenant:${tenantId}:branch:${branchScope}:${resource}:list`;
+}

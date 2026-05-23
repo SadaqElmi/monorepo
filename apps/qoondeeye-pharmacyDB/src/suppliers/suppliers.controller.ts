@@ -10,7 +10,7 @@ import {
   ForbiddenException,
   Req,
 } from '@nestjs/common';
-import type { Request } from 'express';
+import type { FastifyRequest } from 'fastify';
 import { hasGlobalBranchAccess } from '../common/security/branch-access.policy';
 import { TenantContextService } from '../tenant/tenant-context.service';
 import { SuppliersService } from './suppliers.service';
@@ -47,7 +47,7 @@ export class SuppliersController {
     );
   }
 
-  private assertSupplierMutationRole(req: Request) {
+  private assertSupplierMutationRole(req: FastifyRequest) {
     if (!hasGlobalBranchAccess(req.userRole, req.userCanViewAllBranches)) {
       throw new ForbiddenException(
         'Only admin or owner can create or modify suppliers',
@@ -56,7 +56,7 @@ export class SuppliersController {
   }
 
   @Post()
-  create(@Req() req: Request, @Body() dto: CreateSupplierDto) {
+  create(@Req() req: FastifyRequest, @Body() dto: CreateSupplierDto) {
     this.ensureTenant();
     this.assertSupplierMutationRole(req);
     return this.suppliersService.create(
@@ -67,7 +67,7 @@ export class SuppliersController {
 
   @Patch(':id')
   update(
-    @Req() req: Request,
+    @Req() req: FastifyRequest,
     @Param('id') id: string,
     @Body() dto: UpdateSupplierDto,
   ) {
@@ -81,7 +81,7 @@ export class SuppliersController {
   }
 
   @Delete(':id')
-  remove(@Req() req: Request, @Param('id') id: string) {
+  remove(@Req() req: FastifyRequest, @Param('id') id: string) {
     this.ensureTenant();
     this.assertSupplierMutationRole(req);
     return this.suppliersService.remove(

@@ -196,7 +196,7 @@ export class AuthService {
       const allowedBranchIds = hasGlobalBranchAccess(roleLower)
         ? (
             await tx.$queryRawUnsafe<{ id: string }[]>(
-              `SELECT id FROM branches ORDER BY name`,
+              `SELECT id FROM "${tenant.schemaName}"."branches" ORDER BY name`,
             )
           ).map((row) => row.id)
         : user.branch_id

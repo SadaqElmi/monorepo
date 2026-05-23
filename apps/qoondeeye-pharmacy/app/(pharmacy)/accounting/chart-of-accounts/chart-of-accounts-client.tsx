@@ -49,7 +49,7 @@ export default function AccountingChartOfAccountsPage({
   const coaQuery = useQuery({
     queryKey: erpKeys.chartOfAccounts(tenantSlug, branchFacet),
     queryFn: () => getChartOfAccounts(tenantSlug),
-    enabled: Boolean(tenantSlug),
+    enabled: Boolean(tenantSlug && branchFacet),
     staleTime: ERP_STALE_STATIC,
     initialData: serverPrefetched && initialCoa ? initialCoa : undefined,
   });

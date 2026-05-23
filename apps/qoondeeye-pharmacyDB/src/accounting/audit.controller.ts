@@ -6,7 +6,7 @@ import {
   Req,
   Res,
 } from '@nestjs/common';
-import type { Request, Response } from 'express';
+import type { FastifyReply, FastifyRequest } from 'fastify';
 import { resolveReportBranchScope } from '../common/branch-scope';
 import { TenantContextService } from '../tenant/tenant-context.service';
 import { TenantService } from '../tenant/tenant.service';
@@ -30,7 +30,7 @@ export class AuditController {
 
   @Get('verify')
   async verify(
-    @Req() req: Request,
+    @Req() req: FastifyRequest,
     @Query('branchId') branchId?: string,
     @Query('branchIds') branchIds?: string,
     @Query('aggregateAll') aggregateAll?: string,
@@ -65,8 +65,8 @@ export class AuditController {
 
   @Get('export')
   async export(
-    @Req() req: Request,
-    @Res() res: Response,
+    @Req() req: FastifyRequest,
+    @Res() res: FastifyReply,
     @Query('branchId') branchId?: string,
     @Query('branchIds') branchIds?: string,
     @Query('aggregateAll') aggregateAll?: string,
@@ -142,8 +142,8 @@ export class AuditController {
       }
     }
     const csv = `${lines.join('\n')}\n`;
-    res.setHeader('Content-Type', 'text/csv; charset=utf-8');
-    res.setHeader(
+    res.header('Content-Type', 'text/csv; charset=utf-8');
+    res.header(
       'Content-Disposition',
       `attachment; filename="audit-chain-export-${Date.now()}.csv"`,
     );

@@ -9,7 +9,7 @@ export function hasGlobalBranchAccess(
   role?: string | null,
   canViewAllBranches?: boolean | null,
 ): boolean {
-  if (typeof canViewAllBranches === 'boolean') return canViewAllBranches;
+  if (canViewAllBranches === true) return true;
   return GLOBAL_BRANCH_ACCESS_ROLES.has(normalizeRole(role));
 }
 

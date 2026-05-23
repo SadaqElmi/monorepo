@@ -1,4 +1,5 @@
 import { QueryClient } from "@tanstack/react-query";
+import { queryRetryPolicy } from "@repo/utils";
 import { cache } from "react";
 
 import { ERP_GC_TIME, ERP_STALE_LIST } from "@/lib/erp-query-options";
@@ -10,7 +11,10 @@ export function makeQueryClient() {
         staleTime: ERP_STALE_LIST,
         gcTime: ERP_GC_TIME,
         refetchOnWindowFocus: false,
-        retry: 1,
+        retry: queryRetryPolicy,
+      },
+      mutations: {
+        retry: false,
       },
     },
   });

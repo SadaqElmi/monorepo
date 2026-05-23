@@ -62,8 +62,8 @@ export default function ExecutiveSummaryReportClient({
     reportId: "executive-summary",
     tenantSlug,
     params: { from, to, branchId, aggregateAll },
-    queryFn: () =>
-      getExecutiveSummary(tenantSlug, from, to, branchId, aggregateAll),
+    queryFn: (scope) =>
+      getExecutiveSummary(tenantSlug, from, to, scope.branchId, scope.aggregateAll),
     initialData:
       serverPrefetched && initialData != null ? initialData : undefined,
     enabled: rangeCheck.ok,

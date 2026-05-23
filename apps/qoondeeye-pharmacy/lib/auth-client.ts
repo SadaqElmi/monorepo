@@ -35,7 +35,8 @@ export function setAuthToken(token: string, user: StoredUser) {
   const maxAge = COOKIE_MAX_AGE_DAYS * 24 * 60 * 60;
   document.cookie = `${AUTH_TOKEN_KEY}=${encodeURIComponent(token)}; ${cookieOptions(maxAge)}`;
   const payload = {
-    userType: user.userType ?? (user.role === "super_admin" ? "system" : "tenant"),
+    userType:
+      user.userType ?? (user.role === "super_admin" ? "system" : "tenant"),
     role: user.role ?? "user",
     tenantId: user.tenantId ?? null,
     tenantSlug: user.tenantSlug ?? null,
@@ -43,7 +44,10 @@ export function setAuthToken(token: string, user: StoredUser) {
     allowedBranchIds: Array.isArray(user.allowedBranchIds)
       ? user.allowedBranchIds
       : [],
-    canViewAllBranches: Boolean(user.canViewAllBranches),
+    canViewAllBranches:
+      typeof user.canViewAllBranches === "boolean"
+        ? user.canViewAllBranches
+        : undefined,
     permissions: Array.isArray(user.permissions) ? user.permissions : [],
     id: user.id,
     email: user.email ?? "",
@@ -117,7 +121,10 @@ export function getResolvedStoredUser(): StoredUser | null {
     allowedBranchIds: Array.isArray(fromCookie.allowedBranchIds)
       ? fromCookie.allowedBranchIds
       : [],
-    canViewAllBranches: Boolean(fromCookie.canViewAllBranches),
+    canViewAllBranches:
+      typeof fromCookie.canViewAllBranches === "boolean"
+        ? fromCookie.canViewAllBranches
+        : undefined,
     permissions: Array.isArray(fromCookie.permissions)
       ? fromCookie.permissions
       : [],
@@ -139,7 +146,9 @@ export type AuthCookiePayload = {
   name?: string | null;
 };
 
-export function getAuthFromCookie(cookieHeader: string | undefined): AuthCookiePayload | null {
+export function getAuthFromCookie(
+  cookieHeader: string | undefined,
+): AuthCookiePayload | null {
   if (!cookieHeader) return null;
   const match = cookieHeader.match(new RegExp(`${AUTH_USER_COOKIE}=([^;]+)`));
   if (!match) return null;

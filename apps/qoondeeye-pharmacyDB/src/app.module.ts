@@ -1,5 +1,5 @@
 import { MiddlewareConsumer, Module, NestModule } from '@nestjs/common';
-import { APP_INTERCEPTOR } from '@nestjs/core';
+import { APP_GUARD, APP_INTERCEPTOR } from '@nestjs/core';
 import { ConfigModule } from '@nestjs/config';
 import { ScheduleModule } from '@nestjs/schedule';
 import { AppController } from './app.controller';
@@ -39,11 +39,17 @@ import { OpsMonitoringService } from './common/services/ops-monitoring.service';
 import { ReconciliationModule } from './reconciliation/reconciliation.module';
 import { PosSessionsModule } from './pos-sessions/pos-sessions.module';
 import { AppCacheModule } from './cache/app-cache.module';
+import { RateLimitModule } from './common/rate-limit/rate-limit.module';
+import { LoggingModule } from './common/logging/logging.module';
+import { RequestContextMiddleware } from './common/logging/request-context.middleware';
+import { BranchScopeGuard } from './common/security/branch-scope.guard';
 
 @Module({
   imports: [
     ConfigModule.forRoot({ isGlobal: true }),
     AppCacheModule,
+    LoggingModule,
+    RateLimitModule,
     ScheduleModule.forRoot(),
     PrismaModule,
     TenantModule,
@@ -79,9 +85,14 @@ import { AppCacheModule } from './cache/app-cache.module';
     AppService,
     TenantMiddleware,
     BranchMiddleware,
+    BranchScopeGuard,
     OpsMonitoringService,
     IdempotencyService,
     IdempotencyCleanupJob,
+    {
+      provide: APP_GUARD,
+      useClass: BranchScopeGuard,
+    },
     {
       provide: APP_INTERCEPTOR,
       useClass: IdempotencyInterceptor,
@@ -90,6 +101,8 @@ import { AppCacheModule } from './cache/app-cache.module';
 })
 export class AppModule implements NestModule {
   configure(consumer: MiddlewareConsumer) {
-    consumer.apply(TenantMiddleware, BranchMiddleware).forRoutes('*');
+    consumer
+      .apply(RequestContextMiddleware, TenantMiddleware, BranchMiddleware)
+      .forRoutes('*');
   }
 }

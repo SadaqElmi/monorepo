@@ -14,7 +14,7 @@ import { TenantContextService } from '../tenant/tenant-context.service';
 import { ExpensesService } from './expenses.service';
 import { CreateExpenseDto } from './dto/create-expense.dto';
 import { UpdateExpenseDto } from './dto/update-expense.dto';
-import type { Request } from 'express';
+import type { FastifyRequest } from 'fastify';
 
 @Controller('expenses')
 export class ExpensesController {
@@ -32,7 +32,7 @@ export class ExpensesController {
   }
 
   @Get()
-  findAll(@Req() req: Request) {
+  findAll(@Req() req: FastifyRequest) {
     this.ensureTenant();
     const allowedBranchIds = req.allowedBranchIds ?? [];
     if (!allowedBranchIds.length) {
@@ -45,7 +45,7 @@ export class ExpensesController {
   }
 
   @Get(':id')
-  findOne(@Param('id') id: string, @Req() req: Request) {
+  findOne(@Param('id') id: string, @Req() req: FastifyRequest) {
     this.ensureTenant();
     return this.expensesService.findOne(
       this.tenantContext.getSchemaName()!,
@@ -55,7 +55,7 @@ export class ExpensesController {
   }
 
   @Post()
-  create(@Body() dto: CreateExpenseDto, @Req() req: Request) {
+  create(@Body() dto: CreateExpenseDto, @Req() req: FastifyRequest) {
     this.ensureTenant();
     return this.expensesService.create(
       this.tenantContext.getSchemaName()!,
@@ -69,7 +69,7 @@ export class ExpensesController {
   update(
     @Param('id') id: string,
     @Body() dto: UpdateExpenseDto,
-    @Req() req: Request,
+    @Req() req: FastifyRequest,
   ) {
     this.ensureTenant();
     return this.expensesService.update(
@@ -82,7 +82,7 @@ export class ExpensesController {
   }
 
   @Delete(':id')
-  remove(@Param('id') id: string, @Req() req: Request) {
+  remove(@Param('id') id: string, @Req() req: FastifyRequest) {
     this.ensureTenant();
     return this.expensesService.remove(
       this.tenantContext.getSchemaName()!,

@@ -6,6 +6,11 @@ import {
 } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import { queryInterbranchMismatches } from '../accounting/interbranch-report.util';
+import { resolveCatalogCacheTtlMs } from '../cache/cache-catalog.config';
+import { CacheInvalidationService } from '../cache/cache-invalidation.service';
+import { catalogListCacheKey } from '../cache/cache-keys';
+import { catalogTenantTags } from '../cache/cache-tags';
+import { TaggedCacheService } from '../cache/tagged-cache.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { TenantService } from '../tenant/tenant.service';
 
@@ -21,17 +26,29 @@ export interface BranchRow {
 
 @Injectable()
 export class BranchesService {
+  private readonly catalogTtlMs = resolveCatalogCacheTtlMs();
+
   constructor(
     private readonly prisma: PrismaService,
     private readonly tenantService: TenantService,
+    private readonly taggedCache: TaggedCacheService,
+    private readonly cacheInvalidation: CacheInvalidationService,
   ) {}
 
-  async findAll(schemaName: string) {
+  async findAll(schemaName: string, tenantId: string) {
     await this.tenantService.applyTenantSchemaPatches(schemaName);
-    return this.prisma.withTenantSchema(schemaName, (tx) =>
-      tx.$queryRawUnsafe<BranchRow[]>(
-        `SELECT id, name, phone, address, accounting_lock_date, created_at FROM branches ORDER BY name`,
-      ),
+    const key = catalogListCacheKey(tenantId, 'all', 'branches');
+    const tags = catalogTenantTags(tenantId);
+    return this.taggedCache.getOrSet(
+      key,
+      tags,
+      this.catalogTtlMs,
+      () =>
+        this.prisma.withTenantSchema(schemaName, (tx) =>
+          tx.$queryRawUnsafe<BranchRow[]>(
+            `SELECT id, name, phone, address, accounting_lock_date, created_at FROM branches ORDER BY name`,
+          ),
+        ),
     );
   }
 
@@ -48,10 +65,11 @@ export class BranchesService {
 
   async create(
     schemaName: string,
+    tenantId: string,
     dto: { name?: string; phone?: string; address?: string },
   ) {
     await this.tenantService.applyTenantSchemaPatches(schemaName);
-    return this.prisma.withTenantSchema(schemaName, async (tx) => {
+    const row = await this.prisma.withTenantSchema(schemaName, async (tx) => {
       const [row] = await tx.$queryRawUnsafe<BranchRow[]>(
         `INSERT INTO branches (name, phone, address) VALUES ($1, $2, $3) RETURNING id, name, phone, address, created_at`,
         dto.name ?? null,
@@ -67,10 +85,13 @@ export class BranchesService {
       );
       return row;
     });
+    await this.cacheInvalidation.invalidateCatalogTenant(tenantId);
+    return row;
   }
 
   async update(
     schemaName: string,
+    tenantId: string,
     id: string,
     dto: {
       name?: string;
@@ -80,7 +101,7 @@ export class BranchesService {
     },
   ) {
     await this.tenantService.applyTenantSchemaPatches(schemaName);
-    return this.prisma.withTenantSchema(schemaName, async (tx) => {
+    const row = await this.prisma.withTenantSchema(schemaName, async (tx) => {
       const skipLock = dto.accountingLockDate === undefined;
       const rawLock = dto.accountingLockDate;
       const lockDate =
@@ -159,6 +180,8 @@ export class BranchesService {
       );
       return row ?? null;
     });
+    await this.cacheInvalidation.invalidateCatalogTenant(tenantId);
+    return row;
   }
 
   /**

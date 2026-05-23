@@ -8,9 +8,11 @@ import {
   Param,
   Patch,
   Post,
+  Query,
   Req,
 } from '@nestjs/common';
-import type { Request } from 'express';
+import { parsePagedQueryParam } from '../common/pagination.util';
+import type { FastifyRequest } from 'fastify';
 import { TenantContextService } from '../tenant/tenant-context.service';
 import { CreateSaleReturnDto } from './dto/create-sale-return.dto';
 import { UpdateSaleReturnDto } from './dto/update-sale-return.dto';
@@ -32,20 +34,31 @@ export class SaleReturnsController {
   }
 
   @Get()
-  findAll(@Req() req: Request) {
+  findAll(
+    @Req() req: FastifyRequest,
+    @Query('page') page?: string,
+    @Query('limit') limit?: string,
+  ) {
     this.ensureTenant();
     const allowedBranchIds = req.allowedBranchIds ?? [];
     if (!allowedBranchIds.length) {
       throw new ForbiddenException('Access denied to this branch');
     }
-    return this.saleReturnsService.findAll(
-      this.tenantContext.getSchemaName()!,
-      allowedBranchIds,
-    );
+    const schemaName = this.tenantContext.getSchemaName()!;
+    const paged = parsePagedQueryParam(page, limit);
+    if (paged) {
+      return this.saleReturnsService.findAllPaged(
+        schemaName,
+        allowedBranchIds,
+        paged.skip,
+        paged.limit,
+      );
+    }
+    return this.saleReturnsService.findAll(schemaName, allowedBranchIds);
   }
 
   @Get(':id')
-  findOne(@Param('id') id: string, @Req() req: Request) {
+  findOne(@Param('id') id: string, @Req() req: FastifyRequest) {
     this.ensureTenant();
     const allowedBranchIds = req.allowedBranchIds ?? [];
     if (!allowedBranchIds.length) {
@@ -59,7 +72,7 @@ export class SaleReturnsController {
   }
 
   @Post()
-  create(@Body() dto: CreateSaleReturnDto, @Req() req: Request) {
+  create(@Body() dto: CreateSaleReturnDto, @Req() req: FastifyRequest) {
     this.ensureTenant();
     return this.saleReturnsService.create(
       this.tenantContext.getSchemaName()!,
@@ -73,7 +86,7 @@ export class SaleReturnsController {
   update(
     @Param('id') id: string,
     @Body() dto: UpdateSaleReturnDto,
-    @Req() req: Request,
+    @Req() req: FastifyRequest,
   ) {
     this.ensureTenant();
     const allowedBranchIds = req.allowedBranchIds ?? [];
@@ -89,7 +102,7 @@ export class SaleReturnsController {
   }
 
   @Delete(':id')
-  remove(@Param('id') id: string, @Req() req: Request) {
+  remove(@Param('id') id: string, @Req() req: FastifyRequest) {
     this.ensureTenant();
     const allowedBranchIds = req.allowedBranchIds ?? [];
     if (!allowedBranchIds.length) {

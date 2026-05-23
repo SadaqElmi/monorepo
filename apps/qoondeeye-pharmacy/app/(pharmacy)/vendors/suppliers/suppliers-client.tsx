@@ -140,7 +140,7 @@ export default function SuppliersPage({
   const suppliersQuery = useQuery({
     queryKey: erpKeys.suppliers(tenantSlug, branchFacet),
     queryFn: () => getSuppliers(tenantSlug),
-    enabled: Boolean(tenantSlug),
+    enabled: Boolean(tenantSlug && branchFacet),
     staleTime: ERP_STALE_LIST,
     initialData:
       serverPrefetched && initialSuppliers ? initialSuppliers : undefined,

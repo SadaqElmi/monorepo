@@ -1,6 +1,8 @@
+import { buildPagedQuery, unwrapListResponse } from "@repo/utils";
+import type { PagedList, Product } from "@repo/types";
+
 import { PRODUCTS_PREFIX } from "./endpoints";
-import { type JsonHeaders, jsonFetch } from "./http";
-import type { Product } from "@repo/types";
+import { jsonFetch } from "./http";
 
 export type { Product };
 
@@ -8,11 +10,28 @@ export async function getProducts(
   tenantSlug: string,
   init?: Pick<RequestInit, "signal">,
 ): Promise<Product[]> {
-  return jsonFetch<Product[]>(PRODUCTS_PREFIX, {
+  const data = await jsonFetch<Product[] | PagedList<Product>>(PRODUCTS_PREFIX, {
     method: "GET",
-    headers: { "X-Tenant": tenantSlug } as JsonHeaders,
+    tenantSlug,
     signal: init?.signal,
   });
+  return unwrapListResponse(data).items;
+}
+
+export async function getProductsPaged(
+  tenantSlug: string,
+  params: { page: number; limit?: number },
+  init?: Pick<RequestInit, "signal">,
+): Promise<PagedList<Product>> {
+  const q = buildPagedQuery({
+    page: params.page,
+    limit: params.limit ?? 50,
+  });
+  const data = await jsonFetch<Product[] | PagedList<Product>>(
+    `${PRODUCTS_PREFIX}${q}`,
+    { method: "GET", tenantSlug, signal: init?.signal },
+  );
+  return unwrapListResponse(data, params.page, params.limit ?? 50);
 }
 
 /** Full tenant product list (all branches + global). Use for purchases and stock. */
@@ -20,19 +39,20 @@ export async function getProductsCatalog(
   tenantSlug: string,
   init?: Pick<RequestInit, "signal">,
 ): Promise<Product[]> {
-  return jsonFetch<Product[]>(`${PRODUCTS_PREFIX}/catalog`, {
-    method: "GET",
-    headers: { "X-Tenant": tenantSlug } as JsonHeaders,
-    signal: init?.signal,
-  });
+  const data = await jsonFetch<Product[] | PagedList<Product>>(
+    `${PRODUCTS_PREFIX}/catalog`,
+    { method: "GET", tenantSlug, signal: init?.signal },
+  );
+  return unwrapListResponse(data).items;
 }
 
 /** Transfer product list scoped to active branch + inventory rows. */
 export async function getTransferProducts(tenantSlug: string): Promise<Product[]> {
-  return jsonFetch<Product[]>(`${PRODUCTS_PREFIX}/transfer-catalog`, {
-    method: "GET",
-    headers: { "X-Tenant": tenantSlug } as JsonHeaders,
-  });
+  const data = await jsonFetch<Product[] | PagedList<Product>>(
+    `${PRODUCTS_PREFIX}/transfer-catalog`,
+    { method: "GET", tenantSlug },
+  );
+  return unwrapListResponse(data).items;
 }
 
 /** Barcode / SKU lookup; throws if not found. */
@@ -43,7 +63,7 @@ export async function getProductByBarcode(
   const b = encodeURIComponent(barcode.trim());
   return jsonFetch<Product>(`${PRODUCTS_PREFIX}/barcode/${b}`, {
     method: "GET",
-    headers: { "X-Tenant": tenantSlug } as JsonHeaders,
+    tenantSlug,
   });
 }
 
@@ -54,10 +74,7 @@ export async function getProductLookup(
   const query = encodeURIComponent(q.trim());
   return jsonFetch<{ matches: Product[] }>(
     `${PRODUCTS_PREFIX}/lookup?q=${query}`,
-    {
-      method: "GET",
-      headers: { "X-Tenant": tenantSlug } as JsonHeaders,
-    },
+    { method: "GET", tenantSlug },
   );
 }
 
@@ -79,10 +96,8 @@ export async function createProduct(
 ) {
   return jsonFetch<Product>(PRODUCTS_PREFIX, {
     method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      "X-Tenant": tenantSlug,
-    } as JsonHeaders,
+    tenantSlug,
+    headers: { "Content-Type": "application/json" },
     body: JSON.stringify(input),
   });
 }
@@ -104,10 +119,8 @@ export async function updateProduct(
 ) {
   return jsonFetch<Product>(`${PRODUCTS_PREFIX}/${id}`, {
     method: "PATCH",
-    headers: {
-      "Content-Type": "application/json",
-      "X-Tenant": tenantSlug,
-    } as JsonHeaders,
+    tenantSlug,
+    headers: { "Content-Type": "application/json" },
     body: JSON.stringify(input),
   });
 }
@@ -115,7 +128,7 @@ export async function updateProduct(
 export async function deleteProduct(tenantSlug: string, id: string) {
   return jsonFetch<{ deleted: boolean }>(`${PRODUCTS_PREFIX}/${id}`, {
     method: "DELETE",
-    headers: { "X-Tenant": tenantSlug } as JsonHeaders,
+    tenantSlug,
   });
 }
 

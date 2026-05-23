@@ -47,7 +47,8 @@ export default function PurchasesPage({
     () => getStoredUser()?.tenantSlug ?? "pharmacy1",
   );
 
-  const [purchases, setPurchases] = React.useState<Purchase[]>(initialPurchases);
+  const [purchases, setPurchases] =
+    React.useState<Purchase[]>(initialPurchases);
   const [suppliers, setSuppliers] = React.useState<Supplier[]>([]);
   const [branches, setBranches] = React.useState<Branch[]>([]);
   const [products, setProducts] = React.useState<Product[]>([]);
@@ -65,7 +66,9 @@ export default function PurchasesPage({
   // Refetch branch-scoped data when the sidebar location changes.
   React.useEffect(() => {
     const handler = (evt: Event) => {
-      const detail = (evt as CustomEvent).detail as { branchId?: string | null };
+      const detail = (evt as CustomEvent).detail as {
+        branchId?: string | null;
+      };
       setBranchKey(detail?.branchId ?? null);
     };
     window.addEventListener("activeBranchChanged", handler);
@@ -157,15 +160,9 @@ export default function PurchasesPage({
     if (!q) return list;
 
     return list.filter((p) => {
-      const supplierName =
-        supplierMap.get(p.supplier_id ?? "")?.name ?? "";
+      const supplierName = supplierMap.get(p.supplier_id ?? "")?.name ?? "";
       const branchName = branchMap.get(p.branch_id ?? "")?.name ?? "";
-      const haystack = [
-        p.invoice_number,
-        supplierName,
-        branchName,
-        p.id,
-      ]
+      const haystack = [p.invoice_number, supplierName, branchName, p.id]
         .filter(Boolean)
         .join(" ")
         .toLowerCase();
@@ -382,9 +379,7 @@ export default function PurchasesPage({
       setFormOpen(false);
       setActivePurchase(null);
     } catch (err) {
-      setError(
-        err instanceof Error ? err.message : "Failed to save purchase",
-      );
+      setError(err instanceof Error ? err.message : "Failed to save purchase");
     } finally {
       setSaving(false);
     }
@@ -402,9 +397,7 @@ export default function PurchasesPage({
       setError(null);
 
       await deletePurchase(tenantSlug, deleteCandidate.id);
-      setPurchases((prev) =>
-        prev.filter((p) => p.id !== deleteCandidate.id),
-      );
+      setPurchases((prev) => prev.filter((p) => p.id !== deleteCandidate.id));
 
       setDeleteConfirmOpen(false);
       setDeleteCandidate(null);
@@ -475,9 +468,7 @@ export default function PurchasesPage({
                 totalPages={totalPages}
                 onPageChange={setPage}
                 onPrevPage={() => setPage((p) => Math.max(1, p - 1))}
-                onNextPage={() =>
-                  setPage((p) => Math.min(totalPages, p + 1))
-                }
+                onNextPage={() => setPage((p) => Math.min(totalPages, p + 1))}
               />
             </>
           )}

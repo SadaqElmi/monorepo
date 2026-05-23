@@ -1,5 +1,8 @@
+import { buildPagedQuery, unwrapListResponse } from "@repo/utils";
+import type { PagedList } from "@repo/types";
+
 import { INVENTORY_PREFIX } from "./endpoints";
-import { type JsonHeaders, jsonFetch } from "./http";
+import { jsonFetch } from "./http";
 
 export type InventoryEntry = {
   id: string;
@@ -23,15 +26,45 @@ export async function getInventory(
   tenantSlug: string,
   options?: BranchScopeOptions,
 ): Promise<InventoryEntry[]> {
-  const headers: JsonHeaders = { "X-Tenant": tenantSlug };
+  const headers: Record<string, string> = {};
   if (options?.includeAllBranches) {
     headers["x-branch-id"] = "all";
   }
-  return jsonFetch<InventoryEntry[]>(INVENTORY_PREFIX, {
-    method: "GET",
-    headers,
-    signal: options?.signal,
+  const data = await jsonFetch<InventoryEntry[] | PagedList<InventoryEntry>>(
+    INVENTORY_PREFIX,
+    {
+      method: "GET",
+      tenantSlug,
+      headers,
+      signal: options?.signal,
+    },
+  );
+  return unwrapListResponse(data).items;
+}
+
+export async function getInventoryPaged(
+  tenantSlug: string,
+  params: { page: number; limit?: number },
+  options?: BranchScopeOptions,
+): Promise<PagedList<InventoryEntry>> {
+  const q = buildPagedQuery({
+    page: params.page,
+    limit: params.limit ?? 50,
   });
+  const headers: Record<string, string> = {};
+  if (options?.includeAllBranches) {
+    headers["x-branch-id"] = "all";
+  }
+  const data = await jsonFetch<InventoryEntry[] | PagedList<InventoryEntry>>(
+    `${INVENTORY_PREFIX}${q}`,
+    {
+      method: "GET",
+      tenantSlug,
+      headers,
+      signal: options?.signal,
+    },
+  );
+  return unwrapListResponse(data, params.page, params.limit ?? 50);
 }
 
 export type ProductStockByBranch = {
@@ -49,7 +82,7 @@ export async function getInventoryStockByProduct(
     `${INVENTORY_PREFIX}/product/${encodeURIComponent(productId)}/stock`,
     {
       method: "GET",
-      headers: { "X-Tenant": tenantSlug } as JsonHeaders,
+      tenantSlug,
     },
   );
 }
@@ -61,10 +94,8 @@ export async function updateInventory(
 ): Promise<InventoryEntry | null> {
   return jsonFetch<InventoryEntry | null>(`${INVENTORY_PREFIX}/${id}`, {
     method: "PATCH",
-    headers: {
-      "Content-Type": "application/json",
-      "X-Tenant": tenantSlug,
-    } as JsonHeaders,
+    tenantSlug,
+    headers: { "Content-Type": "application/json" },
     body: JSON.stringify(input),
   });
 }

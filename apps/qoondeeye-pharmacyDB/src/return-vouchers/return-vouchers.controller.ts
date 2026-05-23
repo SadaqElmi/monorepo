@@ -10,7 +10,7 @@ import {
   Post,
   Req,
 } from '@nestjs/common';
-import type { Request } from 'express';
+import type { FastifyRequest } from 'fastify';
 import { TenantContextService } from '../tenant/tenant-context.service';
 import { CreateReturnVoucherDto } from './dto/create-return-voucher.dto';
 import { FinalizeReturnVoucherDto } from './dto/finalize-return-voucher.dto';
@@ -32,7 +32,7 @@ export class ReturnVouchersController {
   }
 
   @Get('by-token/:token')
-  findByToken(@Param('token') token: string, @Req() req: Request) {
+  findByToken(@Param('token') token: string, @Req() req: FastifyRequest) {
     this.ensureTenant();
     const allowed = req.allowedBranchIds ?? [];
     if (!allowed.length) {
@@ -58,7 +58,7 @@ export class ReturnVouchersController {
   }
 
   @Post()
-  create(@Body() dto: CreateReturnVoucherDto, @Req() req: Request) {
+  create(@Body() dto: CreateReturnVoucherDto, @Req() req: FastifyRequest) {
     this.ensureTenant();
     if (!req.branchId) {
       throw new BadRequestException('Branch required (x-branch-id header)');
@@ -74,7 +74,7 @@ export class ReturnVouchersController {
   finalize(
     @Param('id', ParseUUIDPipe) id: string,
     @Body() dto: FinalizeReturnVoucherDto,
-    @Req() req: Request,
+    @Req() req: FastifyRequest,
   ) {
     this.ensureTenant();
     const allowed = req.allowedBranchIds ?? [];

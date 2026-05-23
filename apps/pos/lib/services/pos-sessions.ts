@@ -1,7 +1,8 @@
-import { API_BASE } from "./endpoints";
-import { jsonFetch, type JsonHeaders } from "./http";
+import { POS_PREFIX } from "./endpoints";
+import { jsonFetch, type JsonFetchOptions } from "./http";
+import { getPosDeviceBinding } from "@/lib/device-client";
 
-const PREFIX = `${API_BASE}/api/pos`;
+const PREFIX = POS_PREFIX;
 
 export type PosSessionCurrentResponse = {
   id: string;
@@ -19,7 +20,7 @@ export async function getCurrentPosSession(
 ): Promise<PosSessionCurrentResponse> {
   return jsonPos<PosSessionCurrentResponse>(`${PREFIX}/sessions/current`, {
     method: "GET",
-    headers: { "X-Tenant": tenantSlug } as JsonHeaders,
+    tenantSlug,
   });
 }
 
@@ -32,13 +33,16 @@ export async function openPosSession(
   status: string;
   opened_at: string;
 }> {
+  const binding = getPosDeviceBinding();
+  const payload = {
+    ...body,
+    deviceId: body?.deviceId ?? binding?.deviceId,
+  };
   return jsonPos(`${PREFIX}/sessions/open`, {
     method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      "X-Tenant": tenantSlug,
-    } as JsonHeaders,
-    body: JSON.stringify(body ?? {}),
+    tenantSlug,
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
   });
 }
 
@@ -48,7 +52,7 @@ export async function postSessionStatement(
 ): Promise<unknown> {
   return jsonPos(`${PREFIX}/sessions/${sessionId}/open-statement`, {
     method: "POST",
-    headers: { "X-Tenant": tenantSlug } as JsonHeaders,
+    tenantSlug,
   });
 }
 
@@ -58,7 +62,7 @@ export async function getPosStatement(
 ): Promise<unknown> {
   return jsonPos(`${PREFIX}/statements/${statementId}`, {
     method: "GET",
-    headers: { "X-Tenant": tenantSlug } as JsonHeaders,
+    tenantSlug,
   });
 }
 
@@ -72,10 +76,8 @@ export async function patchPosStatementLine(
     `${PREFIX}/statements/${statementId}/lines/${lineId}`,
     {
       method: "PATCH",
-      headers: {
-        "Content-Type": "application/json",
-        "X-Tenant": tenantSlug,
-      } as JsonHeaders,
+      tenantSlug,
+      headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ actualAmount }),
     },
   );
@@ -87,7 +89,7 @@ export async function postPosStatement(
 ): Promise<unknown> {
   return jsonPos(`${PREFIX}/statements/${statementId}/post`, {
     method: "POST",
-    headers: { "X-Tenant": tenantSlug } as JsonHeaders,
+    tenantSlug,
   });
 }
 
@@ -97,7 +99,7 @@ export async function getXReport(
 ): Promise<unknown> {
   return jsonPos(`${PREFIX}/sessions/${sessionId}/x-report`, {
     method: "GET",
-    headers: { "X-Tenant": tenantSlug } as JsonHeaders,
+    tenantSlug,
   });
 }
 
@@ -107,7 +109,7 @@ export async function getZReport(
 ): Promise<unknown> {
   return jsonPos(`${PREFIX}/sessions/${sessionId}/z-report`, {
     method: "GET",
-    headers: { "X-Tenant": tenantSlug } as JsonHeaders,
+    tenantSlug,
   });
 }
 
@@ -117,10 +119,10 @@ export async function closePosSession(
 ): Promise<unknown> {
   return jsonPos(`${PREFIX}/sessions/${sessionId}/close`, {
     method: "POST",
-    headers: { "X-Tenant": tenantSlug } as JsonHeaders,
+    tenantSlug,
   });
 }
 
-async function jsonPos<T>(url: string, init: RequestInit): Promise<T> {
+async function jsonPos<T>(url: string, init: JsonFetchOptions): Promise<T> {
   return jsonFetch<T>(url, init);
 }

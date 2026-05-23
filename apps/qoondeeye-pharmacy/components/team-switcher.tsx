@@ -9,7 +9,8 @@ import {
   isRestrictedToAssignedBranch,
 } from "@/lib/branch-access";
 import { syncActiveBranchCookie } from "@/lib/branch-cookie";
-import { getBranches, type Branch } from "@/lib/services/branches";
+import { useErpBranches } from "@/hooks/queries/use-erp-branches";
+import type { Branch } from "@/lib/services/branches";
 import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
@@ -46,8 +47,9 @@ export function TeamSwitcher({ variant = "default" }: TeamSwitcherProps) {
     resolvedUser?.role,
   );
   const assignedBranchId = getAssignedBranchIdFromUser();
-  const [branches, setBranches] = React.useState<Branch[]>([]);
-  const [loading, setLoading] = React.useState(true);
+  const branchesQuery = useErpBranches(tenantSlug);
+  const branches: Branch[] = branchesQuery.data ?? [];
+  const loading = branchesQuery.isPending;
   const [activeId, setActiveId] = React.useState<string>("all");
 
   React.useEffect(() => {
@@ -55,62 +57,55 @@ export function TeamSwitcher({ variant = "default" }: TeamSwitcherProps) {
   }, [assignedBranchId, restrictedToAssignedBranch]);
 
   React.useEffect(() => {
-    let cancelled = false;
-    setLoading(true);
-    void getBranches(tenantSlug)
-      .then((rows) => {
-        if (!cancelled) setBranches(rows);
-      })
-      .catch(() => {
-        if (!cancelled) setBranches([]);
-      })
-      .finally(() => {
-        if (!cancelled) setLoading(false);
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [tenantSlug]);
+    const onBranch = () => setActiveId(readBranchId());
+    window.addEventListener("activeBranchChanged", onBranch);
+    return () => window.removeEventListener("activeBranchChanged", onBranch);
+  }, []);
 
-  const emitBranch = React.useCallback((branchId: string) => {
-    if (
-      restrictedToAssignedBranch &&
-      assignedBranchId &&
-      branchId !== assignedBranchId
-    ) {
-      return;
-    }
-    try {
-      if (branchId === "all") {
-        localStorage.setItem("branchId", "all");
-        localStorage.setItem("branchName", "All branches");
-      } else {
-        localStorage.setItem("branchId", branchId);
-        const selectedBranchName = branches.find((b) => b.id === branchId)?.name?.trim();
-        if (selectedBranchName) {
-          localStorage.setItem("branchName", selectedBranchName);
-        } else {
-          localStorage.removeItem("branchName");
-        }
+  const emitBranch = React.useCallback(
+    (branchId: string) => {
+      if (
+        restrictedToAssignedBranch &&
+        assignedBranchId &&
+        branchId !== assignedBranchId
+      ) {
+        return;
       }
-    } catch {
-      // ignore
-    }
-    syncActiveBranchCookie(branchId);
-    setActiveId(branchId);
-    const selectedBranchName =
-      branchId === "all"
-        ? "All branches"
-        : branches.find((b) => b.id === branchId)?.name?.trim();
-    window.dispatchEvent(
-      new CustomEvent("activeBranchChanged", {
-        detail: {
-          branchId: branchId === "all" ? null : branchId,
-          branchName: selectedBranchName,
-        },
-      }),
-    );
-  }, [assignedBranchId, branches, restrictedToAssignedBranch]);
+      try {
+        if (branchId === "all") {
+          localStorage.setItem("branchId", "all");
+          localStorage.setItem("branchName", "All branches");
+        } else {
+          localStorage.setItem("branchId", branchId);
+          const selectedBranchName = branches
+            .find((b) => b.id === branchId)
+            ?.name?.trim();
+          if (selectedBranchName) {
+            localStorage.setItem("branchName", selectedBranchName);
+          } else {
+            localStorage.removeItem("branchName");
+          }
+        }
+      } catch {
+        // ignore
+      }
+      syncActiveBranchCookie(branchId);
+      setActiveId(branchId);
+      const selectedBranchName =
+        branchId === "all"
+          ? "All branches"
+          : branches.find((b) => b.id === branchId)?.name?.trim();
+      window.dispatchEvent(
+        new CustomEvent("activeBranchChanged", {
+          detail: {
+            branchId: branchId === "all" ? null : branchId,
+            branchName: selectedBranchName,
+          },
+        }),
+      );
+    },
+    [assignedBranchId, branches, restrictedToAssignedBranch],
+  );
 
   React.useEffect(() => {
     if (restrictedToAssignedBranch && assignedBranchId) {
@@ -133,11 +128,7 @@ export function TeamSwitcher({ variant = "default" }: TeamSwitcherProps) {
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
-        <Button
-          variant="outline"
-          className={triggerClass}
-          type="button"
-        >
+        <Button variant="outline" className={triggerClass} type="button">
           {loading ? (
             <Loader2
               className="size-4 shrink-0 animate-spin text-muted-foreground"

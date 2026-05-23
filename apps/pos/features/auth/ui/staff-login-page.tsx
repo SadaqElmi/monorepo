@@ -12,7 +12,10 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Keyboard } from "lucide-react";
 
+import { reconcileClientBranchSelection } from "@/lib/branch-reconcile";
+import { syncActiveBranchCookie } from "@/lib/branch-cookie";
 import { setAuthToken, type StoredUser } from "@/lib/auth-client";
+import { formatApiErrorForUser } from "@/lib/services/http";
 import { usePos } from "@/components/pos-context";
 import { getPosDeviceCredential } from "@/lib/device-client";
 import { staffLogin, pinLogin } from "@/lib/services/auth";
@@ -74,8 +77,8 @@ export function StaffLoginPage() {
     try {
       let branchId: string | undefined;
       try {
-        const b = localStorage.getItem("branchId");
-        if (b) branchId = b;
+        const b = localStorage.getItem("branchId")?.trim();
+        if (b && b.toLowerCase() !== "all") branchId = b;
       } catch {
         /* ignore */
       }
@@ -144,6 +147,7 @@ export function StaffLoginPage() {
         tenantSlug: res.tenantSlug ?? undefined,
         assignedBranchId: res.assignedBranchId,
         allowedBranchIds: res.allowedBranchIds,
+        canViewAllBranches: res.canViewAllBranches,
       };
 
       setAuthToken(res.token, user);
@@ -155,7 +159,9 @@ export function StaffLoginPage() {
         const initialBranchId = res.assignedBranchId ?? res.defaultBranchId;
         if (initialBranchId) {
           localStorage.setItem("branchId", initialBranchId);
+          syncActiveBranchCookie(initialBranchId);
         }
+        reconcileClientBranchSelection(res.allowedBranchIds);
       } catch {
         /* ignore */
       }
@@ -168,7 +174,7 @@ export function StaffLoginPage() {
       router.push("/");
       router.refresh();
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Sign-in failed");
+      setError(formatApiErrorForUser(e));
     } finally {
       setLoading(false);
     }
