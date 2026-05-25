@@ -21,6 +21,7 @@ import {
   type StoredUser,
 } from "@/lib/auth-client";
 import { enrollPosDevice } from "@/lib/services/auth";
+import { isManagerTierRole } from "@/features/register/model/discount-policy";
 import { POS_BRAND_COLOR } from "@/features/register/model/constants";
 
 const POS_LOGIN_MODE = (
@@ -34,6 +35,12 @@ export function PosSessionGate({ children }: { children: React.ReactNode }) {
     const u = getStoredUser();
     const isLoggedIn = u?.userType === "tenant" && u.tenantSlug;
     if (isLoggedIn) {
+      const managerAwaitingStaff =
+        isManagerTierRole(u.role) && !u.staffId?.trim();
+      if (managerAwaitingStaff) {
+        setSession(1);
+        return;
+      }
       setSession(2);
       return;
     }

@@ -96,12 +96,6 @@ export function PosReturnPanel({
   const [lookupLoading, setLookupLoading] = React.useState(false);
   const [lookupError, setLookupError] = React.useState<string | null>(null);
 
-  const [productNames, setProductNames] = React.useState<
-    Record<string, string>
-  >({});
-  const [barcodeToProductId, setBarcodeToProductId] = React.useState<
-    Record<string, string>
-  >({});
   const [returnQtyByLine, setReturnQtyByLine] = React.useState<
     Record<string, string>
   >({});
@@ -123,20 +117,9 @@ export function PosReturnPanel({
     null,
   );
 
-  const catalogQuery = usePosCatalog(tenantSlug);
-  React.useEffect(() => {
-    const prods = catalogQuery.data?.prods;
-    if (!prods) return;
-    const map: Record<string, string> = {};
-    const bc: Record<string, string> = {};
-    for (const p of prods) {
-      map[p.id] = p.name;
-      const code = (p.sku ?? "").trim().toLowerCase();
-      if (code) bc[code] = p.id;
-    }
-    setProductNames(map);
-    setBarcodeToProductId(bc);
-  }, [catalogQuery.data]);
+  const catalog = usePosCatalog(tenantSlug);
+  const productNames = catalog.productNameById;
+  const barcodeToProductId = catalog.barcodeToProductId;
 
   const runLookup = async () => {
     if (!tenantSlug) return;

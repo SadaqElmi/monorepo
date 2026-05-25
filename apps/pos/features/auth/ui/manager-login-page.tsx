@@ -81,7 +81,8 @@ export function ManagerLoginPage() {
       };
 
       setAuthToken(res.token, user);
-      setManagerPrivilegesSuspended(false);
+      // Terminal unlocked; cashier/staff must sign in before operating the register.
+      setManagerPrivilegesSuspended(true);
 
       try {
         if (res.tenantSlug) {
@@ -101,7 +102,7 @@ export function ManagerLoginPage() {
         prefetchPosRegisterData(queryClient, slug);
       }
 
-      router.push("/");
+      router.push("/staff-login");
       router.refresh();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Sign-in failed");

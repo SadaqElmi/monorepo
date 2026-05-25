@@ -20,6 +20,7 @@ export {
 } from "./services/pos-sessions";
 export { getBatches, type Batch } from "./services/batches";
 export { getCategories, type Category } from "./services/categories";
+export { getPosRegisterCatalog } from "./services/pos-catalog";
 export { getProductByBarcode, getProducts } from "./services/products";
 export {
   createReturnVoucher,

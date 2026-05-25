@@ -13,9 +13,6 @@ export function invalidatePosAfterSale(
     queryKey: ["pos", "sales", tenantSlug, facet],
   });
   void queryClient.invalidateQueries({
-    queryKey: posKeys.catalogProducts(tenantSlug, facet),
-  });
-  void queryClient.invalidateQueries({
-    queryKey: posKeys.catalogBatches(tenantSlug, facet),
+    queryKey: posKeys.catalog(tenantSlug, facet),
   });
 }

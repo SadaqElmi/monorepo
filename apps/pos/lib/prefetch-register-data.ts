@@ -1,6 +1,7 @@
 import type { QueryClient } from "@tanstack/react-query";
 
-import { getBatches, getCategories, getProducts, getSalesPaged } from "@/lib/api";
+import { getSalesPaged } from "@/lib/api";
+import { getPosRegisterCatalog } from "@/lib/services/pos-catalog";
 import { getBranchQueryKeyFacet } from "@/lib/query-branch-key";
 import { posKeys, POS_STALE_CATALOG, POS_STALE_SALES } from "@/lib/pos-query-keys";
 
@@ -22,19 +23,9 @@ export function prefetchPosRegisterData(
 
   void Promise.all([
     queryClient.prefetchQuery({
-      queryKey: posKeys.catalogProducts(tenantSlug, facet),
+      queryKey: posKeys.catalog(tenantSlug, facet),
       staleTime: POS_STALE_CATALOG,
-      queryFn: ({ signal }) => getProducts(tenantSlug, { signal }),
-    }),
-    queryClient.prefetchQuery({
-      queryKey: posKeys.catalogBatches(tenantSlug, facet),
-      staleTime: POS_STALE_CATALOG,
-      queryFn: ({ signal }) => getBatches(tenantSlug, { signal }),
-    }),
-    queryClient.prefetchQuery({
-      queryKey: posKeys.catalogCategories(tenantSlug, facet),
-      staleTime: POS_STALE_CATALOG,
-      queryFn: ({ signal }) => getCategories(tenantSlug, { signal }),
+      queryFn: ({ signal }) => getPosRegisterCatalog(tenantSlug, { signal }),
     }),
     queryClient.prefetchQuery({
       queryKey: posKeys.sales(tenantSlug, facet, 1, 200),

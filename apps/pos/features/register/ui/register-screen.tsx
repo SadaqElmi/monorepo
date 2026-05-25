@@ -35,12 +35,9 @@ import {
 import { CurrencyEntryDialog } from "@/components/currency-entry-dialog";
 import { usePos } from "@/components/pos-context";
 import {
-  getBatches,
-  getCategories,
   getSaleById,
   getSalesPaged,
   getProductByBarcode,
-  type Batch,
 } from "@/lib/api";
 import {
   persistPosTransactions,
@@ -124,12 +121,6 @@ export function RegisterScreen() {
 
   const tenantSlug = currentUser?.tenantSlug ?? null;
 
-  const [categoryList, setCategoryList] = React.useState<string[]>([
-    ALL_CATEGORIES_LABEL,
-  ]);
-  const [catalogProducts, setCatalogProducts] = React.useState<
-    PosCatalogProduct[]
-  >([]);
   const [activeCategory, setActiveCategory] =
     React.useState<string>(ALL_CATEGORIES_LABEL);
   const [searchQuery, setSearchQuery] = React.useState("");
@@ -138,7 +129,6 @@ export function RegisterScreen() {
   const [highlightedProductIndex, setHighlightedProductIndex] =
     React.useState(0);
   const [, setNow] = React.useState<Date | null>(null);
-  const [batchesState, setBatchesState] = React.useState<Batch[]>([]);
   const searchMenuCloseTimerRef = React.useRef<ReturnType<
     typeof setTimeout
   > | null>(null);
@@ -150,7 +140,13 @@ export function RegisterScreen() {
     React.useState(false);
 
   const branchKey = usePosBranchFacet(tenantSlug);
-  const catalogQuery = usePosCatalog(tenantSlug);
+  const catalog = usePosCatalog(tenantSlug);
+  const {
+    catalogProducts,
+    categoryList,
+    batches: batchesState,
+    productNameById,
+  } = catalog;
 
   const salesQuery = useQuery({
     queryKey: posKeys.sales(tenantSlug ?? "", branchKey, 1, 200),
@@ -169,12 +165,6 @@ export function RegisterScreen() {
   React.useEffect(() => {
     if (selectedLineId) setForceBlankSelectionPanel(false);
   }, [selectedLineId]);
-
-  const productNameById = React.useMemo(() => {
-    const out: Record<string, string> = {};
-    for (const p of catalogProducts) out[p.id] = p.name;
-    return out;
-  }, [catalogProducts]);
 
   React.useEffect(() => {
     syncReceiptSeqFromTransactions();
@@ -266,59 +256,6 @@ export function RegisterScreen() {
       return changed ? next : prev;
     });
   }, [catalogProducts, productNameById, setTransactions]);
-
-  React.useEffect(() => {
-    if (!tenantSlug) {
-      setCatalogProducts([]);
-      setCategoryList([ALL_CATEGORIES_LABEL]);
-      setBatchesState([]);
-      return;
-    }
-
-    if (catalogQuery.isError) {
-      setCatalogProducts([]);
-      setCategoryList([ALL_CATEGORIES_LABEL]);
-      return;
-    }
-
-    const raw = catalogQuery.data;
-    if (!raw) return;
-
-    const { prods, batchesData, cats } = raw;
-    setBatchesState(batchesData);
-    const catNames = new Map(cats.map((c) => [c.id, c.name]));
-    const mapped: PosCatalogProduct[] = prods.map((p) => {
-      const { sellingValue, listValue, showCompare } = resolvePosCatalogPricing(
-        p,
-        batchesData,
-        p.id,
-      );
-      return {
-        id: p.id,
-        sku: (p.sku ?? "").trim() || p.id.slice(0, 8),
-        name: p.name,
-        meta:
-          [p.genericName, p.strength, p.unit].filter(Boolean).join(" • ") ||
-          "Catalog item",
-        category:
-          (p.categoryId && catNames.get(p.categoryId)) || "Uncategorized",
-        price: formatMoney(sellingValue),
-        priceValue: sellingValue,
-        listPriceValue: showCompare ? listValue : undefined,
-        showCompare,
-        stock: "in" as const,
-        unitType: "PC" as UnitType,
-      };
-    });
-    if (mapped.length > 0) {
-      setCatalogProducts(mapped);
-      const uc = [...new Set(mapped.map((m) => m.category))].sort();
-      setCategoryList([ALL_CATEGORIES_LABEL, ...uc]);
-    } else {
-      setCatalogProducts([]);
-      setCategoryList([ALL_CATEGORIES_LABEL]);
-    }
-  }, [tenantSlug, catalogQuery.data, catalogQuery.isError]);
 
   const addProductFromApi = React.useCallback(
     (p: {
