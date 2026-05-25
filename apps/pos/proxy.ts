@@ -26,14 +26,18 @@ function getAuthPayload(request: NextRequest): AuthPayload | null {
 export function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl;
 
-  if (pathname === "/login" || pathname === "/staff-login") {
+  if (pathname === "/login") {
     const token = request.cookies.get(AUTH_TOKEN_KEY)?.value;
     if (token) {
       const payload = getAuthPayload(request);
       if (payload?.id) {
-        return NextResponse.redirect(new URL("/", request.url));
+        return NextResponse.redirect(new URL("/staff-login", request.url));
       }
     }
+    return NextResponse.next();
+  }
+
+  if (pathname === "/staff-login") {
     return NextResponse.next();
   }
 

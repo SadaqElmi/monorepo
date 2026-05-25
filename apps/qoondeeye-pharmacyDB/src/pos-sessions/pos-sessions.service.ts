@@ -15,6 +15,9 @@ import {
   STATEMENT_BUCKETS,
   paymentMethodToStatementBucket,
 } from '../accounting/pos-statement-bucket.util';
+import { BatchesService } from '../batches/batches.service';
+import { CategoriesService } from '../categories/categories.service';
+import { ProductsService } from '../products/products.service';
 
 function round2(n: number): number {
   return Math.round((n + Number.EPSILON) * 100) / 100;
@@ -55,7 +58,28 @@ export class PosSessionsService {
     private readonly accountingPosting: AccountingPostingService,
     private readonly lockDates: AccountingLockDateService,
     private readonly auditLog: AuditLogService,
+    private readonly productsService: ProductsService,
+    private readonly batchesService: BatchesService,
+    private readonly categoriesService: CategoriesService,
   ) {}
+
+  /** Products, batches, and categories for the register in one response. */
+  async getRegisterCatalog(
+    schemaName: string,
+    tenantId: string,
+    allowedBranchIds: string[],
+  ) {
+    const [prods, batchesData, cats] = await Promise.all([
+      this.productsService.findAll(schemaName, tenantId, allowedBranchIds),
+      this.batchesService.findAll(schemaName),
+      this.categoriesService.findAll(
+        schemaName,
+        tenantId,
+        allowedBranchIds,
+      ),
+    ]);
+    return { prods, batchesData, cats };
+  }
 
   private ensureBranch(branchId: string, allowedBranchIds: string[]): void {
     if (!allowedBranchIds.includes(branchId)) {

@@ -1,30 +1,24 @@
 "use client";
 
-import { useQueries } from "@tanstack/react-query";
+import { useQuery } from "@tanstack/react-query";
+import { useMemo } from "react";
 
 import { usePosBranchFacet } from "@/hooks/use-pos-branch-facet";
-import { getBatches, getCategories, getProducts } from "@/lib/api";
+import {
+  EMPTY_POS_CATALOG_VIEW,
+  mapPosCatalogView,
+  type PosCatalogData,
+} from "@/lib/pos-catalog-view";
 import { posKeys, POS_STALE_CATALOG } from "@/lib/pos-query-keys";
-import type { Batch } from "@/lib/api";
-import type { Product } from "@repo/types";
-import type { Category } from "@repo/types";
+import { getPosRegisterCatalog } from "@/lib/services/pos-catalog";
 
-export type PosCatalogData = {
-  prods: Product[];
-  batchesData: Batch[];
-  cats: Category[];
-};
+export type { PosCatalogData } from "@/lib/pos-catalog-view";
 
 export async function fetchPosCatalog(
   tenantSlug: string,
   signal?: AbortSignal,
 ): Promise<PosCatalogData> {
-  const [prods, batchesData, cats] = await Promise.all([
-    getProducts(tenantSlug, { signal }),
-    getBatches(tenantSlug, { signal }),
-    getCategories(tenantSlug, { signal }),
-  ]);
-  return { prods, batchesData, cats };
+  return getPosRegisterCatalog(tenantSlug, { signal });
 }
 
 export function usePosCatalog(
@@ -39,64 +33,38 @@ export function usePosCatalog(
     options?.enabled !== false && Boolean(tenantSlug && branchFacet);
   const tenant = tenantSlug ?? "";
 
-  const [productsQ, batchesQ, categoriesQ] = useQueries({
-    queries: [
-      {
-        queryKey: posKeys.catalogProducts(tenant, branchFacet),
-        enabled,
-        staleTime: POS_STALE_CATALOG,
-        refetchOnWindowFocus: false,
-        initialData: options?.initialData?.prods,
-        queryFn: ({ signal }) => getProducts(tenantSlug!, { signal }),
-      },
-      {
-        queryKey: posKeys.catalogBatches(tenant, branchFacet),
-        enabled,
-        staleTime: POS_STALE_CATALOG,
-        refetchOnWindowFocus: false,
-        initialData: options?.initialData?.batchesData,
-        queryFn: ({ signal }) => getBatches(tenantSlug!, { signal }),
-      },
-      {
-        queryKey: posKeys.catalogCategories(tenant, branchFacet),
-        enabled,
-        staleTime: POS_STALE_CATALOG,
-        refetchOnWindowFocus: false,
-        initialData: options?.initialData?.cats,
-        queryFn: ({ signal }) => getCategories(tenantSlug!, { signal }),
-      },
-    ],
+  const query = useQuery({
+    queryKey: posKeys.catalog(tenant, branchFacet),
+    enabled,
+    staleTime: POS_STALE_CATALOG,
+    refetchOnWindowFocus: false,
+    initialData: options?.initialData,
+    queryFn: ({ signal }) => getPosRegisterCatalog(tenantSlug!, { signal }),
   });
 
-  const data: PosCatalogData | undefined =
-    productsQ.data != null &&
-    batchesQ.data != null &&
-    categoriesQ.data != null
-      ? {
-          prods: productsQ.data,
-          batchesData: batchesQ.data,
-          cats: categoriesQ.data,
-        }
-      : options?.initialData;
+  const isError = query.isError;
+
+  const data = query.data;
+
+  const view = useMemo(() => {
+    if (!tenantSlug || isError || !data) {
+      return EMPTY_POS_CATALOG_VIEW;
+    }
+    return mapPosCatalogView(data);
+  }, [tenantSlug, isError, data]);
 
   return {
     data,
-    isPending:
-      productsQ.isPending || batchesQ.isPending || categoriesQ.isPending,
-    isFetching:
-      productsQ.isFetching || batchesQ.isFetching || categoriesQ.isFetching,
-    isError: productsQ.isError || batchesQ.isError || categoriesQ.isError,
-    error: productsQ.error ?? batchesQ.error ?? categoriesQ.error,
-    dataUpdatedAt: Math.max(
-      productsQ.dataUpdatedAt,
-      batchesQ.dataUpdatedAt,
-      categoriesQ.dataUpdatedAt,
-    ),
-    refetch: () =>
-      Promise.all([
-        productsQ.refetch(),
-        batchesQ.refetch(),
-        categoriesQ.refetch(),
-      ]),
+    isPending: query.isPending,
+    isFetching: query.isFetching,
+    isError,
+    error: query.error,
+    dataUpdatedAt: query.dataUpdatedAt,
+    refetch: () => query.refetch(),
+    catalogProducts: view.catalogProducts,
+    categoryList: view.categoryList,
+    batches: view.batches,
+    productNameById: view.productNameById,
+    barcodeToProductId: view.barcodeToProductId,
   };
 }

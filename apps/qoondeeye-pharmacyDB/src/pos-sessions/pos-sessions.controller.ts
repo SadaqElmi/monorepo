@@ -21,12 +21,25 @@ export class PosSessionsController {
     private readonly tenantContext: TenantContextService,
   ) {}
 
-  private ensureTenant() {
-    if (!this.tenantContext.getTenant()) {
+  private ensureTenant(): { schema: string; tenantId: string } {
+    const tenant = this.tenantContext.getTenant();
+    if (!tenant) {
       throw new BadRequestException(
         'Tenant context required. Use X-Tenant header (e.g. X-Tenant: pharmacy1)',
       );
     }
+    return { schema: tenant.schemaName, tenantId: tenant.id };
+  }
+
+  /** Register catalog bundle (products + batches + categories) in one request. */
+  @Get('register-catalog')
+  getRegisterCatalog(@Req() req: FastifyRequest) {
+    const { schema, tenantId } = this.ensureTenant();
+    return this.posSessionsService.getRegisterCatalog(
+      schema,
+      tenantId,
+      req.allowedBranchIds ?? [],
+    );
   }
 
   @Post('sessions/open')
