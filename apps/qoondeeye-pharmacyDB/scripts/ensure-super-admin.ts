@@ -15,7 +15,7 @@ import {
 
 const url = resolveDatabaseUrl();
 const email = process.env.SUPER_ADMIN_EMAIL?.trim();
-const password = process.env.SUPER_ADMIN_PASSWORD;
+const password = process.env.SUPER_ADMIN_PASSWORD?.trim();
 
 async function main() {
   if (!url) {
