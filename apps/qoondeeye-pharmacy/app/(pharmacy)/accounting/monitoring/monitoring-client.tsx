@@ -26,7 +26,7 @@ import {
 } from "@/components/ui/table";
 import { useErpBranches } from "@/hooks/queries/use-erp-branches";
 import { useErpBranchFacet } from "@/hooks/use-erp-branch-facet";
-import { getStoredUser } from "@/lib/auth-client";
+import { getResolvedStoredUser } from "@/lib/auth-client";
 import { erpKeys } from "@/lib/erp-query-keys";
 import { ERP_STALE_LIST } from "@/lib/erp-query-options";
 import {
@@ -57,7 +57,7 @@ export default function TransferMonitoringPage() {
   const queryClient = useQueryClient();
   const branchFacet = useErpBranchFacet();
   const [tenantSlug] = useState(() => {
-    const user = getStoredUser();
+    const user = getResolvedStoredUser();
     return user?.tenantSlug?.trim() || null;
   });
 

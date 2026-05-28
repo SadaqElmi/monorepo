@@ -26,7 +26,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { useErpBranchFacet } from "@/hooks/use-erp-branch-facet";
-import { getStoredUser } from "@/lib/auth-client";
+import { getResolvedStoredUser } from "@/lib/auth-client";
 import { groupCoaByRoot, sortCoaTree } from "@/lib/accounting-display";
 import { erpKeys } from "@/lib/erp-query-keys";
 import { ERP_STALE_STATIC } from "@/lib/erp-query-options";
@@ -43,7 +43,7 @@ export default function AccountingChartOfAccountsPage({
 }: ChartOfAccountsPageClientProps = {}) {
   const branchFacet = useErpBranchFacet();
   const [tenantSlug] = React.useState(
-    () => getStoredUser()?.tenantSlug ?? "pharmacy1",
+    () => getResolvedStoredUser()?.tenantSlug?.trim() ?? "",
   );
 
   const coaQuery = useQuery({

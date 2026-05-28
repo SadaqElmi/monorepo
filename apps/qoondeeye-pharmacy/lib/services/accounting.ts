@@ -101,7 +101,7 @@ function appendReportBranchQuery(
     computeReportScopeHash(branchId, aggregateAll, opts?.consolidated),
   );
 }
-import { type JsonHeaders, authPost, jsonFetch } from "./http";
+import { type JsonHeaders, authPost, blobFetch, jsonFetch } from "./http";
 
 export type ChartOfAccountRow = {
   id: string;
@@ -763,21 +763,13 @@ export async function downloadAuditPackageZip(
   if (opts?.to) q.set("to", opts.to);
   if (opts?.scopeHash) q.set("scopeHash", opts.scopeHash);
   if (opts?.periodKey) q.set("periodKey", opts.periodKey);
-  const headers: Record<string, string> = {
-    "X-Tenant": tenantSlug,
-  };
+  const headers: Record<string, string> = { "X-Tenant": tenantSlug };
   const branchHeader = getClientBranchIdHeaderForApi();
   if (branchHeader) headers["x-branch-id"] = branchHeader;
-  const res = await fetch(`${REPORTS_PREFIX}/audit-package?${q}`, {
+  return blobFetch(`${REPORTS_PREFIX}/audit-package?${q}`, {
     method: "GET",
-    credentials: "include",
     headers,
   });
-  if (!res.ok) {
-    const text = await res.text().catch(() => "");
-    throw new Error(text || `Download failed (${res.status})`);
-  }
-  return res.blob();
 }
 
 export async function getConsolidationRuns(
@@ -1649,6 +1641,25 @@ export function getAuditExportUrl(opts?: {
   if (opts?.from?.trim()) q.set("from", opts.from.trim());
   if (opts?.to?.trim()) q.set("to", opts.to.trim());
   return `${AUDIT_PREFIX}/export?${q}`;
+}
+
+export async function downloadAuditExportBlob(
+  tenantSlug: string,
+  opts?: {
+    branchId?: string;
+    aggregateAll?: boolean;
+    from?: string;
+    to?: string;
+  },
+): Promise<Blob> {
+  const q = new URLSearchParams();
+  appendReportBranchQuery(q, opts?.branchId, opts?.aggregateAll);
+  if (opts?.from?.trim()) q.set("from", opts.from.trim());
+  if (opts?.to?.trim()) q.set("to", opts.to.trim());
+  return blobFetch(`${AUDIT_PREFIX}/export?${q}`, {
+    method: "GET",
+    headers: { "X-Tenant": tenantSlug } as JsonHeaders,
+  });
 }
 
 export async function getIntegrityHealthSnapshots(

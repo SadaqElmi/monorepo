@@ -41,12 +41,12 @@ import {
 import { useErpAccountingAlerts } from "@/hooks/queries/use-erp-accounting-alerts";
 import { useErpBranchFacet } from "@/hooks/use-erp-branch-facet";
 import { money } from "@/lib/accounting-display";
-import { getStoredUser } from "@/lib/auth-client";
+import { getResolvedStoredUser } from "@/lib/auth-client";
 import { erpKeys } from "@/lib/erp-query-keys";
 import { ERP_STALE_REPORT } from "@/lib/erp-query-options";
 import { ROUTES, inventoryTransferDetailPath } from "@/lib/routes";
 import {
-  getAuditExportUrl,
+  downloadAuditExportBlob,
   getAuditVerify,
   getCloseReadiness,
   getIntegrityHealthSnapshots,
@@ -117,7 +117,9 @@ export default function ControlCenterPage() {
   const queryClient = useQueryClient();
   const branchFacet = useErpBranchFacet();
   const { branchId, aggregateAll } = useReportBranchQuery();
-  const [tenantSlug] = React.useState(() => getStoredUser()?.tenantSlug ?? "pharmacy1");
+  const [tenantSlug] = React.useState(
+    () => getResolvedStoredUser()?.tenantSlug?.trim() ?? "",
+  );
 
   const defaultTo = React.useMemo(() => new Date().toISOString().slice(0, 10), []);
   const defaultFrom = React.useMemo(() => {
@@ -221,12 +223,17 @@ export default function ControlCenterPage() {
   const [autoRepairResult, setAutoRepairResult] = React.useState<AutoFixResult | null>(
     null,
   );
+  const [auditExportLoading, setAuditExportLoading] = React.useState(false);
 
   const refreshControlCenter = React.useCallback(() => {
     void queryClient.invalidateQueries({ queryKey: ["erp", "control-center"] });
   }, [queryClient]);
 
   const runAutoRepairNow = React.useCallback(async () => {
+    if (!tenantSlug) {
+      toast.error("Sign in and select a tenant first.");
+      return;
+    }
     setAutoRepairLoading(true);
     try {
       const result = await runAutoRepair(tenantSlug);
@@ -249,6 +256,29 @@ export default function ControlCenterPage() {
       setAutoRepairLoading(false);
     }
   }, [refreshControlCenter, tenantSlug]);
+
+  const exportAuditChain = React.useCallback(async () => {
+    if (!tenantSlug) {
+      toast.error("Sign in and select a tenant first.");
+      return;
+    }
+    setAuditExportLoading(true);
+    try {
+      const blob = await downloadAuditExportBlob(tenantSlug, { branchId, aggregateAll });
+      const href = URL.createObjectURL(blob);
+      const anchor = document.createElement("a");
+      anchor.href = href;
+      anchor.download = "audit-chain.json";
+      anchor.click();
+      URL.revokeObjectURL(href);
+    } catch (err) {
+      toast.error("Export failed", {
+        description: err instanceof Error ? err.message : "Unable to export audit chain",
+      });
+    } finally {
+      setAuditExportLoading(false);
+    }
+  }, [aggregateAll, branchId, tenantSlug]);
 
   const inventoryCritical = inventorySync.filter((row) => row.severity === "critical").length;
   const summary = statusSummary({
@@ -433,15 +463,18 @@ export default function ControlCenterPage() {
         <Card>
           <CardHeader className="flex flex-row items-center justify-between">
             <CardTitle className="text-base">Audit proof</CardTitle>
-            <Button asChild size="sm" variant="outline">
-              <a
-                href={getAuditExportUrl({ branchId, aggregateAll })}
-                target="_blank"
-                rel="noreferrer"
-              >
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={() => void exportAuditChain()}
+              disabled={auditExportLoading}
+            >
+              {auditExportLoading ? (
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+              ) : (
                 <Download className="mr-2 h-4 w-4" />
-                Export chain
-              </a>
+              )}
+              Export chain
             </Button>
           </CardHeader>
           <CardContent className="space-y-2 text-sm">

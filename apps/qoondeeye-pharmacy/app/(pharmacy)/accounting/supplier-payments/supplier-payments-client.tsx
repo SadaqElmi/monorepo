@@ -31,7 +31,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { useErpBranchFacet } from "@/hooks/use-erp-branch-facet";
-import { getStoredUser } from "@/lib/auth-client";
+import { getResolvedStoredUser } from "@/lib/auth-client";
 import { money } from "@/lib/accounting-display";
 import { erpKeys } from "@/lib/erp-query-keys";
 import { ERP_STALE_LIST, ERP_STALE_STATIC } from "@/lib/erp-query-options";
@@ -54,7 +54,7 @@ export default function SupplierPaymentsPage() {
   const queryClient = useQueryClient();
   const branchFacet = useErpBranchFacet();
   const [tenantSlug] = React.useState(
-    () => getStoredUser()?.tenantSlug ?? "pharmacy1",
+    () => getResolvedStoredUser()?.tenantSlug?.trim() ?? "",
   );
 
   const [branchId, setBranchId] = React.useState<string | null>(null);

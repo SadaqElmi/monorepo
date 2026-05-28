@@ -20,7 +20,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { useErpBranchFacet } from "@/hooks/use-erp-branch-facet";
-import { getStoredUser } from "@/lib/auth-client";
+import { getResolvedStoredUser } from "@/lib/auth-client";
 import { erpKeys } from "@/lib/erp-query-keys";
 import { ERP_STALE_STATIC } from "@/lib/erp-query-options";
 import {
@@ -30,7 +30,7 @@ import {
 export default function ConfigurationJournalsPage() {
   const branchFacet = useErpBranchFacet();
   const [tenantSlug] = React.useState(
-    () => getStoredUser()?.tenantSlug ?? "pharmacy1",
+    () => getResolvedStoredUser()?.tenantSlug?.trim() ?? "",
   );
   const [branchId, setBranchId] = React.useState<string | null>(null);
 

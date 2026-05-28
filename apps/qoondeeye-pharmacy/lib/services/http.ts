@@ -11,11 +11,11 @@ import {
   getClientBranchIdHeaderForApi,
   getEffectiveClientBranchId,
 } from "@/lib/branch-access";
+import { AUTH_TOKEN_COOKIE } from "@/lib/auth-constants";
 import { getResolvedStoredUser } from "@/lib/auth-client";
 import { reconcileClientBranchSelection } from "@/lib/branch-reconcile";
 
 export type JsonHeaders = Record<string, string>;
-const AUTH_TOKEN_COOKIE = "auth_token";
 
 /** Re-export for UI and hooks. */
 export {
@@ -83,6 +83,12 @@ function mergeClientHeaders(
   return merged;
 }
 
+function hasAuthorizationHeader(headers: Record<string, string>): boolean {
+  return Object.entries(headers).some(
+    ([key, value]) => key.toLowerCase() === "authorization" && Boolean(value?.trim()),
+  );
+}
+
 async function parseResponseBody(res: Response): Promise<unknown> {
   const contentType = res.headers.get("content-type") ?? "";
   if (contentType.includes("application/json")) {
@@ -124,6 +130,13 @@ export async function jsonFetch<TResponse>(
 ): Promise<TResponse> {
   const { tenantSlug, _branchRetried, ...requestInit } = init ?? {};
   const mergedHeaders = mergeClientHeaders(requestInit, { tenantSlug });
+  if ((tenantSlug || hasExplicitTenantHeader(mergedHeaders)) && !hasAuthorizationHeader(mergedHeaders)) {
+    const err = new ApiError("Missing auth token. Please sign in again.", {
+      status: 403,
+    });
+    logApiErrorForSupport(err);
+    throw err;
+  }
 
   let res: Response;
   try {
@@ -178,6 +191,13 @@ export async function blobFetch(
 ): Promise<Blob> {
   const { tenantSlug, ...requestInit } = init ?? {};
   const mergedHeaders = mergeClientHeaders(requestInit, { tenantSlug });
+  if ((tenantSlug || hasExplicitTenantHeader(mergedHeaders)) && !hasAuthorizationHeader(mergedHeaders)) {
+    const err = new ApiError("Missing auth token. Please sign in again.", {
+      status: 403,
+    });
+    logApiErrorForSupport(err);
+    throw err;
+  }
 
   let res: Response;
   try {

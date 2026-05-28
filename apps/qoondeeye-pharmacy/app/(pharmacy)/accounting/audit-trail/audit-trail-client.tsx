@@ -28,7 +28,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { getStoredUser } from "@/lib/auth-client";
+import { getResolvedStoredUser } from "@/lib/auth-client";
 import { getBranchQueryKeyFacet } from "@/lib/query-branch-key";
 import { getAuditTrailPaged } from "@/lib/services/accounting";
 
@@ -37,7 +37,7 @@ const LIMIT_OPTIONS = [50, 100, 200, 500] as const;
 export default function AuditTrailPage() {
   const queryClient = useQueryClient();
   const [tenantSlug] = React.useState(
-    () => getStoredUser()?.tenantSlug ?? "pharmacy1",
+    () => getResolvedStoredUser()?.tenantSlug?.trim() ?? "",
   );
   const [branchId, setBranchId] = React.useState<string | null>(null);
   const [branchFacet, setBranchFacet] = React.useState(() =>
