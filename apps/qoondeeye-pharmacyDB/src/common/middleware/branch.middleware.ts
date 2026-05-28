@@ -11,6 +11,7 @@ import {
   normalizeRole,
   requiresAssignedBranch,
 } from '../security/branch-access.policy';
+import { getAuthTokenFromHeaders } from '../security/auth-token.util';
 import { ALL_ACCOUNTING_PERMISSIONS } from '../security/accounting-permissions';
 import { requestPathname } from '../http/request-pathname';
 
@@ -29,41 +30,6 @@ type JwtPayload =
       canViewAllBranches?: boolean;
       permissions?: string[];
     };
-
-function parseCookies(
-  cookieHeader: string | undefined,
-): Record<string, string> {
-  if (!cookieHeader) return {};
-  const out: Record<string, string> = {};
-  const parts = cookieHeader.split(';');
-  for (const part of parts) {
-    const trimmed = part.trim();
-    if (!trimmed) continue;
-    const eqIdx = trimmed.indexOf('=');
-    if (eqIdx === -1) continue;
-    const key = trimmed.slice(0, eqIdx).trim();
-    const rawVal = trimmed.slice(eqIdx + 1);
-    try {
-      out[key] = decodeURIComponent(rawVal);
-    } catch {
-      out[key] = rawVal;
-    }
-  }
-  return out;
-}
-
-function getBearerToken(
-  authorizationHeader: string | string[] | undefined,
-): string | null {
-  const raw = Array.isArray(authorizationHeader)
-    ? authorizationHeader[0]
-    : authorizationHeader;
-  if (!raw) return null;
-  const [scheme, token] = raw.trim().split(/\s+/, 2);
-  if (!scheme || !token) return null;
-  if (scheme.toLowerCase() !== 'bearer') return null;
-  return token.trim() || null;
-}
 
 function isMutationMethod(method: string | undefined): boolean {
   const m = (method ?? '').toUpperCase();
@@ -374,10 +340,7 @@ export class BranchMiddleware implements NestMiddleware {
     // System host / system routes: no tenant, no branch filtering.
     if (req.isSystem) return;
 
-    const cookieHeader = req.headers.cookie;
-    const cookies = parseCookies(cookieHeader);
-    const earlyToken =
-      getBearerToken(req.headers.authorization) ?? cookies['auth_token'];
+    const earlyToken = getAuthTokenFromHeaders(req.headers);
 
     const schemaName =
       this.resolveSchemaNameSync(req) ??

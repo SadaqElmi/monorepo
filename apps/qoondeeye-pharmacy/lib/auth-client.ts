@@ -3,9 +3,12 @@
  * so middleware can enforce /admin vs /dashboard access.
  */
 
-const AUTH_TOKEN_KEY = "auth_token";
-const AUTH_USER_KEY = "auth_user";
-const AUTH_USER_COOKIE = "auth_user";
+import {
+  AUTH_TOKEN_COOKIE,
+  AUTH_USER_COOKIE,
+  AUTH_USER_STORAGE_KEY,
+} from "@/lib/auth-constants";
+
 const COOKIE_MAX_AGE_DAYS = 7;
 
 export type StoredUser = {
@@ -33,7 +36,7 @@ function cookieOptions(maxAge: number) {
 export function setAuthToken(token: string, user: StoredUser) {
   if (typeof document === "undefined") return;
   const maxAge = COOKIE_MAX_AGE_DAYS * 24 * 60 * 60;
-  document.cookie = `${AUTH_TOKEN_KEY}=${encodeURIComponent(token)}; ${cookieOptions(maxAge)}`;
+  document.cookie = `${AUTH_TOKEN_COOKIE}=${encodeURIComponent(token)}; ${cookieOptions(maxAge)}`;
   const payload = {
     userType:
       user.userType ?? (user.role === "super_admin" ? "system" : "tenant"),
@@ -55,7 +58,7 @@ export function setAuthToken(token: string, user: StoredUser) {
   };
   document.cookie = `${AUTH_USER_COOKIE}=${encodeURIComponent(JSON.stringify(payload))}; ${cookieOptions(maxAge)}`;
   try {
-    sessionStorage.setItem(AUTH_USER_KEY, JSON.stringify(user));
+    sessionStorage.setItem(AUTH_USER_STORAGE_KEY, JSON.stringify(user));
   } catch {
     // ignore
   }
@@ -64,10 +67,10 @@ export function setAuthToken(token: string, user: StoredUser) {
 export function clearAuthToken() {
   if (typeof document === "undefined") return;
   const zero = "path=/; max-age=0";
-  document.cookie = `${AUTH_TOKEN_KEY}=; ${zero}`;
+  document.cookie = `${AUTH_TOKEN_COOKIE}=; ${zero}`;
   document.cookie = `${AUTH_USER_COOKIE}=; ${zero}`;
   try {
-    sessionStorage.removeItem(AUTH_USER_KEY);
+    sessionStorage.removeItem(AUTH_USER_STORAGE_KEY);
   } catch {
     // ignore
   }
@@ -76,7 +79,7 @@ export function clearAuthToken() {
 export function getStoredUser(): StoredUser | null {
   if (typeof sessionStorage === "undefined") return null;
   try {
-    const raw = sessionStorage.getItem(AUTH_USER_KEY);
+    const raw = sessionStorage.getItem(AUTH_USER_STORAGE_KEY);
     if (!raw) return null;
     return JSON.parse(raw) as StoredUser;
   } catch {

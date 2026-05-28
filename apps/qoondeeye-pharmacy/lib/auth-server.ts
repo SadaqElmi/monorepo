@@ -4,9 +4,7 @@ import { redirect } from "next/navigation";
 
 import type { AuthCookiePayload } from "@/lib/auth-client";
 import { getAuthFromCookie } from "@/lib/auth-client";
-
-export const AUTH_TOKEN_COOKIE = "auth_token";
-export const AUTH_USER_COOKIE = "auth_user";
+import { AUTH_TOKEN_COOKIE, AUTH_USER_COOKIE } from "@/lib/auth-constants";
 
 export type ServerSession = AuthCookiePayload & {
   token: string;

@@ -18,27 +18,7 @@ import {
 } from './reconciliation.service';
 import { RECONCILIATION_LOG_TYPES } from './reconciliation.types';
 import { parsePagedQueryParam } from '../common/pagination.util';
-
-function parseCookies(
-  cookieHeader: string | undefined,
-): Record<string, string> {
-  if (!cookieHeader) return {};
-  const out: Record<string, string> = {};
-  for (const part of cookieHeader.split(';')) {
-    const trimmed = part.trim();
-    if (!trimmed) continue;
-    const eqIdx = trimmed.indexOf('=');
-    if (eqIdx === -1) continue;
-    const key = trimmed.slice(0, eqIdx).trim();
-    const rawVal = trimmed.slice(eqIdx + 1);
-    try {
-      out[key] = decodeURIComponent(rawVal);
-    } catch {
-      out[key] = rawVal;
-    }
-  }
-  return out;
-}
+import { getAuthTokenFromHeaders } from '../common/security/auth-token.util';
 
 type JwtPayload =
   | { type: 'super_admin'; role?: string }
@@ -63,9 +43,13 @@ export class ReconciliationController {
   }
 
   private ensureRunAuthorized(req: FastifyRequest) {
+    const upstreamRole = (req.userRole ?? '').toLowerCase().trim();
+    if (upstreamRole === 'super_admin' || upstreamRole === 'admin' || upstreamRole === 'owner') {
+      return;
+    }
+
     const jwtSecret = this.config.get<string>('JWT_SECRET') ?? 'changeme';
-    const cookies = parseCookies(req.headers.cookie);
-    const token = cookies['auth_token'];
+    const token = getAuthTokenFromHeaders(req.headers);
     if (!token) {
       throw new ForbiddenException('Missing auth token');
     }

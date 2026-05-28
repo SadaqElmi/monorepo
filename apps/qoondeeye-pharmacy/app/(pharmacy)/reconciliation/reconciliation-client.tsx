@@ -48,7 +48,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { getStoredUser, type StoredUser } from "@/lib/auth-client";
+import { getResolvedStoredUser, type StoredUser } from "@/lib/auth-client";
 import {
   getLatestReconciliationRun,
   getReconciliationLogs,
@@ -392,7 +392,7 @@ export default function ReconciliationPage() {
   const [repairError, setRepairError] = React.useState<string | null>(null);
 
   React.useEffect(() => {
-    const u = getStoredUser();
+    const u = getResolvedStoredUser();
     setUser(u);
     setTenantSlug(u?.tenantSlug?.trim() || null);
   }, []);

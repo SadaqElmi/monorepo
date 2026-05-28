@@ -28,7 +28,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { getStoredUser } from "@/lib/auth-client";
+import { getResolvedStoredUser } from "@/lib/auth-client";
 import { money } from "@/lib/accounting-display";
 import {
   getBalanceSheet,
@@ -39,7 +39,7 @@ import {
 
 export default function AccountingStatementsPage() {
   const [tenantSlug] = React.useState(
-    () => getStoredUser()?.tenantSlug ?? "pharmacy1",
+    () => getResolvedStoredUser()?.tenantSlug?.trim() ?? "",
   );
 
   const [income, setIncome] = React.useState<IncomeStatementResult | null>(
@@ -59,6 +59,10 @@ export default function AccountingStatementsPage() {
   const [bsDate, setBsDate] = React.useState(format(now, "yyyy-MM-dd"));
 
   const loadStatements = React.useCallback(async () => {
+    if (!tenantSlug) {
+      setErr("Sign in and select a tenant to load statements.");
+      return;
+    }
     setLoadingStmt(true);
     setErr(null);
     try {

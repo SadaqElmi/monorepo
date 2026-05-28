@@ -15,27 +15,7 @@ import { PrismaService } from '../prisma/prisma.service';
 import { TenantContextService } from '../tenant/tenant-context.service';
 import { TransferRepairConfirmDto } from './dto/transfer-repair-confirm.dto';
 import { TransfersService } from './transfers.service';
-
-function parseCookies(
-  cookieHeader: string | undefined,
-): Record<string, string> {
-  const out: Record<string, string> = {};
-  if (!cookieHeader) return out;
-  for (const part of cookieHeader.split(';')) {
-    const trimmed = part.trim();
-    if (!trimmed) continue;
-    const eqIdx = trimmed.indexOf('=');
-    if (eqIdx === -1) continue;
-    const key = trimmed.slice(0, eqIdx).trim();
-    const rawVal = trimmed.slice(eqIdx + 1);
-    try {
-      out[key] = decodeURIComponent(rawVal);
-    } catch {
-      out[key] = rawVal;
-    }
-  }
-  return out;
-}
+import { getAuthTokenFromHeaders } from '../common/security/auth-token.util';
 
 type JwtPayload =
   | { type: 'super_admin'; role?: string; sub?: string }
@@ -67,9 +47,13 @@ export class TransferRepairController {
   }
 
   private ensureRepairAuthorized(req: FastifyRequest) {
+    const upstreamRole = (req.userRole ?? '').toLowerCase().trim();
+    if (upstreamRole === 'super_admin' || upstreamRole === 'admin' || upstreamRole === 'owner') {
+      return;
+    }
+
     const jwtSecret = this.config.get<string>('JWT_SECRET') ?? 'changeme';
-    const cookies = parseCookies(req.headers.cookie);
-    const token = cookies['auth_token'];
+    const token = getAuthTokenFromHeaders(req.headers);
     if (!token) {
       throw new ForbiddenException('Missing auth token');
     }
@@ -113,8 +97,7 @@ export class TransferRepairController {
 
   private actor(req: FastifyRequest) {
     const jwtSecret = this.config.get<string>('JWT_SECRET') ?? 'changeme';
-    const cookies = parseCookies(req.headers.cookie);
-    const token = cookies['auth_token'];
+    const token = getAuthTokenFromHeaders(req.headers);
     let userId: string | null = null;
     let userRole: string | null = null;
     if (token) {

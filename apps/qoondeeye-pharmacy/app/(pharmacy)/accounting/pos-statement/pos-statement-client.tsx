@@ -15,7 +15,7 @@ import {
 } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { useErpBranchFacet } from "@/hooks/use-erp-branch-facet";
-import { getStoredUser } from "@/lib/auth-client";
+import { getResolvedStoredUser } from "@/lib/auth-client";
 import { erpKeys } from "@/lib/erp-query-keys";
 import { ERP_STALE_LIST } from "@/lib/erp-query-options";
 import { ROUTES } from "@/lib/routes";
@@ -40,7 +40,7 @@ export default function AccountingPosStatementPage() {
   const queryClient = useQueryClient();
   const branchFacet = useErpBranchFacet();
   const [slug] = React.useState(
-    () => getStoredUser()?.tenantSlug?.trim() ?? null,
+    () => getResolvedStoredUser()?.tenantSlug?.trim() ?? null,
   );
   const [branchId, setBranchId] = React.useState<string | null>(null);
 

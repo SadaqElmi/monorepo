@@ -4,7 +4,7 @@ import * as React from "react";
 import { FileSpreadsheet, FileText, Loader2 } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
-import { getClientBranchIdHeaderForApi } from "@/lib/branch-access";
+import { blobFetch } from "@/lib/services/http";
 import {
   computeReportScopeHash,
   enqueueReportExport,
@@ -32,15 +32,10 @@ async function downloadExportBlob(
   format: "pdf" | "xlsx",
 ): Promise<void> {
   const url = reportExportDownloadUrl(jobId);
-  const headers: Record<string, string> = { "X-Tenant": tenantSlug };
-  const b = getClientBranchIdHeaderForApi();
-  if (b) headers["x-branch-id"] = b;
-  const res = await fetch(url, { credentials: "include", headers });
-  if (!res.ok) {
-    const t = await res.text().catch(() => "");
-    throw new Error(t || `Download failed (${res.status})`);
-  }
-  const blob = await res.blob();
+  const blob = await blobFetch(url, {
+    method: "GET",
+    headers: { "X-Tenant": tenantSlug },
+  });
   const a = document.createElement("a");
   a.href = URL.createObjectURL(blob);
   a.download = `report-${jobId.slice(0, 8)}.${format === "pdf" ? "pdf" : "xlsx"}`;

@@ -20,7 +20,7 @@ import {
 } from "@/components/ui/table";
 import { useErpReportQuery } from "@/hooks/queries/use-erp-report-query";
 import { useReportBranchQuery } from "@/hooks/use-branch-for-reports";
-import { getStoredUser } from "@/lib/auth-client";
+import { getResolvedStoredUser } from "@/lib/auth-client";
 import { money } from "@/lib/accounting-display";
 import {
   getInventoryValuation,
@@ -37,7 +37,7 @@ export default function InventoryValuationPage({
   serverPrefetched = false,
 }: InventoryValuationPageClientProps = {}) {
   const [tenantSlug] = React.useState(
-    () => getStoredUser()?.tenantSlug ?? "pharmacy1",
+    () => getResolvedStoredUser()?.tenantSlug?.trim() ?? "",
   );
   const { branchId, aggregateAll } = useReportBranchQuery();
 
@@ -49,7 +49,7 @@ export default function InventoryValuationPage({
       getInventoryValuation(tenantSlug, scope.branchId, scope.aggregateAll),
     initialData:
       serverPrefetched && initialData != null ? initialData : undefined,
-    enabled: Boolean(branchId || aggregateAll),
+    enabled: Boolean(tenantSlug && (branchId || aggregateAll)),
   });
   const data = valuationQuery.data ?? null;
   const loading = valuationQuery.isPending;
