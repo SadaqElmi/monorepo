@@ -3,8 +3,10 @@
  */
 
 export const getBaseUrl = () =>
-  process.env.NEXT_PUBLIC_API_URL_LOCAL ?? "http://localhost:5555";
+  //process.env.NEXT_PUBLIC_API_URL_LOCAL ?? "http://localhost:5555";
 
+  process.env.NEXT_PUBLIC_API_URL ??
+  "https://backend-production-1dc6.up.railway.app";
 export const API_BASE = getBaseUrl();
 
 export const AUTH_PREFIX = `${API_BASE}/api/auth`;
