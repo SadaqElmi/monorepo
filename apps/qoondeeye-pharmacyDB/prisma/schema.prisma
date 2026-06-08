@@ -21,27 +21,28 @@ model Tenant {
   status     String   @default("active") @db.VarChar(20)
   createdAt  DateTime @default(now()) @map("created_at") @db.Timestamp(6)
 
-  posDevices           PosDevice[]
-  domains              Domain[]
-  reconciliationRuns   ReconciliationRun[]
-  reconciliationLogs ReconciliationLog[]
+  posDevices            PosDevice[]
+  domains               Domain[]
+  reconciliationRuns    ReconciliationRun[]
+  reconciliationLogs    ReconciliationLog[]
+  systemHealthSnapshots SystemHealthSnapshot[]
 
   @@schema("public")
 }
 
 model PosDevice {
-  id               String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  tenantId         String   @map("tenant_id") @db.Uuid
-  deviceCode       String   @unique @map("device_code") @db.VarChar(128)
-  displayName      String?  @map("display_name") @db.VarChar(255)
-  status           String   @default("active") @db.VarChar(20)
-  deviceSecretHash String   @map("device_secret_hash") @db.VarChar(128)
-  branchId         String?  @map("branch_id") @db.Uuid
-  boundAt          DateTime @default(now()) @map("bound_at") @db.Timestamp(6)
+  id               String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  tenantId         String    @map("tenant_id") @db.Uuid
+  deviceCode       String    @unique @map("device_code") @db.VarChar(128)
+  displayName      String?   @map("display_name") @db.VarChar(255)
+  status           String    @default("active") @db.VarChar(20)
+  deviceSecretHash String    @map("device_secret_hash") @db.VarChar(128)
+  branchId         String?   @map("branch_id") @db.Uuid
+  boundAt          DateTime  @default(now()) @map("bound_at") @db.Timestamp(6)
   lastSeenAt       DateTime? @map("last_seen_at") @db.Timestamp(6)
   revokedAt        DateTime? @map("revoked_at") @db.Timestamp(6)
-  createdAt        DateTime @default(now()) @map("created_at") @db.Timestamp(6)
-  updatedAt        DateTime @updatedAt @map("updated_at") @db.Timestamp(6)
+  createdAt        DateTime  @default(now()) @map("created_at") @db.Timestamp(6)
+  updatedAt        DateTime  @updatedAt @map("updated_at") @db.Timestamp(6)
 
   tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
 
@@ -110,6 +111,27 @@ model ReconciliationLog {
   @@index([tenantId, severity])
   @@index([tenantId, type])
   @@map("reconciliation_logs")
+  @@schema("public")
+}
+
+model SystemHealthSnapshot {
+  id           String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  tenantId     String   @map("tenant_id") @db.Uuid
+  snapshotHour DateTime @map("snapshot_hour") @db.Timestamp(6)
+  checkKey     String   @map("check_key") @db.VarChar(64)
+  status       String   @db.VarChar(16)
+  summary      Json     @db.JsonB
+  sourceRunId  String?  @map("source_run_id") @db.Uuid
+  createdAt    DateTime @default(now()) @map("created_at") @db.Timestamp(6)
+  updatedAt    DateTime @default(now()) @map("updated_at") @db.Timestamp(6)
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@unique([tenantId, snapshotHour, checkKey], map: "system_health_snapshots_unique")
+  @@index([tenantId, snapshotHour(sort: Desc)], map: "idx_health_snapshots_tenant_hour")
+  @@index([checkKey, snapshotHour(sort: Desc)], map: "idx_health_snapshots_check_hour")
+  @@index([status, snapshotHour(sort: Desc)], map: "idx_health_snapshots_status_hour")
+  @@map("system_health_snapshots")
   @@schema("public")
 }
 
@@ -197,12 +219,12 @@ model RolePermission {
 }
 
 model ProductCategory {
-  id          String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  branchId    String?   @map("branch_id") @db.Uuid
-  parentId    String?   @map("parent_id") @db.Uuid
-  name        String    @db.VarChar(255)
-  description String?   @db.Text
-  slug        String?   @db.VarChar(255)
+  id          String            @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  branchId    String?           @map("branch_id") @db.Uuid
+  parentId    String?           @map("parent_id") @db.Uuid
+  name        String            @db.VarChar(255)
+  description String?           @db.Text
+  slug        String?           @db.VarChar(255)
   products    Product[]
   offerRules  OfferRule[]
   children    ProductCategory[] @relation("CategoryHierarchy")
@@ -232,24 +254,24 @@ model Product {
   description String?  @db.Text
   createdAt   DateTime @default(now()) @map("created_at") @db.Timestamp(6)
 
-  branch          Branch?          @relation(fields: [branchId], references: [id])
-  category        ProductCategory? @relation(fields: [categoryId], references: [id])
-  supplier        Supplier?        @relation(fields: [supplierId], references: [id], onDelete: SetNull)
-  purchaseItems   PurchaseItem[]
-  batches         Batch[]
-  inventory       Inventory[]
-  saleItems       SaleItem[]
-  saleReturnItems SaleReturnItem[]
-  productSuppliers ProductSupplier[]
-  productUoms     ProductUom[]
-  productUomPrices ProductUomPrice[]
-  productUomBarcodes ProductUomBarcode[]
-  supplierUomCosts ProductSupplierUomCost[]
+  branch               Branch?                  @relation(fields: [branchId], references: [id])
+  category             ProductCategory?         @relation(fields: [categoryId], references: [id])
+  supplier             Supplier?                @relation(fields: [supplierId], references: [id], onDelete: SetNull)
+  purchaseItems        PurchaseItem[]
+  batches              Batch[]
+  inventory            Inventory[]
+  saleItems            SaleItem[]
+  saleReturnItems      SaleReturnItem[]
+  productSuppliers     ProductSupplier[]
+  productUoms          ProductUom[]
+  productUomPrices     ProductUomPrice[]
+  productUomBarcodes   ProductUomBarcode[]
+  supplierUomCosts     ProductSupplierUomCost[]
   supplierPriceHistory SupplierPriceHistory[]
-  priceGroupPrices ProductPriceGroupPrice[]
-  priceHistory ProductPriceHistory[]
-  offerRules OfferRule[]
-  offerRedemptions OfferRedemption[]
+  priceGroupPrices     ProductPriceGroupPrice[]
+  priceHistory         ProductPriceHistory[]
+  offerRules           OfferRule[]
+  offerRedemptions     OfferRedemption[]
 
   @@index([barcode])
   @@index([branchId])
@@ -269,17 +291,17 @@ model Uom {
   createdAt DateTime @default(now()) @map("created_at") @db.Timestamp(6)
   updatedAt DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamp(6)
 
-  productUoms     ProductUom[]
-  productUomPrices ProductUomPrice[]
-  productUomBarcodes ProductUomBarcode[]
-  priceGroupPrices ProductPriceGroupPrice[]
-  priceHistory ProductPriceHistory[]
-  supplierUomCosts ProductSupplierUomCost[]
+  productUoms          ProductUom[]
+  productUomPrices     ProductUomPrice[]
+  productUomBarcodes   ProductUomBarcode[]
+  priceGroupPrices     ProductPriceGroupPrice[]
+  priceHistory         ProductPriceHistory[]
+  supplierUomCosts     ProductSupplierUomCost[]
   supplierPriceHistory SupplierPriceHistory[]
-  purchaseItems   PurchaseItem[]
-  saleItems       SaleItem[]
-  saleReturnItems SaleReturnItem[]
-  returnVouchers  ReturnVoucher[]
+  purchaseItems        PurchaseItem[]
+  saleItems            SaleItem[]
+  saleReturnItems      SaleReturnItem[]
+  returnVouchers       ReturnVoucher[]
 
   @@map("uoms")
   @@schema("tenant_template")
@@ -309,23 +331,23 @@ model ProductUom {
 }
 
 model ProductUomPrice {
-  id           String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  productId    String   @map("product_id") @db.Uuid
-  uomId        String   @map("uom_id") @db.Uuid
-  sellingPrice Decimal? @map("selling_price") @db.Decimal(14, 2)
-  costPrice    Decimal? @map("cost_price") @db.Decimal(14, 4)
-  initialCostPrice Decimal? @map("initial_cost_price") @db.Decimal(14, 4)
-  lastPurchaseCost Decimal? @map("last_purchase_cost") @db.Decimal(14, 4)
-  lastPurchaseAt DateTime? @map("last_purchase_at") @db.Timestamp(6)
-  lastPurchaseId String? @map("last_purchase_id") @db.Uuid
-  lastPurchaseItemId String? @map("last_purchase_item_id") @db.Uuid
-  active       Boolean  @default(true)
-  createdAt    DateTime @default(now()) @map("created_at") @db.Timestamp(6)
-  updatedAt    DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamp(6)
+  id                 String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  productId          String    @map("product_id") @db.Uuid
+  uomId              String    @map("uom_id") @db.Uuid
+  sellingPrice       Decimal?  @map("selling_price") @db.Decimal(14, 2)
+  costPrice          Decimal?  @map("cost_price") @db.Decimal(14, 4)
+  initialCostPrice   Decimal?  @map("initial_cost_price") @db.Decimal(14, 4)
+  lastPurchaseCost   Decimal?  @map("last_purchase_cost") @db.Decimal(14, 4)
+  lastPurchaseAt     DateTime? @map("last_purchase_at") @db.Timestamp(6)
+  lastPurchaseId     String?   @map("last_purchase_id") @db.Uuid
+  lastPurchaseItemId String?   @map("last_purchase_item_id") @db.Uuid
+  active             Boolean   @default(true)
+  createdAt          DateTime  @default(now()) @map("created_at") @db.Timestamp(6)
+  updatedAt          DateTime  @default(now()) @updatedAt @map("updated_at") @db.Timestamp(6)
 
-  product Product @relation(fields: [productId], references: [id], onDelete: Cascade)
-  uom     Uom     @relation(fields: [uomId], references: [id])
-  lastPurchase Purchase? @relation(fields: [lastPurchaseId], references: [id], onDelete: SetNull)
+  product          Product       @relation(fields: [productId], references: [id], onDelete: Cascade)
+  uom              Uom           @relation(fields: [uomId], references: [id])
+  lastPurchase     Purchase?     @relation(fields: [lastPurchaseId], references: [id], onDelete: SetNull)
   lastPurchaseItem PurchaseItem? @relation(fields: [lastPurchaseItemId], references: [id], onDelete: SetNull)
 
   @@index([productId, uomId], map: "idx_product_uom_prices_product_uom")
@@ -364,11 +386,11 @@ model Supplier {
   createdAt    DateTime @default(now()) @map("created_at") @db.Timestamp(6)
   updatedAt    DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamp(6)
 
-  products         Product[]
-  productSuppliers ProductSupplier[]
-  supplierUomCosts ProductSupplierUomCost[]
+  products             Product[]
+  productSuppliers     ProductSupplier[]
+  supplierUomCosts     ProductSupplierUomCost[]
   supplierPriceHistory SupplierPriceHistory[]
-  purchases        Purchase[]
+  purchases            Purchase[]
 
   @@schema("tenant_template")
 }
@@ -394,22 +416,22 @@ model ProductSupplier {
 }
 
 model ProductSupplierUomCost {
-  id               String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  productId        String   @map("product_id") @db.Uuid
-  supplierId       String   @map("supplier_id") @db.Uuid
-  uomId            String   @map("uom_id") @db.Uuid
-  currentCostPrice Decimal? @map("current_cost_price") @db.Decimal(14, 4)
-  lastPurchaseCost Decimal? @map("last_purchase_cost") @db.Decimal(14, 4)
-  lastPurchaseAt   DateTime? @map("last_purchase_at") @db.Timestamp(6)
-  lastPurchaseId   String?  @map("last_purchase_id") @db.Uuid
-  lastPurchaseItemId String? @map("last_purchase_item_id") @db.Uuid
-  createdAt        DateTime @default(now()) @map("created_at") @db.Timestamp(6)
-  updatedAt        DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamp(6)
+  id                 String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  productId          String    @map("product_id") @db.Uuid
+  supplierId         String    @map("supplier_id") @db.Uuid
+  uomId              String    @map("uom_id") @db.Uuid
+  currentCostPrice   Decimal?  @map("current_cost_price") @db.Decimal(14, 4)
+  lastPurchaseCost   Decimal?  @map("last_purchase_cost") @db.Decimal(14, 4)
+  lastPurchaseAt     DateTime? @map("last_purchase_at") @db.Timestamp(6)
+  lastPurchaseId     String?   @map("last_purchase_id") @db.Uuid
+  lastPurchaseItemId String?   @map("last_purchase_item_id") @db.Uuid
+  createdAt          DateTime  @default(now()) @map("created_at") @db.Timestamp(6)
+  updatedAt          DateTime  @default(now()) @updatedAt @map("updated_at") @db.Timestamp(6)
 
-  product Product @relation(fields: [productId], references: [id], onDelete: Cascade)
-  supplier Supplier @relation(fields: [supplierId], references: [id], onDelete: Cascade)
-  uom Uom @relation(fields: [uomId], references: [id])
-  lastPurchase Purchase? @relation(fields: [lastPurchaseId], references: [id], onDelete: SetNull)
+  product          Product       @relation(fields: [productId], references: [id], onDelete: Cascade)
+  supplier         Supplier      @relation(fields: [supplierId], references: [id], onDelete: Cascade)
+  uom              Uom           @relation(fields: [uomId], references: [id])
+  lastPurchase     Purchase?     @relation(fields: [lastPurchaseId], references: [id], onDelete: SetNull)
   lastPurchaseItem PurchaseItem? @relation(fields: [lastPurchaseItemId], references: [id], onDelete: SetNull)
 
   @@unique([productId, supplierId, uomId], map: "product_supplier_uom_costs_product_supplier_uom_uq")
@@ -420,25 +442,25 @@ model ProductSupplierUomCost {
 }
 
 model SupplierPriceHistory {
-  id                       String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  productId                String   @map("product_id") @db.Uuid
-  supplierId               String   @map("supplier_id") @db.Uuid
-  uomId                    String   @map("uom_id") @db.Uuid
-  purchaseId               String?  @map("purchase_id") @db.Uuid
-  purchaseItemId           String?  @map("purchase_item_id") @db.Uuid
-  oldCostPrice             Decimal? @map("old_cost_price") @db.Decimal(14, 4)
-  newCostPrice             Decimal  @map("new_cost_price") @db.Decimal(14, 4)
-  enteredQuantity          Decimal? @map("entered_quantity") @db.Decimal(14, 4)
-  baseQuantity             Int?     @map("base_quantity")
-  conversionFactorSnapshot Decimal? @map("conversion_factor_snapshot") @db.Decimal(18, 6)
+  id                       String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  productId                String    @map("product_id") @db.Uuid
+  supplierId               String    @map("supplier_id") @db.Uuid
+  uomId                    String    @map("uom_id") @db.Uuid
+  purchaseId               String?   @map("purchase_id") @db.Uuid
+  purchaseItemId           String?   @map("purchase_item_id") @db.Uuid
+  oldCostPrice             Decimal?  @map("old_cost_price") @db.Decimal(14, 4)
+  newCostPrice             Decimal   @map("new_cost_price") @db.Decimal(14, 4)
+  enteredQuantity          Decimal?  @map("entered_quantity") @db.Decimal(14, 4)
+  baseQuantity             Int?      @map("base_quantity")
+  conversionFactorSnapshot Decimal?  @map("conversion_factor_snapshot") @db.Decimal(18, 6)
   purchaseDate             DateTime? @map("purchase_date") @db.Date
-  source                   String   @default("purchase_invoice") @db.VarChar(50)
-  createdAt                DateTime @default(now()) @map("created_at") @db.Timestamp(6)
+  source                   String    @default("purchase_invoice") @db.VarChar(50)
+  createdAt                DateTime  @default(now()) @map("created_at") @db.Timestamp(6)
 
-  product Product @relation(fields: [productId], references: [id], onDelete: Cascade)
-  supplier Supplier @relation(fields: [supplierId], references: [id], onDelete: Cascade)
-  uom Uom @relation(fields: [uomId], references: [id])
-  purchase Purchase? @relation(fields: [purchaseId], references: [id], onDelete: SetNull)
+  product      Product       @relation(fields: [productId], references: [id], onDelete: Cascade)
+  supplier     Supplier      @relation(fields: [supplierId], references: [id], onDelete: Cascade)
+  uom          Uom           @relation(fields: [uomId], references: [id])
+  purchase     Purchase?     @relation(fields: [purchaseId], references: [id], onDelete: SetNull)
   purchaseItem PurchaseItem? @relation(fields: [purchaseItemId], references: [id], onDelete: SetNull)
 
   @@index([productId, supplierId, uomId, createdAt(sort: Desc)], map: "idx_supplier_price_history_lookup")
@@ -457,10 +479,10 @@ model PriceGroup {
   createdAt   DateTime @default(now()) @map("created_at") @db.Timestamp(6)
   updatedAt   DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamp(6)
 
-  productPrices ProductPriceGroupPrice[]
-  priceHistory ProductPriceHistory[]
-  offers OfferList[]
-  saleItems SaleItem[]
+  productPrices    ProductPriceGroupPrice[]
+  priceHistory     ProductPriceHistory[]
+  offers           OfferList[]
+  saleItems        SaleItem[]
   offerRedemptions OfferRedemption[]
 
   @@map("price_groups")
@@ -477,8 +499,8 @@ model ProductPriceGroupPrice {
   createdAt    DateTime @default(now()) @map("created_at") @db.Timestamp(6)
   updatedAt    DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamp(6)
 
-  product Product @relation(fields: [productId], references: [id], onDelete: Cascade)
-  uom Uom @relation(fields: [uomId], references: [id])
+  product    Product    @relation(fields: [productId], references: [id], onDelete: Cascade)
+  uom        Uom        @relation(fields: [uomId], references: [id])
   priceGroup PriceGroup @relation(fields: [priceGroupId], references: [id], onDelete: Cascade)
 
   @@index([productId, uomId, priceGroupId], map: "idx_product_price_group_prices_lookup")
@@ -501,8 +523,8 @@ model ProductPriceHistory {
   actorUserId     String?  @map("actor_user_id") @db.Uuid
   createdAt       DateTime @default(now()) @map("created_at") @db.Timestamp(6)
 
-  product Product @relation(fields: [productId], references: [id], onDelete: Cascade)
-  uom Uom? @relation(fields: [uomId], references: [id])
+  product    Product     @relation(fields: [productId], references: [id], onDelete: Cascade)
+  uom        Uom?        @relation(fields: [uomId], references: [id])
   priceGroup PriceGroup? @relation(fields: [priceGroupId], references: [id], onDelete: SetNull)
 
   @@index([productId, createdAt(sort: Desc)], map: "idx_product_price_history_product_created")
@@ -530,9 +552,9 @@ model OfferList {
   createdAt          DateTime  @default(now()) @map("created_at") @db.Timestamp(6)
   updatedAt          DateTime  @default(now()) @updatedAt @map("updated_at") @db.Timestamp(6)
 
-  priceGroup PriceGroup? @relation(fields: [priceGroupId], references: [id], onDelete: SetNull)
-  rules OfferRule[]
-  saleItems SaleItem[]
+  priceGroup  PriceGroup?       @relation(fields: [priceGroupId], references: [id], onDelete: SetNull)
+  rules       OfferRule[]
+  saleItems   SaleItem[]
   redemptions OfferRedemption[]
 
   @@index([status, startDate, endDate, priority], map: "idx_offer_lists_status_dates_priority")
@@ -553,8 +575,8 @@ model OfferRule {
   bundleProductIds Json?    @map("bundle_product_ids")
   createdAt        DateTime @default(now()) @map("created_at") @db.Timestamp(6)
 
-  offer OfferList @relation(fields: [offerId], references: [id], onDelete: Cascade)
-  product Product? @relation(fields: [productId], references: [id], onDelete: Cascade)
+  offer    OfferList        @relation(fields: [offerId], references: [id], onDelete: Cascade)
+  product  Product?         @relation(fields: [productId], references: [id], onDelete: Cascade)
   category ProductCategory? @relation(fields: [categoryId], references: [id], onDelete: Cascade)
 
   @@index([offerId], map: "idx_offer_rules_offer_id")
@@ -565,21 +587,21 @@ model OfferRule {
 }
 
 model OfferRedemption {
-  id            String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  offerId       String   @map("offer_id") @db.Uuid
-  saleId        String?  @map("sale_id") @db.Uuid
-  saleItemId    String?  @map("sale_item_id") @db.Uuid
-  branchId      String?  @map("branch_id") @db.Uuid
-  productId     String?  @map("product_id") @db.Uuid
-  priceGroupId  String?  @map("price_group_id") @db.Uuid
-  discountAmount Decimal @default(0) @map("discount_amount") @db.Decimal(14, 2)
-  createdAt     DateTime @default(now()) @map("created_at") @db.Timestamp(6)
+  id             String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  offerId        String   @map("offer_id") @db.Uuid
+  saleId         String?  @map("sale_id") @db.Uuid
+  saleItemId     String?  @map("sale_item_id") @db.Uuid
+  branchId       String?  @map("branch_id") @db.Uuid
+  productId      String?  @map("product_id") @db.Uuid
+  priceGroupId   String?  @map("price_group_id") @db.Uuid
+  discountAmount Decimal  @default(0) @map("discount_amount") @db.Decimal(14, 2)
+  createdAt      DateTime @default(now()) @map("created_at") @db.Timestamp(6)
 
-  offer OfferList @relation(fields: [offerId], references: [id], onDelete: Cascade)
-  sale Sale? @relation(fields: [saleId], references: [id], onDelete: SetNull)
-  saleItem SaleItem? @relation(fields: [saleItemId], references: [id], onDelete: SetNull)
-  branch Branch? @relation(fields: [branchId], references: [id], onDelete: SetNull)
-  product Product? @relation(fields: [productId], references: [id], onDelete: SetNull)
+  offer      OfferList   @relation(fields: [offerId], references: [id], onDelete: Cascade)
+  sale       Sale?       @relation(fields: [saleId], references: [id], onDelete: SetNull)
+  saleItem   SaleItem?   @relation(fields: [saleItemId], references: [id], onDelete: SetNull)
+  branch     Branch?     @relation(fields: [branchId], references: [id], onDelete: SetNull)
+  product    Product?    @relation(fields: [productId], references: [id], onDelete: SetNull)
   priceGroup PriceGroup? @relation(fields: [priceGroupId], references: [id], onDelete: SetNull)
 
   @@index([offerId, createdAt(sort: Desc)], map: "idx_offer_redemptions_offer_created")
@@ -642,30 +664,30 @@ model PatientLoanPayment {
 }
 
 model Purchase {
-  id                 String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  supplierId         String?   @map("supplier_id") @db.Uuid
-  branchId           String?   @map("branch_id") @db.Uuid
-  invoiceNumber      String?   @map("invoice_number") @db.VarChar(100)
-  supplierInvoiceNo  String?   @map("supplier_invoice_no") @db.VarChar(100)
-  purchaseOrderNo    String?   @map("purchase_order_no") @db.VarChar(100)
-  totalAmount        Decimal?  @map("total_amount") @db.Decimal(12, 2)
-  purchaseDate       DateTime? @map("purchase_date") @db.Date
-  orderDate          DateTime? @map("order_date") @db.Date
-  postingDate        DateTime? @map("posting_date") @db.Date
-  dueDate            DateTime? @map("due_date") @db.Date
-  status             String    @default("closed") @db.VarChar(32)
-  notes              String?   @db.Text
-  onCredit           Boolean   @default(false) @map("on_credit")
-  releasedAt         DateTime? @map("released_at") @db.Timestamp(6)
-  receivedAt         DateTime? @map("received_at") @db.Timestamp(6)
-  invoicedAt         DateTime? @map("invoiced_at") @db.Timestamp(6)
-  createdAt          DateTime  @default(now()) @map("created_at") @db.Timestamp(6)
+  id                String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  supplierId        String?   @map("supplier_id") @db.Uuid
+  branchId          String?   @map("branch_id") @db.Uuid
+  invoiceNumber     String?   @map("invoice_number") @db.VarChar(100)
+  supplierInvoiceNo String?   @map("supplier_invoice_no") @db.VarChar(100)
+  purchaseOrderNo   String?   @map("purchase_order_no") @db.VarChar(100)
+  totalAmount       Decimal?  @map("total_amount") @db.Decimal(12, 2)
+  purchaseDate      DateTime? @map("purchase_date") @db.Date
+  orderDate         DateTime? @map("order_date") @db.Date
+  postingDate       DateTime? @map("posting_date") @db.Date
+  dueDate           DateTime? @map("due_date") @db.Date
+  status            String    @default("closed") @db.VarChar(32)
+  notes             String?   @db.Text
+  onCredit          Boolean   @default(false) @map("on_credit")
+  releasedAt        DateTime? @map("released_at") @db.Timestamp(6)
+  receivedAt        DateTime? @map("received_at") @db.Timestamp(6)
+  invoicedAt        DateTime? @map("invoiced_at") @db.Timestamp(6)
+  createdAt         DateTime  @default(now()) @map("created_at") @db.Timestamp(6)
 
-  supplier      Supplier?      @relation(fields: [supplierId], references: [id])
-  branch        Branch?        @relation(fields: [branchId], references: [id])
-  purchaseItems PurchaseItem[]
-  productUomPrices ProductUomPrice[]
-  supplierUomCosts ProductSupplierUomCost[]
+  supplier             Supplier?                @relation(fields: [supplierId], references: [id])
+  branch               Branch?                  @relation(fields: [branchId], references: [id])
+  purchaseItems        PurchaseItem[]
+  productUomPrices     ProductUomPrice[]
+  supplierUomCosts     ProductSupplierUomCost[]
   supplierPriceHistory SupplierPriceHistory[]
 
   @@index([branchId])
@@ -679,34 +701,34 @@ model Purchase {
 }
 
 model PurchaseItem {
-  id                  String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  purchaseId          String    @map("purchase_id") @db.Uuid
-  branchId            String?   @map("branch_id") @db.Uuid
-  productId           String?   @map("product_id") @db.Uuid
-  batchId             String?   @map("batch_id") @db.Uuid
-  uomId               String?   @map("uom_id") @db.Uuid
-  quantity            Int?
-  quantityReceived    Int       @default(0) @map("quantity_received")
-  conversionFactorSnapshot Decimal @default(1) @map("conversion_factor_snapshot") @db.Decimal(18, 6)
-  baseQuantity        Int       @default(0) @map("base_quantity")
-  baseUnitCost        Decimal?  @map("base_unit_cost") @db.Decimal(14, 4)
-  costPrice           Decimal?  @map("cost_price") @db.Decimal(10, 2)
-  sellingPrice        Decimal?  @map("selling_price") @db.Decimal(10, 2)
-  updateSellingPrice  Boolean   @default(false) @map("update_selling_price")
-  expiryDate          DateTime? @map("expiry_date") @db.Date
-  lineDiscount        Decimal?  @default(0) @map("line_discount") @db.Decimal(12, 2)
-  taxAmount           Decimal?  @default(0) @map("tax_amount") @db.Decimal(12, 2)
-  lineNotes           String?   @map("line_notes") @db.Text
-  plannedBatchNumber  String?   @map("planned_batch_number") @db.VarChar(100)
-  plannedExpiryDate   DateTime? @map("planned_expiry_date") @db.Date
+  id                       String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  purchaseId               String    @map("purchase_id") @db.Uuid
+  branchId                 String?   @map("branch_id") @db.Uuid
+  productId                String?   @map("product_id") @db.Uuid
+  batchId                  String?   @map("batch_id") @db.Uuid
+  uomId                    String?   @map("uom_id") @db.Uuid
+  quantity                 Int?
+  quantityReceived         Int       @default(0) @map("quantity_received")
+  conversionFactorSnapshot Decimal   @default(1) @map("conversion_factor_snapshot") @db.Decimal(18, 6)
+  baseQuantity             Int       @default(0) @map("base_quantity")
+  baseUnitCost             Decimal?  @map("base_unit_cost") @db.Decimal(14, 4)
+  costPrice                Decimal?  @map("cost_price") @db.Decimal(10, 2)
+  sellingPrice             Decimal?  @map("selling_price") @db.Decimal(10, 2)
+  updateSellingPrice       Boolean   @default(false) @map("update_selling_price")
+  expiryDate               DateTime? @map("expiry_date") @db.Date
+  lineDiscount             Decimal?  @default(0) @map("line_discount") @db.Decimal(12, 2)
+  taxAmount                Decimal?  @default(0) @map("tax_amount") @db.Decimal(12, 2)
+  lineNotes                String?   @map("line_notes") @db.Text
+  plannedBatchNumber       String?   @map("planned_batch_number") @db.VarChar(100)
+  plannedExpiryDate        DateTime? @map("planned_expiry_date") @db.Date
 
-  purchase Purchase @relation(fields: [purchaseId], references: [id], onDelete: Cascade)
-  branch   Branch?  @relation(fields: [branchId], references: [id])
-  product  Product? @relation(fields: [productId], references: [id])
-  batch    Batch?   @relation(fields: [batchId], references: [id])
-  uom      Uom?     @relation(fields: [uomId], references: [id])
-  productUomPrices ProductUomPrice[]
-  supplierUomCosts ProductSupplierUomCost[]
+  purchase             Purchase                 @relation(fields: [purchaseId], references: [id], onDelete: Cascade)
+  branch               Branch?                  @relation(fields: [branchId], references: [id])
+  product              Product?                 @relation(fields: [productId], references: [id])
+  batch                Batch?                   @relation(fields: [batchId], references: [id])
+  uom                  Uom?                     @relation(fields: [uomId], references: [id])
+  productUomPrices     ProductUomPrice[]
+  supplierUomCosts     ProductSupplierUomCost[]
   supplierPriceHistory SupplierPriceHistory[]
 
   @@index([purchaseId])
@@ -807,29 +829,29 @@ model PosStatementLine {
 }
 
 model Sale {
-  id             String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  branchId       String?  @map("branch_id") @db.Uuid
-  posSessionId   String?  @map("pos_session_id") @db.Uuid
-  receiptNumber  String?  @map("receipt_number") @db.VarChar(20)
-  totalAmount    Decimal? @map("total_amount") @db.Decimal(12, 2)
-  discount       Decimal  @default(0) @db.Decimal(10, 2)
-  tax            Decimal  @default(0) @db.Decimal(10, 2)
-  saleDate       DateTime @default(now()) @map("sale_date") @db.Timestamp(6)
-  customerId     String?  @map("customer_id") @db.Uuid
-  onAccount      Boolean  @default(false) @map("on_account")
-  creditOverrideManagerId String? @map("credit_override_manager_id") @db.Uuid
-  creditOverrideReason    String? @map("credit_override_reason") @db.Text
+  id                      String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  branchId                String?   @map("branch_id") @db.Uuid
+  posSessionId            String?   @map("pos_session_id") @db.Uuid
+  receiptNumber           String?   @map("receipt_number") @db.VarChar(20)
+  totalAmount             Decimal?  @map("total_amount") @db.Decimal(12, 2)
+  discount                Decimal   @default(0) @db.Decimal(10, 2)
+  tax                     Decimal   @default(0) @db.Decimal(10, 2)
+  saleDate                DateTime  @default(now()) @map("sale_date") @db.Timestamp(6)
+  customerId              String?   @map("customer_id") @db.Uuid
+  onAccount               Boolean   @default(false) @map("on_account")
+  creditOverrideManagerId String?   @map("credit_override_manager_id") @db.Uuid
+  creditOverrideReason    String?   @map("credit_override_reason") @db.Text
   creditOverrideAt        DateTime? @map("credit_override_at") @db.Timestamp(6)
-  dueDate        DateTime? @map("due_date") @db.Date
+  dueDate                 DateTime? @map("due_date") @db.Date
 
-  branch          Branch?          @relation(fields: [branchId], references: [id])
-  posSession      PosSession?      @relation(fields: [posSessionId], references: [id], onDelete: SetNull)
-  customer        Customer?        @relation(fields: [customerId], references: [id], onDelete: SetNull)
-  saleItems       SaleItem[]
-  saleReturns     SaleReturn[]
-  returnVouchers  ReturnVoucher[]
-  payments        Payment[]
-  patientLoans    PatientLoan[]
+  branch           Branch?           @relation(fields: [branchId], references: [id])
+  posSession       PosSession?       @relation(fields: [posSessionId], references: [id], onDelete: SetNull)
+  customer         Customer?         @relation(fields: [customerId], references: [id], onDelete: SetNull)
+  saleItems        SaleItem[]
+  saleReturns      SaleReturn[]
+  returnVouchers   ReturnVoucher[]
+  payments         Payment[]
+  patientLoans     PatientLoan[]
   offerRedemptions OfferRedemption[]
 
   @@unique([branchId, receiptNumber], map: "sales_branch_receipt_unique")
@@ -842,33 +864,33 @@ model Sale {
 }
 
 model SaleItem {
-  id              String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  saleId          String   @map("sale_id") @db.Uuid
-  branchId        String?  @map("branch_id") @db.Uuid
-  productId       String?  @map("product_id") @db.Uuid
-  batchId         String?  @map("batch_id") @db.Uuid
-  uomId           String?  @map("uom_id") @db.Uuid
-  priceGroupId    String?  @map("price_group_id") @db.Uuid
-  offerId         String?  @map("offer_id") @db.Uuid
-  quantity        Int?
-  enteredQuantity Decimal? @map("entered_quantity") @db.Decimal(14, 4)
-  conversionFactorSnapshot Decimal @default(1) @map("conversion_factor_snapshot") @db.Decimal(18, 6)
-  baseQuantity    Int      @default(0) @map("base_quantity")
-  price           Decimal? @db.Decimal(10, 2)
-  total           Decimal? @db.Decimal(10, 2)
-  lineDiscount    Decimal  @default(0) @map("line_discount") @db.Decimal(14, 2)
-  discountSource  String?  @map("discount_source") @db.VarChar(50)
-  miscChargeKind  String?  @map("misc_charge_kind") @db.VarChar(32)
+  id                       String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  saleId                   String   @map("sale_id") @db.Uuid
+  branchId                 String?  @map("branch_id") @db.Uuid
+  productId                String?  @map("product_id") @db.Uuid
+  batchId                  String?  @map("batch_id") @db.Uuid
+  uomId                    String?  @map("uom_id") @db.Uuid
+  priceGroupId             String?  @map("price_group_id") @db.Uuid
+  offerId                  String?  @map("offer_id") @db.Uuid
+  quantity                 Int?
+  enteredQuantity          Decimal? @map("entered_quantity") @db.Decimal(14, 4)
+  conversionFactorSnapshot Decimal  @default(1) @map("conversion_factor_snapshot") @db.Decimal(18, 6)
+  baseQuantity             Int      @default(0) @map("base_quantity")
+  price                    Decimal? @db.Decimal(10, 2)
+  total                    Decimal? @db.Decimal(10, 2)
+  lineDiscount             Decimal  @default(0) @map("line_discount") @db.Decimal(14, 2)
+  discountSource           String?  @map("discount_source") @db.VarChar(50)
+  miscChargeKind           String?  @map("misc_charge_kind") @db.VarChar(32)
 
-  sale            Sale             @relation(fields: [saleId], references: [id], onDelete: Cascade)
-  branch          Branch?          @relation(fields: [branchId], references: [id])
-  product         Product?         @relation(fields: [productId], references: [id])
-  batch           Batch?           @relation(fields: [batchId], references: [id])
-  uom             Uom?             @relation(fields: [uomId], references: [id])
-  priceGroup      PriceGroup?      @relation(fields: [priceGroupId], references: [id], onDelete: SetNull)
-  offer           OfferList?       @relation(fields: [offerId], references: [id], onDelete: SetNull)
-  saleReturnItems SaleReturnItem[]
-  returnVouchers  ReturnVoucher[]
+  sale             Sale              @relation(fields: [saleId], references: [id], onDelete: Cascade)
+  branch           Branch?           @relation(fields: [branchId], references: [id])
+  product          Product?          @relation(fields: [productId], references: [id])
+  batch            Batch?            @relation(fields: [batchId], references: [id])
+  uom              Uom?              @relation(fields: [uomId], references: [id])
+  priceGroup       PriceGroup?       @relation(fields: [priceGroupId], references: [id], onDelete: SetNull)
+  offer            OfferList?        @relation(fields: [offerId], references: [id], onDelete: SetNull)
+  saleReturnItems  SaleReturnItem[]
+  returnVouchers   ReturnVoucher[]
   offerRedemptions OfferRedemption[]
 
   @@index([saleId])
@@ -882,18 +904,18 @@ model SaleItem {
 }
 
 model SaleReturn {
-  id            String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  saleId        String   @map("sale_id") @db.Uuid
-  branchId      String?  @map("branch_id") @db.Uuid
-  reason        String?  @db.Text
-  returnDate    DateTime @default(now()) @map("return_date") @db.Timestamp(6)
-  refundMethod  String?  @map("refund_method") @db.VarChar(50)
-  refundAmount  Decimal? @map("refund_amount") @db.Decimal(12, 2)
+  id           String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  saleId       String   @map("sale_id") @db.Uuid
+  branchId     String?  @map("branch_id") @db.Uuid
+  reason       String?  @db.Text
+  returnDate   DateTime @default(now()) @map("return_date") @db.Timestamp(6)
+  refundMethod String?  @map("refund_method") @db.VarChar(50)
+  refundAmount Decimal? @map("refund_amount") @db.Decimal(12, 2)
 
-  sale             Sale              @relation(fields: [saleId], references: [id], onDelete: Cascade)
-  branch           Branch?           @relation(fields: [branchId], references: [id])
-  saleReturnItems  SaleReturnItem[]
-  returnVouchers   ReturnVoucher[]
+  sale            Sale             @relation(fields: [saleId], references: [id], onDelete: Cascade)
+  branch          Branch?          @relation(fields: [branchId], references: [id])
+  saleReturnItems SaleReturnItem[]
+  returnVouchers  ReturnVoucher[]
 
   @@index([saleId])
   @@index([returnDate])
@@ -902,23 +924,23 @@ model SaleReturn {
 }
 
 model ReturnVoucher {
-  id           String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  branchId     String    @map("branch_id") @db.Uuid
-  saleId       String    @map("sale_id") @db.Uuid
-  saleItemId   String    @map("sale_item_id") @db.Uuid
-  uomId        String?   @map("uom_id") @db.Uuid
-  quantity     Int
-  enteredQuantity Decimal? @map("entered_quantity") @db.Decimal(14, 4)
-  conversionFactorSnapshot Decimal @default(1) @map("conversion_factor_snapshot") @db.Decimal(18, 6)
-  baseQuantity Int @default(0) @map("base_quantity")
-  unitPrice    Decimal   @map("unit_price") @db.Decimal(10, 2)
-  token        String    @unique @db.VarChar(80)
-  status       String    @default("pending") @db.VarChar(20)
-  reason       String?   @db.Text
-  saleReturnId String?   @map("sale_return_id") @db.Uuid
-  expiresAt    DateTime? @map("expires_at") @db.Timestamp(6)
-  usedAt       DateTime? @map("used_at") @db.Timestamp(6)
-  createdAt    DateTime  @default(now()) @map("created_at") @db.Timestamp(6)
+  id                       String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  branchId                 String    @map("branch_id") @db.Uuid
+  saleId                   String    @map("sale_id") @db.Uuid
+  saleItemId               String    @map("sale_item_id") @db.Uuid
+  uomId                    String?   @map("uom_id") @db.Uuid
+  quantity                 Int
+  enteredQuantity          Decimal?  @map("entered_quantity") @db.Decimal(14, 4)
+  conversionFactorSnapshot Decimal   @default(1) @map("conversion_factor_snapshot") @db.Decimal(18, 6)
+  baseQuantity             Int       @default(0) @map("base_quantity")
+  unitPrice                Decimal   @map("unit_price") @db.Decimal(10, 2)
+  token                    String    @unique @db.VarChar(80)
+  status                   String    @default("pending") @db.VarChar(20)
+  reason                   String?   @db.Text
+  saleReturnId             String?   @map("sale_return_id") @db.Uuid
+  expiresAt                DateTime? @map("expires_at") @db.Timestamp(6)
+  usedAt                   DateTime? @map("used_at") @db.Timestamp(6)
+  createdAt                DateTime  @default(now()) @map("created_at") @db.Timestamp(6)
 
   branch     Branch      @relation(fields: [branchId], references: [id])
   sale       Sale        @relation(fields: [saleId], references: [id], onDelete: Cascade)
@@ -935,16 +957,16 @@ model ReturnVoucher {
 }
 
 model SaleReturnItem {
-  id           String  @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  saleReturnId String  @map("sale_return_id") @db.Uuid
-  productId    String? @map("product_id") @db.Uuid
-  batchId      String? @map("batch_id") @db.Uuid
-  saleItemId   String? @map("sale_item_id") @db.Uuid
-  uomId        String? @map("uom_id") @db.Uuid
-  quantity     Int
-  enteredQuantity Decimal? @map("entered_quantity") @db.Decimal(14, 4)
-  conversionFactorSnapshot Decimal @default(1) @map("conversion_factor_snapshot") @db.Decimal(18, 6)
-  baseQuantity Int @default(0) @map("base_quantity")
+  id                       String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  saleReturnId             String   @map("sale_return_id") @db.Uuid
+  productId                String?  @map("product_id") @db.Uuid
+  batchId                  String?  @map("batch_id") @db.Uuid
+  saleItemId               String?  @map("sale_item_id") @db.Uuid
+  uomId                    String?  @map("uom_id") @db.Uuid
+  quantity                 Int
+  enteredQuantity          Decimal? @map("entered_quantity") @db.Decimal(14, 4)
+  conversionFactorSnapshot Decimal  @default(1) @map("conversion_factor_snapshot") @db.Decimal(18, 6)
+  baseQuantity             Int      @default(0) @map("base_quantity")
 
   saleReturn SaleReturn @relation(fields: [saleReturnId], references: [id], onDelete: Cascade)
   product    Product?   @relation(fields: [productId], references: [id])
@@ -971,10 +993,10 @@ model Payment {
 }
 
 model ExpenseCategory {
-  id            String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  name          String?   @db.VarChar(255)
-  glAccountKey  String?   @map("gl_account_key") @db.VarChar(50)
-  expenses      Expense[]
+  id           String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  name         String?   @db.VarChar(255)
+  glAccountKey String?   @map("gl_account_key") @db.VarChar(50)
+  expenses     Expense[]
 
   @@schema("tenant_template")
 }

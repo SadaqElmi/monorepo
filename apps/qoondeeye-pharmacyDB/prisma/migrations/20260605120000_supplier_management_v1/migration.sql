@@ -1,7 +1,7 @@
 -- Supplier Management V1: supplier metadata, product-supplier links,
 -- supplier statement indexes, and supplier price-history indexes.
 
-ALTER TABLE "tenant_template"."suppliers"
+ALTER TABLE "tenant_template"."Supplier"
   ADD COLUMN IF NOT EXISTS "supplier_type" VARCHAR(20) NOT NULL DEFAULT 'local',
   ADD COLUMN IF NOT EXISTS "country" VARCHAR(100),
   ADD COLUMN IF NOT EXISTS "city" VARCHAR(100),
@@ -16,16 +16,33 @@ BEGIN
     WHERE conname = 'suppliers_supplier_type_check'
       AND connamespace = 'tenant_template'::regnamespace
   ) THEN
-    ALTER TABLE "tenant_template"."suppliers"
+    ALTER TABLE "tenant_template"."Supplier"
       ADD CONSTRAINT "suppliers_supplier_type_check"
       CHECK ("supplier_type" IN ('local', 'international'));
   END IF;
 END $$;
 
+ALTER TABLE "tenant_template"."Product"
+  ADD COLUMN IF NOT EXISTS "supplier_id" UUID;
+
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_constraint
+    WHERE conname = 'Product_supplier_id_fkey'
+      AND connamespace = 'tenant_template'::regnamespace
+  ) THEN
+    ALTER TABLE "tenant_template"."Product"
+      ADD CONSTRAINT "Product_supplier_id_fkey"
+      FOREIGN KEY ("supplier_id") REFERENCES "tenant_template"."Supplier"("id")
+      ON DELETE SET NULL ON UPDATE CASCADE;
+  END IF;
+END $$;
+
 CREATE TABLE IF NOT EXISTS "tenant_template"."product_suppliers" (
   "id" UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  "product_id" UUID NOT NULL REFERENCES "tenant_template"."products"("id") ON DELETE CASCADE,
-  "supplier_id" UUID NOT NULL REFERENCES "tenant_template"."suppliers"("id") ON DELETE CASCADE,
+  "product_id" UUID NOT NULL REFERENCES "tenant_template"."Product"("id") ON DELETE CASCADE,
+  "supplier_id" UUID NOT NULL REFERENCES "tenant_template"."Supplier"("id") ON DELETE CASCADE,
   "is_preferred" BOOLEAN NOT NULL DEFAULT FALSE,
   "last_cost_price" NUMERIC(10,2),
   "supplier_item_code" VARCHAR(100),
@@ -47,16 +64,16 @@ CREATE INDEX IF NOT EXISTS "idx_product_suppliers_supplier_product"
   ON "tenant_template"."product_suppliers"("supplier_id", "product_id");
 
 CREATE INDEX IF NOT EXISTS "idx_suppliers_type_active_name"
-  ON "tenant_template"."suppliers"("supplier_type", "active", "name");
+  ON "tenant_template"."Supplier"("supplier_type", "active", "name");
 
 CREATE INDEX IF NOT EXISTS "idx_suppliers_active_name"
-  ON "tenant_template"."suppliers"("active", "name");
+  ON "tenant_template"."Supplier"("active", "name");
 
 INSERT INTO "tenant_template"."product_suppliers" AS ps (
   "product_id", "supplier_id", "is_preferred", "last_cost_price"
 )
 SELECT p."id", p."supplier_id", TRUE, NULL
-FROM "tenant_template"."products" p
+FROM "tenant_template"."Product" p
 WHERE p."supplier_id" IS NOT NULL
 ON CONFLICT ("product_id", "supplier_id") DO UPDATE
   SET "is_preferred" = TRUE,
@@ -67,8 +84,8 @@ WITH latest_purchase_cost AS (
     pi."product_id",
     p."supplier_id",
     pi."cost_price"
-  FROM "tenant_template"."purchase_items" pi
-  JOIN "tenant_template"."purchases" p ON p."id" = pi."purchase_id"
+  FROM "tenant_template"."PurchaseItem" pi
+  JOIN "tenant_template"."Purchase" p ON p."id" = pi."purchase_id"
   WHERE pi."product_id" IS NOT NULL
     AND p."supplier_id" IS NOT NULL
   ORDER BY
@@ -78,7 +95,7 @@ WITH latest_purchase_cost AS (
     p."created_at" DESC NULLS LAST,
     pi."id" DESC
 )
-INSERT INTO "tenant_template"."product_suppliers" (
+INSERT INTO "tenant_template"."product_suppliers" AS ps (
   "product_id", "supplier_id", "is_preferred", "last_cost_price"
 )
 SELECT
@@ -95,8 +112,8 @@ WITH latest_supplier_per_product AS (
   SELECT DISTINCT ON (pi."product_id")
     pi."product_id",
     p."supplier_id"
-  FROM "tenant_template"."purchase_items" pi
-  JOIN "tenant_template"."purchases" p ON p."id" = pi."purchase_id"
+  FROM "tenant_template"."PurchaseItem" pi
+  JOIN "tenant_template"."Purchase" p ON p."id" = pi."purchase_id"
   WHERE pi."product_id" IS NOT NULL
     AND p."supplier_id" IS NOT NULL
   ORDER BY
@@ -118,14 +135,20 @@ WHERE ps."product_id" = latest."product_id"
       AND existing."is_preferred"
   );
 
-CREATE INDEX IF NOT EXISTS "journal_lines_partner_account_entry_idx"
-  ON "tenant_template"."journal_lines"("partner_kind", "partner_id", "account_id", "journal_entry_id");
-
-CREATE INDEX IF NOT EXISTS "journal_entries_branch_entry_created_idx"
-  ON "tenant_template"."journal_entries"("branch_id", "entry_date", "created_at", "id");
+DO $$
+BEGIN
+  IF to_regclass('"tenant_template"."journal_lines"') IS NOT NULL THEN
+    CREATE INDEX IF NOT EXISTS "journal_lines_partner_account_entry_idx"
+      ON "tenant_template"."journal_lines"("partner_kind", "partner_id", "account_id", "journal_entry_id");
+  END IF;
+  IF to_regclass('"tenant_template"."journal_entries"') IS NOT NULL THEN
+    CREATE INDEX IF NOT EXISTS "journal_entries_branch_entry_created_idx"
+      ON "tenant_template"."journal_entries"("branch_id", "entry_date", "created_at", "id");
+  END IF;
+END $$;
 
 CREATE INDEX IF NOT EXISTS "idx_purchases_supplier_branch_date"
-  ON "tenant_template"."purchases"("supplier_id", "branch_id", "purchase_date" DESC, "created_at" DESC);
+  ON "tenant_template"."Purchase"("supplier_id", "branch_id", "purchase_date" DESC, "created_at" DESC);
 
 CREATE INDEX IF NOT EXISTS "idx_purchase_items_product_purchase"
-  ON "tenant_template"."purchase_items"("product_id", "purchase_id");
+  ON "tenant_template"."PurchaseItem"("product_id", "purchase_id");

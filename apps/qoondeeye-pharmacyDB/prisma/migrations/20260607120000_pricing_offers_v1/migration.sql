@@ -31,7 +31,7 @@ CREATE TABLE IF NOT EXISTS "tenant_template"."product_price_group_prices" (
   "updated_at" TIMESTAMP(6) NOT NULL DEFAULT CURRENT_TIMESTAMP,
   CONSTRAINT "product_price_group_prices_pkey" PRIMARY KEY ("id"),
   CONSTRAINT "product_price_group_prices_product_id_fkey"
-    FOREIGN KEY ("product_id") REFERENCES "tenant_template"."products"("id")
+    FOREIGN KEY ("product_id") REFERENCES "tenant_template"."Product"("id")
     ON DELETE CASCADE ON UPDATE CASCADE,
   CONSTRAINT "product_price_group_prices_uom_id_fkey"
     FOREIGN KEY ("uom_id") REFERENCES "tenant_template"."uoms"("id")
@@ -66,7 +66,7 @@ CREATE TABLE IF NOT EXISTS "tenant_template"."product_price_history" (
   "created_at" TIMESTAMP(6) NOT NULL DEFAULT CURRENT_TIMESTAMP,
   CONSTRAINT "product_price_history_pkey" PRIMARY KEY ("id"),
   CONSTRAINT "product_price_history_product_id_fkey"
-    FOREIGN KEY ("product_id") REFERENCES "tenant_template"."products"("id")
+    FOREIGN KEY ("product_id") REFERENCES "tenant_template"."Product"("id")
     ON DELETE CASCADE ON UPDATE CASCADE,
   CONSTRAINT "product_price_history_uom_id_fkey"
     FOREIGN KEY ("uom_id") REFERENCES "tenant_template"."uoms"("id")
@@ -132,10 +132,10 @@ CREATE TABLE IF NOT EXISTS "tenant_template"."offer_rules" (
     FOREIGN KEY ("offer_id") REFERENCES "tenant_template"."offer_lists"("id")
     ON DELETE CASCADE ON UPDATE CASCADE,
   CONSTRAINT "offer_rules_product_id_fkey"
-    FOREIGN KEY ("product_id") REFERENCES "tenant_template"."products"("id")
+    FOREIGN KEY ("product_id") REFERENCES "tenant_template"."Product"("id")
     ON DELETE CASCADE ON UPDATE CASCADE,
   CONSTRAINT "offer_rules_category_id_fkey"
-    FOREIGN KEY ("category_id") REFERENCES "tenant_template"."product_categories"("id")
+    FOREIGN KEY ("category_id") REFERENCES "tenant_template"."ProductCategory"("id")
     ON DELETE CASCADE ON UPDATE CASCADE
 );
 
@@ -161,16 +161,16 @@ CREATE TABLE IF NOT EXISTS "tenant_template"."offer_redemptions" (
     FOREIGN KEY ("offer_id") REFERENCES "tenant_template"."offer_lists"("id")
     ON DELETE CASCADE ON UPDATE CASCADE,
   CONSTRAINT "offer_redemptions_sale_id_fkey"
-    FOREIGN KEY ("sale_id") REFERENCES "tenant_template"."sales"("id")
+    FOREIGN KEY ("sale_id") REFERENCES "tenant_template"."Sale"("id")
     ON DELETE SET NULL ON UPDATE CASCADE,
   CONSTRAINT "offer_redemptions_sale_item_id_fkey"
-    FOREIGN KEY ("sale_item_id") REFERENCES "tenant_template"."sale_items"("id")
+    FOREIGN KEY ("sale_item_id") REFERENCES "tenant_template"."SaleItem"("id")
     ON DELETE SET NULL ON UPDATE CASCADE,
   CONSTRAINT "offer_redemptions_branch_id_fkey"
-    FOREIGN KEY ("branch_id") REFERENCES "tenant_template"."branches"("id")
+    FOREIGN KEY ("branch_id") REFERENCES "tenant_template"."Branch"("id")
     ON DELETE SET NULL ON UPDATE CASCADE,
   CONSTRAINT "offer_redemptions_product_id_fkey"
-    FOREIGN KEY ("product_id") REFERENCES "tenant_template"."products"("id")
+    FOREIGN KEY ("product_id") REFERENCES "tenant_template"."Product"("id")
     ON DELETE SET NULL ON UPDATE CASCADE,
   CONSTRAINT "offer_redemptions_price_group_id_fkey"
     FOREIGN KEY ("price_group_id") REFERENCES "tenant_template"."price_groups"("id")
@@ -182,7 +182,7 @@ CREATE INDEX IF NOT EXISTS "idx_offer_redemptions_offer_created"
 CREATE INDEX IF NOT EXISTS "idx_offer_redemptions_sale_id"
   ON "tenant_template"."offer_redemptions"("sale_id");
 
-ALTER TABLE "tenant_template"."sale_items"
+ALTER TABLE "tenant_template"."SaleItem"
   ADD COLUMN IF NOT EXISTS "price_group_id" UUID,
   ADD COLUMN IF NOT EXISTS "offer_id" UUID,
   ADD COLUMN IF NOT EXISTS "line_discount" NUMERIC(14,2) NOT NULL DEFAULT 0,
@@ -195,7 +195,7 @@ BEGIN
     WHERE conname = 'sale_items_price_group_id_fkey'
       AND connamespace = 'tenant_template'::regnamespace
   ) THEN
-    ALTER TABLE "tenant_template"."sale_items"
+    ALTER TABLE "tenant_template"."SaleItem"
       ADD CONSTRAINT "sale_items_price_group_id_fkey"
       FOREIGN KEY ("price_group_id") REFERENCES "tenant_template"."price_groups"("id")
       ON DELETE SET NULL ON UPDATE CASCADE;
@@ -205,7 +205,7 @@ BEGIN
     WHERE conname = 'sale_items_offer_id_fkey'
       AND connamespace = 'tenant_template'::regnamespace
   ) THEN
-    ALTER TABLE "tenant_template"."sale_items"
+    ALTER TABLE "tenant_template"."SaleItem"
       ADD CONSTRAINT "sale_items_offer_id_fkey"
       FOREIGN KEY ("offer_id") REFERENCES "tenant_template"."offer_lists"("id")
       ON DELETE SET NULL ON UPDATE CASCADE;
@@ -213,9 +213,9 @@ BEGIN
 END $$;
 
 CREATE INDEX IF NOT EXISTS "idx_sale_items_price_group_id"
-  ON "tenant_template"."sale_items"("price_group_id");
+  ON "tenant_template"."SaleItem"("price_group_id");
 CREATE INDEX IF NOT EXISTS "idx_sale_items_offer_id"
-  ON "tenant_template"."sale_items"("offer_id");
+  ON "tenant_template"."SaleItem"("offer_id");
 
 INSERT INTO "tenant_template"."price_groups" ("code", "name", "is_default", "active")
 VALUES
@@ -245,7 +245,7 @@ active_prices AS (
       ELSE p.list_price * pu.conversion_factor_to_base
     END) AS selling_price
   FROM "tenant_template"."product_uoms" pu
-  JOIN "tenant_template"."products" p ON p.id = pu.product_id
+  JOIN "tenant_template"."Product" p ON p.id = pu.product_id
   LEFT JOIN "tenant_template"."product_uom_prices" pp
     ON pp.product_id = pu.product_id
    AND pp.uom_id = pu.uom_id
@@ -261,16 +261,16 @@ CROSS JOIN retail
 WHERE selling_price IS NOT NULL
 ON CONFLICT DO NOTHING;
 
-INSERT INTO "tenant_template"."permissions" ("name")
+INSERT INTO "tenant_template"."Permission" ("name")
 VALUES ('manage_pricing'),
        ('manage_price_groups'),
        ('manage_offers')
 ON CONFLICT ("name") DO NOTHING;
 
-INSERT INTO "tenant_template"."role_permissions" ("role_id", "permission_id")
+INSERT INTO "tenant_template"."RolePermission" ("role_id", "permission_id")
 SELECT r."id", p."id"
-FROM "tenant_template"."roles" r
-JOIN "tenant_template"."permissions" p
+FROM "tenant_template"."Role" r
+JOIN "tenant_template"."Permission" p
   ON p."name" IN ('manage_pricing', 'manage_price_groups', 'manage_offers')
 WHERE r."name" IN ('admin', 'manager')
 ON CONFLICT ("role_id", "permission_id") DO NOTHING;

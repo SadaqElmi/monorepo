@@ -29,7 +29,7 @@ CREATE TABLE IF NOT EXISTS "tenant_template"."product_uoms" (
   "updated_at" TIMESTAMP(6) NOT NULL DEFAULT CURRENT_TIMESTAMP,
   CONSTRAINT "product_uoms_pkey" PRIMARY KEY ("id"),
   CONSTRAINT "product_uoms_product_id_fkey"
-    FOREIGN KEY ("product_id") REFERENCES "tenant_template"."products"("id")
+    FOREIGN KEY ("product_id") REFERENCES "tenant_template"."Product"("id")
     ON DELETE CASCADE ON UPDATE CASCADE,
   CONSTRAINT "product_uoms_uom_id_fkey"
     FOREIGN KEY ("uom_id") REFERENCES "tenant_template"."uoms"("id")
@@ -70,7 +70,7 @@ CREATE TABLE IF NOT EXISTS "tenant_template"."product_uom_prices" (
   "updated_at" TIMESTAMP(6) NOT NULL DEFAULT CURRENT_TIMESTAMP,
   CONSTRAINT "product_uom_prices_pkey" PRIMARY KEY ("id"),
   CONSTRAINT "product_uom_prices_product_id_fkey"
-    FOREIGN KEY ("product_id") REFERENCES "tenant_template"."products"("id")
+    FOREIGN KEY ("product_id") REFERENCES "tenant_template"."Product"("id")
     ON DELETE CASCADE ON UPDATE CASCADE,
   CONSTRAINT "product_uom_prices_uom_id_fkey"
     FOREIGN KEY ("uom_id") REFERENCES "tenant_template"."uoms"("id")
@@ -93,7 +93,7 @@ CREATE TABLE IF NOT EXISTS "tenant_template"."product_uom_barcodes" (
   "updated_at" TIMESTAMP(6) NOT NULL DEFAULT CURRENT_TIMESTAMP,
   CONSTRAINT "product_uom_barcodes_pkey" PRIMARY KEY ("id"),
   CONSTRAINT "product_uom_barcodes_product_id_fkey"
-    FOREIGN KEY ("product_id") REFERENCES "tenant_template"."products"("id")
+    FOREIGN KEY ("product_id") REFERENCES "tenant_template"."Product"("id")
     ON DELETE CASCADE ON UPDATE CASCADE,
   CONSTRAINT "product_uom_barcodes_uom_id_fkey"
     FOREIGN KEY ("uom_id") REFERENCES "tenant_template"."uoms"("id")
@@ -108,7 +108,7 @@ CREATE INDEX IF NOT EXISTS "idx_product_uom_barcodes_barcode"
 CREATE INDEX IF NOT EXISTS "idx_product_uom_barcodes_product_uom"
   ON "tenant_template"."product_uom_barcodes"("product_id", "uom_id");
 
-ALTER TABLE "tenant_template"."purchase_items"
+ALTER TABLE "tenant_template"."PurchaseItem"
   ADD COLUMN IF NOT EXISTS "uom_id" UUID,
   ADD COLUMN IF NOT EXISTS "conversion_factor_snapshot" NUMERIC(18,6) NOT NULL DEFAULT 1,
   ADD COLUMN IF NOT EXISTS "base_quantity" INTEGER NOT NULL DEFAULT 0,
@@ -121,7 +121,7 @@ BEGIN
     WHERE conname = 'purchase_items_uom_id_fkey'
       AND connamespace = 'tenant_template'::regnamespace
   ) THEN
-    ALTER TABLE "tenant_template"."purchase_items"
+    ALTER TABLE "tenant_template"."PurchaseItem"
       ADD CONSTRAINT "purchase_items_uom_id_fkey"
       FOREIGN KEY ("uom_id") REFERENCES "tenant_template"."uoms"("id")
       ON DELETE RESTRICT ON UPDATE CASCADE;
@@ -129,11 +129,11 @@ BEGIN
 END $$;
 
 CREATE INDEX IF NOT EXISTS "idx_purchase_items_uom_id"
-  ON "tenant_template"."purchase_items"("uom_id");
+  ON "tenant_template"."PurchaseItem"("uom_id");
 CREATE INDEX IF NOT EXISTS "idx_purchase_items_product_uom"
-  ON "tenant_template"."purchase_items"("product_id", "uom_id");
+  ON "tenant_template"."PurchaseItem"("product_id", "uom_id");
 
-ALTER TABLE "tenant_template"."sale_items"
+ALTER TABLE "tenant_template"."SaleItem"
   ADD COLUMN IF NOT EXISTS "uom_id" UUID,
   ADD COLUMN IF NOT EXISTS "entered_quantity" NUMERIC(14,4),
   ADD COLUMN IF NOT EXISTS "conversion_factor_snapshot" NUMERIC(18,6) NOT NULL DEFAULT 1,
@@ -146,7 +146,7 @@ BEGIN
     WHERE conname = 'sale_items_uom_id_fkey'
       AND connamespace = 'tenant_template'::regnamespace
   ) THEN
-    ALTER TABLE "tenant_template"."sale_items"
+    ALTER TABLE "tenant_template"."SaleItem"
       ADD CONSTRAINT "sale_items_uom_id_fkey"
       FOREIGN KEY ("uom_id") REFERENCES "tenant_template"."uoms"("id")
       ON DELETE RESTRICT ON UPDATE CASCADE;
@@ -154,9 +154,9 @@ BEGIN
 END $$;
 
 CREATE INDEX IF NOT EXISTS "idx_sale_items_uom_id"
-  ON "tenant_template"."sale_items"("uom_id");
+  ON "tenant_template"."SaleItem"("uom_id");
 CREATE INDEX IF NOT EXISTS "idx_sale_items_product_uom"
-  ON "tenant_template"."sale_items"("product_id", "uom_id");
+  ON "tenant_template"."SaleItem"("product_id", "uom_id");
 
 INSERT INTO "tenant_template"."uoms" ("code", "name", "symbol")
 VALUES
@@ -185,7 +185,7 @@ WITH normalized AS (
       ELSE upper(regexp_replace(btrim(p.unit), '[^A-Za-z0-9]+', '_', 'g'))
     END AS code,
     COALESCE(NULLIF(btrim(p.unit), ''), 'Piece') AS raw_name
-  FROM "tenant_template"."products" p
+  FROM "tenant_template"."Product" p
 )
 INSERT INTO "tenant_template"."uoms" ("code", "name", "symbol")
 SELECT code, initcap(replace(raw_name, '_', ' ')), code
@@ -199,7 +199,7 @@ WITH product_base AS (
     u.id AS uom_id,
     u.code,
     u.symbol
-  FROM "tenant_template"."products" p
+  FROM "tenant_template"."Product" p
   JOIN "tenant_template"."uoms" u ON u.code = CASE
     WHEN p.unit IS NULL OR btrim(p.unit) = '' THEN 'PCS'
     WHEN upper(btrim(p.unit)) IN ('PC', 'PCS', 'PIECE', 'PIECES', 'EA', 'EACH') THEN 'PCS'
@@ -226,11 +226,11 @@ ON CONFLICT ("product_id", "uom_id") DO UPDATE
       "is_active" = TRUE,
       "updated_at" = CURRENT_TIMESTAMP;
 
-UPDATE "tenant_template"."purchase_items"
+UPDATE "tenant_template"."PurchaseItem"
 SET "base_quantity" = COALESCE("quantity", 0)
 WHERE COALESCE("base_quantity", 0) = 0;
 
-UPDATE "tenant_template"."sale_items"
+UPDATE "tenant_template"."SaleItem"
 SET "base_quantity" = COALESCE("quantity", 0),
     "entered_quantity" = COALESCE("entered_quantity", COALESCE("quantity", 0))
 WHERE COALESCE("base_quantity", 0) = 0;
