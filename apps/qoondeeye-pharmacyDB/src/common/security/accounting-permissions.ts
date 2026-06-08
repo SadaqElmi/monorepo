@@ -8,6 +8,12 @@ export const ACCOUNTING_PERMISSION_CODES = [
   'view_audit_logs',
   'export_audit_package',
   'view_disclosure_reports',
+  'manage_accounting_configuration',
+  'post_journal',
+  'reverse_journal',
+  'close_period',
+  'reopen_period',
+  'change_lock_date',
 ] as const;
 
 export type AccountingPermissionCode =

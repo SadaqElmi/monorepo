@@ -43,7 +43,6 @@ export function deriveStateFromEvents(
     }
     if (rawType === 'confirmed') {
       state.status = 'confirmed';
-      state.approval_state = 'pending';
       continue;
     }
     if (rawType === 'approved') {

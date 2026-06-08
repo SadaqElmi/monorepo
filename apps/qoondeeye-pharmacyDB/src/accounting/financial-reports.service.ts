@@ -16,6 +16,8 @@ import { severityInventoryGlMismatch } from '../reconciliation/reconciliation-se
 import { TaggedCacheService } from '../cache/tagged-cache.service';
 import { financialBranchTags } from '../cache/cache-tags';
 import { normalizeBranchScope } from '../cache/cache-keys';
+import { formatBaseQuantityDisplay } from '../uoms/uom-display.util';
+import { UomsService } from '../uoms/uoms.service';
 
 export type ReportStatus = 'CLEAN' | 'WARNING' | 'CRITICAL';
 
@@ -61,6 +63,8 @@ export type BalanceSheetReport = {
   lines: Array<{
     accountType: string;
     accountKey: string;
+    accountId?: string;
+    code?: string | null;
     name: string;
     balance: number;
     drilldownPath?: string;
@@ -234,6 +238,7 @@ export class FinancialReportsService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly taggedCache: TaggedCacheService,
+    private readonly uomsService: UomsService,
   ) {
     const rawDefault = Number(process.env.CACHE_DEFAULT_TTL_MS);
     const rawReport = Number(process.env.REPORT_CACHE_TTL_MS);
@@ -244,6 +249,22 @@ export class FinancialReportsService {
           ? rawReport
           : 60_000;
     this.cacheTtlMs = Math.min(600_000, Math.max(5_000, pick));
+  }
+
+  private accountTypeFamily(accountType: string): string {
+    if (accountType === 'asset' || accountType.startsWith('asset_')) {
+      return 'asset';
+    }
+    if (
+      accountType === 'liability' ||
+      accountType.startsWith('liability_')
+    ) {
+      return 'liability';
+    }
+    if (accountType === 'cost_of_goods_sold') {
+      return 'expense';
+    }
+    return accountType;
   }
 
   /** When true, P&amp;L excludes rows on `chart_of_accounts.is_interbranch` (future intercompany P&amp;L). */
@@ -530,7 +551,7 @@ export class FinancialReportsService {
                 SUM(
                   CASE
                     WHEN coa.account_type = 'income' THEN jl.credit - jl.debit
-                    WHEN coa.account_type = 'expense' THEN jl.debit - jl.credit
+                    WHEN coa.account_type IN ('expense', 'cost_of_goods_sold') THEN jl.debit - jl.credit
                     ELSE 0
                   END
                 )::numeric(14,2)::text AS amount
@@ -540,13 +561,13 @@ export class FinancialReportsService {
          WHERE ${branchWhere}
            AND je.entry_date >= $2::date
            AND je.entry_date <= $3::date
-           AND coa.account_type IN ('income', 'expense')
+           AND coa.account_type IN ('income', 'expense', 'cost_of_goods_sold')
            ${pnlInterbranchSql}
          GROUP BY coa.id, coa.account_type, coa.account_key, coa.name
          HAVING SUM(
                   CASE
                     WHEN coa.account_type = 'income' THEN jl.credit - jl.debit
-                    WHEN coa.account_type = 'expense' THEN jl.debit - jl.credit
+                    WHEN coa.account_type IN ('expense', 'cost_of_goods_sold') THEN jl.debit - jl.credit
                     ELSE 0
                   END
                 ) <> 0
@@ -567,7 +588,7 @@ export class FinancialReportsService {
                 SUM(
                   CASE
                     WHEN coa.account_type = 'income' THEN jl.credit - jl.debit
-                    WHEN coa.account_type = 'expense' THEN jl.debit - jl.credit
+                    WHEN coa.account_type IN ('expense', 'cost_of_goods_sold') THEN jl.debit - jl.credit
                     ELSE 0
                   END
                 )::numeric(14,2)::text AS amount
@@ -577,7 +598,7 @@ export class FinancialReportsService {
          WHERE ${branchWhere}
            AND je.entry_date >= $2::date
            AND je.entry_date <= $3::date
-           AND coa.account_type IN ('income', 'expense')
+           AND coa.account_type IN ('income', 'expense', 'cost_of_goods_sold')
            AND COALESCE(coa.is_interbranch, false) = true
          GROUP BY coa.id, coa.account_type, coa.account_key`,
         ...branchParams,
@@ -595,13 +616,21 @@ export class FinancialReportsService {
         const a = Number(r.amount);
         if (r.account_type === 'income') revenue += a;
         else expense += a;
-        if (r.account_type === 'expense' && r.account_key === 'cogs') cogs += a;
+        if (
+          r.account_type === 'cost_of_goods_sold' ||
+          (r.account_type === 'expense' && r.account_key === 'cogs')
+        ) {
+          cogs += a;
+        }
       }
       for (const r of intercompanyRows) {
         const amount = Number(r.amount);
         if (r.account_type === 'income') intercompanyRevenue += amount;
         else intercompanyExpenses += amount;
-        if (r.account_type === 'expense' && r.account_key === 'cogs') {
+        if (
+          r.account_type === 'cost_of_goods_sold' ||
+          (r.account_type === 'expense' && r.account_key === 'cogs')
+        ) {
           intercompanyCogs += amount;
         }
       }
@@ -617,14 +646,14 @@ export class FinancialReportsService {
           >(
             `SELECT TO_CHAR(DATE_TRUNC('month', je.entry_date), 'YYYY-MM') AS month,
                     SUM(CASE WHEN coa.account_type = 'income' THEN jl.credit - jl.debit ELSE 0 END)::numeric(14,2)::text AS revenue,
-                    SUM(CASE WHEN coa.account_type = 'expense' THEN jl.debit - jl.credit ELSE 0 END)::numeric(14,2)::text AS expenses
+                    SUM(CASE WHEN coa.account_type IN ('expense', 'cost_of_goods_sold') THEN jl.debit - jl.credit ELSE 0 END)::numeric(14,2)::text AS expenses
              FROM journal_lines jl
              INNER JOIN journal_entries je ON je.id = jl.journal_entry_id
              INNER JOIN chart_of_accounts coa ON coa.id = jl.account_id
              WHERE ${branchWhere}
                AND je.entry_date >= $2::date
                AND je.entry_date <= $3::date
-               AND coa.account_type IN ('income', 'expense')
+               AND coa.account_type IN ('income', 'expense', 'cost_of_goods_sold')
                ${pnlInterbranchSql}
              GROUP BY DATE_TRUNC('month', je.entry_date)
              ORDER BY DATE_TRUNC('month', je.entry_date)`,
@@ -680,7 +709,7 @@ export class FinancialReportsService {
                 SUM(
                   CASE
                     WHEN coa.account_type = 'income' THEN jl.credit - jl.debit
-                    WHEN coa.account_type = 'expense' THEN jl.debit - jl.credit
+                    WHEN coa.account_type IN ('expense', 'cost_of_goods_sold') THEN jl.debit - jl.credit
                     ELSE 0
                   END
                 )::numeric(14,2)::text AS value
@@ -690,7 +719,7 @@ export class FinancialReportsService {
          WHERE ${branchWhere}
            AND je.entry_date >= $2::date
            AND je.entry_date <= $3::date
-           AND coa.account_type IN ('income', 'expense')
+           AND coa.account_type IN ('income', 'expense', 'cost_of_goods_sold')
            ${pnlInterbranchSql}
          GROUP BY coa.account_key`,
         [...branchParams, fromDate, toDate],
@@ -744,22 +773,26 @@ export class FinancialReportsService {
       );
       const rows = await tx.$queryRawUnsafe<
         {
+          account_id: string;
           account_type: string;
           account_key: string;
+          code: string | null;
           name: string;
           balance: string;
         }[]
       >(
-        `SELECT coa.account_type,
+        `SELECT coa.id AS account_id,
+                coa.account_type,
                 coa.account_key,
+                coa.code,
                 coa.name,
                 (
-                  CASE coa.account_type
-                    WHEN 'asset' THEN SUM(jl.debit - jl.credit)
-                    WHEN 'expense' THEN SUM(jl.debit - jl.credit)
-                    WHEN 'liability' THEN SUM(jl.credit - jl.debit)
-                    WHEN 'equity' THEN SUM(jl.credit - jl.debit)
-                    WHEN 'income' THEN SUM(jl.credit - jl.debit)
+                  CASE
+                    WHEN coa.account_type = 'asset' OR coa.account_type LIKE 'asset_%' THEN SUM(jl.debit - jl.credit)
+                    WHEN coa.account_type IN ('expense', 'cost_of_goods_sold') THEN SUM(jl.debit - jl.credit)
+                    WHEN coa.account_type = 'liability' OR coa.account_type LIKE 'liability_%' THEN SUM(jl.credit - jl.debit)
+                    WHEN coa.account_type = 'equity' THEN SUM(jl.credit - jl.debit)
+                    WHEN coa.account_type = 'income' THEN SUM(jl.credit - jl.debit)
                     ELSE 0
                   END
                 )::numeric(14,2)::text AS balance
@@ -769,18 +802,18 @@ export class FinancialReportsService {
          WHERE ${branchWhere}
            AND je.entry_date <= $2::date
            AND coa.account_type <> 'section'
-         GROUP BY coa.id, coa.account_type, coa.account_key, coa.name
+         GROUP BY coa.id, coa.account_type, coa.account_key, coa.code, coa.name
          HAVING (
-           CASE coa.account_type
-             WHEN 'asset' THEN SUM(jl.debit - jl.credit)
-             WHEN 'expense' THEN SUM(jl.debit - jl.credit)
-             WHEN 'liability' THEN SUM(jl.credit - jl.debit)
-             WHEN 'equity' THEN SUM(jl.credit - jl.debit)
-             WHEN 'income' THEN SUM(jl.credit - jl.debit)
+           CASE
+             WHEN coa.account_type = 'asset' OR coa.account_type LIKE 'asset_%' THEN SUM(jl.debit - jl.credit)
+             WHEN coa.account_type IN ('expense', 'cost_of_goods_sold') THEN SUM(jl.debit - jl.credit)
+             WHEN coa.account_type = 'liability' OR coa.account_type LIKE 'liability_%' THEN SUM(jl.credit - jl.debit)
+             WHEN coa.account_type = 'equity' THEN SUM(jl.credit - jl.debit)
+             WHEN coa.account_type = 'income' THEN SUM(jl.credit - jl.debit)
              ELSE 0
            END
          ) <> 0
-         ORDER BY coa.account_type, coa.name`,
+         ORDER BY coa.code NULLS LAST, coa.name`,
         ...branchParams,
         asOfDate,
       );
@@ -793,8 +826,8 @@ export class FinancialReportsService {
         expense: 0,
       };
       for (const r of rows) {
-        byType[r.account_type] =
-          (byType[r.account_type] ?? 0) + Number(r.balance);
+        const family = this.accountTypeFamily(r.account_type);
+        byType[family] = (byType[family] ?? 0) + Number(r.balance);
       }
 
       const retainedFromPnl = (byType.income ?? 0) - (byType.expense ?? 0);
@@ -807,6 +840,8 @@ export class FinancialReportsService {
         lines: rows.map((r) => ({
           accountType: r.account_type,
           accountKey: r.account_key,
+          accountId: r.account_id,
+          code: r.code,
           name: r.name,
           balance: Number(r.balance),
           drilldownPath: opts?.drilldownPath
@@ -833,12 +868,12 @@ export class FinancialReportsService {
         tx,
         `SELECT coa.account_key,
                 (
-                  CASE coa.account_type
-                    WHEN 'asset' THEN SUM(jl.debit - jl.credit)
-                    WHEN 'expense' THEN SUM(jl.debit - jl.credit)
-                    WHEN 'liability' THEN SUM(jl.credit - jl.debit)
-                    WHEN 'equity' THEN SUM(jl.credit - jl.debit)
-                    WHEN 'income' THEN SUM(jl.credit - jl.debit)
+                  CASE
+                    WHEN coa.account_type = 'asset' OR coa.account_type LIKE 'asset_%' THEN SUM(jl.debit - jl.credit)
+                    WHEN coa.account_type IN ('expense', 'cost_of_goods_sold') THEN SUM(jl.debit - jl.credit)
+                    WHEN coa.account_type = 'liability' OR coa.account_type LIKE 'liability_%' THEN SUM(jl.credit - jl.debit)
+                    WHEN coa.account_type = 'equity' THEN SUM(jl.credit - jl.debit)
+                    WHEN coa.account_type = 'income' THEN SUM(jl.credit - jl.debit)
                     ELSE 0
                   END
                 )::numeric(14,2)::text AS value
@@ -1667,7 +1702,7 @@ export class FinancialReportsService {
             `WITH days AS (
            SELECT je.entry_date AS d,
                   SUM(CASE WHEN coa.account_key = 'sales_revenue' THEN jl.credit - jl.debit ELSE 0 END)::numeric(14,2) AS sales,
-                  SUM(CASE WHEN coa.account_type = 'expense' THEN jl.debit - jl.credit ELSE 0 END)::numeric(14,2) AS expenses
+                  SUM(CASE WHEN coa.account_type IN ('expense', 'cost_of_goods_sold') THEN jl.debit - jl.credit ELSE 0 END)::numeric(14,2) AS expenses
            FROM journal_lines jl
            INNER JOIN journal_entries je ON je.id = jl.journal_entry_id
            INNER JOIN chart_of_accounts coa ON coa.id = jl.account_id
@@ -1701,7 +1736,7 @@ export class FinancialReportsService {
    * Stock value at weighted-average batch cost per product (matches COGS batch logic).
    */
   async inventoryValuation(schemaName: string, branchIds: string[]) {
-    return this.prisma.withTenantSchema(schemaName, async (tx) => {
+    const rows = await this.prisma.withTenantSchema(schemaName, async (tx) => {
       const { sql: batchBranchWhere, branchParams } = branchColumnPredicate(
         'b.branch_id',
         branchIds,
@@ -1755,25 +1790,35 @@ export class FinancialReportsService {
          ORDER BY p.name`,
         ...branchParams,
       );
+      return rows;
+    });
+    const byProduct = await this.uomsService.listProductUomsForProducts(
+      schemaName,
+      rows.map((r) => r.product_id),
+    );
 
-      let totalValue = 0;
-      const lines = rows.map((r) => {
-        const lv = Number(r.line_value);
-        totalValue += lv;
-        return {
-          productId: r.product_id,
-          productName: r.product_name,
-          qty: Number(r.qty),
-          unitCost: Number(r.unit_cost),
-          lineValue: lv,
-        };
-      });
-
+    let totalValue = 0;
+    const lines = rows.map((r) => {
+      const lv = Number(r.line_value);
+      totalValue += lv;
+      const uoms = byProduct[r.product_id] ?? [];
+      const base = uoms.find((u) => u.isBase);
       return {
-        lines,
-        totalValue: Math.round((totalValue + Number.EPSILON) * 100) / 100,
+        productId: r.product_id,
+        productName: r.product_name,
+        qty: Number(r.qty),
+        baseUomCode: base?.code ?? null,
+        baseUomSymbol: base?.symbol ?? null,
+        convertedQuantity: formatBaseQuantityDisplay(Number(r.qty), uoms),
+        unitCost: Number(r.unit_cost),
+        lineValue: lv,
       };
     });
+
+    return {
+      lines,
+      totalValue: Math.round((totalValue + Number.EPSILON) * 100) / 100,
+    };
   }
 
   /**
@@ -2208,7 +2253,7 @@ export class FinancialReportsService {
          WHERE ${branchWhere}
            AND je.entry_date >= $2::date
            AND je.entry_date <= $3::date
-           AND coa.account_type = 'expense'
+           AND coa.account_type IN ('expense', 'cost_of_goods_sold')
            AND (coa.account_key ILIKE '%tax%' OR coa.name ILIKE '%tax%')
          GROUP BY coa.id, coa.account_key, coa.name
          HAVING SUM(jl.debit - jl.credit) <> 0

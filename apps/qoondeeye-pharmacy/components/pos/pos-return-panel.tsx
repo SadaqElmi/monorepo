@@ -171,6 +171,14 @@ export function PosReturnPanel({
   const lineLabel = (item: SaleItem) =>
     productNames[item.product_id ?? ""] ?? item.product_id ?? "Product";
 
+  const enteredQuantityForLine = (item: SaleItem) =>
+    Number(item.entered_quantity ?? item.quantity ?? 0);
+
+  const quantityLabel = (value: number | string | null | undefined) => {
+    const n = Number(value ?? 0);
+    return Number.isFinite(n) ? String(n) : "0";
+  };
+
   const issueVoucher = async (item: SaleItem) => {
     if (!tenantSlug || !sale) return;
     const id = item.id;
@@ -379,7 +387,7 @@ export function PosReturnPanel({
                       {lineLabel(item)}
                     </TableCell>
                     <TableCell className="text-right tabular-nums">
-                      {item.quantity ?? 0}
+                      {quantityLabel(enteredQuantityForLine(item))}
                     </TableCell>
                     <TableCell>
                       <Input
@@ -431,7 +439,9 @@ export function PosReturnPanel({
           <CardContent className="space-y-4">
             <div className="flex flex-wrap gap-2 text-xs">
               <Badge variant="secondary">ID: {voucher.id}</Badge>
-              <Badge variant="outline">Qty: {voucher.quantity}</Badge>
+              <Badge variant="outline">
+                Qty: {quantityLabel(voucher.entered_quantity ?? voucher.quantity)}
+              </Badge>
             </div>
             <ReturnVoucherPrint
               voucherId={voucher.id}
@@ -442,7 +452,7 @@ export function PosReturnPanel({
                     ?.product_id ?? ""
                 ] ?? "Item"
               }
-              quantity={voucher.quantity}
+              quantity={Number(voucher.entered_quantity ?? voucher.quantity)}
               unitPrice={voucherUnit}
               receiptNumber={sale?.receipt_number ?? null}
               originalSaleId={voucher.sale_id}

@@ -43,6 +43,11 @@ import { RateLimitModule } from './common/rate-limit/rate-limit.module';
 import { LoggingModule } from './common/logging/logging.module';
 import { RequestContextMiddleware } from './common/logging/request-context.middleware';
 import { BranchScopeGuard } from './common/security/branch-scope.guard';
+import { ImportModule } from './import/import.module';
+import { UomsModule } from './uoms/uoms.module';
+import { PricingModule } from './pricing/pricing.module';
+import { OffersModule } from './offers/offers.module';
+import { TransactionRegisterModule } from './transaction-register/transaction-register.module';
 
 @Module({
   imports: [
@@ -79,6 +84,11 @@ import { BranchScopeGuard } from './common/security/branch-scope.guard';
     TransfersModule,
     ReconciliationModule,
     PosSessionsModule,
+    ImportModule,
+    UomsModule,
+    PricingModule,
+    OffersModule,
+    TransactionRegisterModule,
   ],
   controllers: [AppController],
   providers: [

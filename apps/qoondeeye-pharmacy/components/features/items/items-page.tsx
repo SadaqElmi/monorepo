@@ -51,9 +51,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 
-function parseMoneyField(
-  v: number | string | null | undefined,
-): number | null {
+function parseMoneyField(v: number | string | null | undefined): number | null {
   if (v === null || v === undefined || v === "") return null;
   const n = typeof v === "number" ? v : Number.parseFloat(String(v));
   return Number.isFinite(n) ? n : null;
@@ -136,6 +134,15 @@ export default function ItemsPage() {
     return m;
   }, [linePricing]);
 
+  const catalogSupplierByProduct = useMemo(() => {
+    const m = new Map<string, string>();
+    for (const p of products) {
+      const name = p.supplierName?.trim();
+      if (name) m.set(p.id, name);
+    }
+    return m;
+  }, [products]);
+
   const flatRows: ItemDisplayRow[] = useMemo(() => {
     const base = computeProductAggregateRows(
       products,
@@ -153,7 +160,10 @@ export default function ItemsPage() {
         ...r,
         unitCost: parseMoneyField(pr?.cost_price),
         sellingPrice: parseMoneyField(pr?.selling_price),
-        supplierName: pr?.supplier_name?.trim() || null,
+        supplierName:
+          pr?.supplier_name?.trim() ||
+          catalogSupplierByProduct.get(r.productId) ||
+          null,
       };
     });
   }, [
@@ -166,6 +176,7 @@ export default function ItemsPage() {
     statusFilter,
     query,
     pricingByProduct,
+    catalogSupplierByProduct,
   ]);
 
   useEffect(() => {
@@ -202,6 +213,7 @@ export default function ItemsPage() {
       "Strength/Form",
       "Unit",
       "Quantity",
+      "Reorder level",
       "Unit cost",
       "Unit price (selling)",
       "Supplier",
@@ -220,6 +232,7 @@ export default function ItemsPage() {
           csvEscape(r.strengthForm),
           csvEscape(r.unit ?? ""),
           String(r.qty),
+          String(r.reorder),
           r.unitCost != null ? String(r.unitCost) : "",
           r.sellingPrice != null ? String(r.sellingPrice) : "",
           csvEscape(r.supplierName ?? ""),
@@ -251,7 +264,8 @@ export default function ItemsPage() {
               </h1>
               <p className="text-sm text-muted-foreground">
                 One row per product with totals across locations. Prices reflect
-                the latest purchase line (cost & selling). By-location detail:{" "}
+                purchases first, then opening stock or batch costs. By-location
+                detail:{" "}
                 <Link
                   href="/items-locations"
                   className="font-medium text-teal-700 underline-offset-4 hover:underline dark:text-teal-400"
@@ -343,9 +357,7 @@ export default function ItemsPage() {
                   onClick={() => void load()}
                   disabled={loading}
                 >
-                  {loading ? (
-                    <Loader2 className="size-4 animate-spin" />
-                  ) : null}
+                  {loading ? <Loader2 className="size-4 animate-spin" /> : null}
                   Refresh
                 </Button>
                 <Button
@@ -395,12 +407,15 @@ export default function ItemsPage() {
                       Quantity
                     </TableHead>
                     <TableHead className="whitespace-nowrap text-right text-[11px] font-bold uppercase tracking-widest text-muted-foreground">
+                      Reorder level
+                    </TableHead>
+                    <TableHead className="whitespace-nowrap text-right text-[11px] font-bold uppercase tracking-widest text-muted-foreground">
                       Unit cost
                     </TableHead>
                     <TableHead className="min-w-[140px] whitespace-nowrap text-right text-[11px] font-bold uppercase tracking-widest text-muted-foreground">
                       Unit price
                       <span className="mt-0.5 block font-normal normal-case tracking-normal text-[10px] text-muted-foreground/90">
-                        Selling (latest purchase)
+                        Selling price
                       </span>
                     </TableHead>
                     <TableHead className="whitespace-nowrap text-[11px] font-bold uppercase tracking-widest text-muted-foreground">
@@ -412,7 +427,7 @@ export default function ItemsPage() {
                   {pageSlice.length === 0 ? (
                     <TableRow>
                       <TableCell
-                        colSpan={9}
+                        colSpan={10}
                         className="py-16 text-center text-sm text-muted-foreground"
                       >
                         No rows match your filters.
@@ -455,6 +470,9 @@ export default function ItemsPage() {
                           {r.qty}
                         </TableCell>
                         <TableCell className="text-right text-sm tabular-nums text-muted-foreground">
+                          {r.reorder}
+                        </TableCell>
+                        <TableCell className="text-right text-sm tabular-nums text-muted-foreground">
                           {formatMoney(r.unitCost)}
                         </TableCell>
                         <TableCell className="text-right text-sm font-semibold tabular-nums text-teal-800 dark:text-teal-300">
@@ -479,19 +497,14 @@ export default function ItemsPage() {
                   ? 0
                   : (currentPage - 1) * ITEMS_TABLE_PAGE_SIZE + 1}
                 –
-                {Math.min(
-                  currentPage * ITEMS_TABLE_PAGE_SIZE,
-                  flatRows.length,
-                )}
+                {Math.min(currentPage * ITEMS_TABLE_PAGE_SIZE, flatRows.length)}
               </span>{" "}
               of{" "}
               <span className="font-medium text-foreground">
                 {flatRows.length.toLocaleString()}
               </span>{" "}
               products · Page{" "}
-              <span className="font-medium text-foreground">
-                {currentPage}
-              </span>{" "}
+              <span className="font-medium text-foreground">{currentPage}</span>{" "}
               of {totalPages}
             </p>
             <div className="flex items-center gap-1">

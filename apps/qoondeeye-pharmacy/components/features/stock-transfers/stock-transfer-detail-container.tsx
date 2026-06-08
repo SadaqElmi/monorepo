@@ -90,12 +90,8 @@ export function StockTransferDetailContainer({
   );
 
   useEffect(() => {
-    if (tenantSlugProp?.trim()) {
-      setTenantSlug(tenantSlugProp.trim());
-      return;
-    }
     const u = getResolvedStoredUser();
-    setTenantSlug(u?.tenantSlug?.trim() || "");
+    setTenantSlug(tenantSlugProp?.trim() || u?.tenantSlug?.trim() || "");
     setActorBranchId(getClientBranchId() ?? null);
     setActorRole(u?.role?.trim()?.toLowerCase() || null);
   }, [tenantSlugProp]);

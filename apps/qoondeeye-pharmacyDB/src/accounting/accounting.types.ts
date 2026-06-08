@@ -14,7 +14,8 @@ export type AccountKey =
   | 'operating_expense'
   | 'cash_shortage_expense'
   | 'cash_overage_income'
-  | 'equity_retained';
+  | 'equity_retained'
+  | 'opening_balance_equity';
 
 export type JournalSourceType =
   | 'sale'
@@ -37,4 +38,8 @@ export type JournalSourceType =
   | 'consolidation_pnl'
   | 'consolidation_reversal'
   | 'period_adjustment'
-  | 'pos_statement';
+  | 'pos_statement'
+  | 'product_import_opening_stock'
+  | 'product_import_opening_stock_reversal'
+  | 'opening_stock_import'
+  | 'opening_stock_import_reversal';

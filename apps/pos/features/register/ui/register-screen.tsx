@@ -82,6 +82,8 @@ export function RegisterScreen() {
     goToPayment: contextGoToPayment,
     managerPrivilegesSuspended,
     setManagerPrivilegesSuspended,
+    selectedCustomer,
+    customerCreditSummary,
   } = usePos();
 
   const handleManagerLoginButton = React.useCallback(() => {
@@ -266,12 +268,26 @@ export function RegisterScreen() {
       strength?: string | null;
       unit?: string | null;
       listPrice?: number | string | null;
+      uomId?: string | null;
+      uomCode?: string | null;
+      uomSymbol?: string | null;
+      conversionFactorToBase?: number | string | null;
+      uomSellingPrice?: number | string | null;
+      priceGroupId?: string | null;
+      offerId?: string | null;
+      discountSource?: string | null;
     }) => {
       const { sellingValue, listValue, showCompare } = resolvePosCatalogPricing(
         p,
         batchesState,
         p.id,
       );
+      const scannedPrice =
+        p.uomSellingPrice != null ? Number(p.uomSellingPrice) : null;
+      const priceValue =
+        scannedPrice != null && Number.isFinite(scannedPrice) && scannedPrice > 0
+          ? scannedPrice
+          : sellingValue;
       const mapped: PosCatalogProduct = {
         id: p.id,
         sku: (p.sku ?? "").trim() || p.id.slice(0, 8),
@@ -280,18 +296,39 @@ export function RegisterScreen() {
           [p.genericName, p.strength, p.unit].filter(Boolean).join(" • ") ||
           "Catalog item",
         category: "Scanned",
-        price: formatMoney(sellingValue),
-        priceValue: sellingValue,
+        price: formatMoney(priceValue),
+        priceValue,
         listPriceValue: showCompare ? listValue : undefined,
         showCompare,
-        stock: sellingValue > 0 ? "in" : "low",
-        unitType: "PC",
+        stock: priceValue > 0 ? "in" : "low",
+        unitType: p.uomSymbol || p.uomCode || p.unit || "PC",
+        uomId: p.uomId ?? undefined,
+        uomCode: p.uomCode ?? undefined,
+        uomSymbol: p.uomSymbol ?? undefined,
+        conversionFactorToBase:
+          p.conversionFactorToBase != null
+            ? Number(p.conversionFactorToBase)
+            : 1,
+        priceGroupId: p.priceGroupId ?? undefined,
+        offerId: p.offerId ?? undefined,
+        discountSource: p.discountSource ?? undefined,
       };
       setCart((prev) => {
-        const existing = prev.find((l) => l.productId === mapped.id);
+        const existing = prev.find(
+          (l) =>
+            l.productId === mapped.id &&
+            (l.uomId ?? null) === (mapped.uomId ?? null),
+        );
         if (existing) {
           return prev.map((l) =>
-            l.productId === mapped.id ? { ...l, qty: l.qty + 1 } : l,
+            l.lineId === existing.lineId
+              ? {
+                  ...l,
+                  qty: l.qty + 1,
+                  baseQty:
+                    (l.qty + 1) * Number(l.conversionFactorToBase ?? 1),
+                }
+              : l,
           );
         }
         return [
@@ -307,6 +344,14 @@ export function RegisterScreen() {
                 : undefined,
             qty: 1,
             unitType: mapped.unitType,
+            uomId: mapped.uomId,
+            uomCode: mapped.uomCode,
+            uomSymbol: mapped.uomSymbol ?? undefined,
+            conversionFactorToBase: mapped.conversionFactorToBase,
+            baseQty: mapped.conversionFactorToBase ?? 1,
+            priceGroupId: mapped.priceGroupId,
+            offerId: mapped.offerId,
+            discountSource: mapped.discountSource,
           },
         ];
       });
@@ -551,11 +596,21 @@ export function RegisterScreen() {
 
   const addProduct = (p: PosCatalogProduct) => {
     setCart((prev) => {
-      const existing = prev.find((l) => l.productId === p.id);
+      const existing = prev.find(
+        (l) =>
+          l.productId === p.id &&
+          (l.uomId ?? null) === (p.uomId ?? null),
+      );
       if (existing) {
         setSelectedLineId(existing.lineId);
         return prev.map((l) =>
-          l.productId === p.id ? { ...l, qty: l.qty + 1 } : l,
+          l.lineId === existing.lineId
+            ? {
+                ...l,
+                qty: l.qty + 1,
+                baseQty: (l.qty + 1) * Number(l.conversionFactorToBase ?? 1),
+              }
+            : l,
         );
       }
       const newLineId = crypto.randomUUID();
@@ -573,6 +628,14 @@ export function RegisterScreen() {
               : undefined,
           qty: 1,
           unitType: p.unitType,
+          uomId: p.uomId,
+          uomCode: p.uomCode,
+          uomSymbol: p.uomSymbol ?? undefined,
+          conversionFactorToBase: p.conversionFactorToBase ?? 1,
+          baseQty: p.conversionFactorToBase ?? 1,
+          priceGroupId: p.priceGroupId,
+          offerId: p.offerId,
+          discountSource: p.discountSource,
         },
       ];
     });
@@ -582,6 +645,32 @@ export function RegisterScreen() {
     setCart((prev) =>
       prev.map((l) => {
         if (l.lineId !== lineId) return l;
+        const product = catalogProducts.find((p) => p.id === l.productId);
+        const uoms = product?.uoms?.filter((u) => u.isActive) ?? [];
+        if (uoms.length > 0) {
+          const currentIndex = uoms.findIndex(
+            (u) => u.uomId === l.uomId || u.code === l.uomCode,
+          );
+          const next = uoms[(currentIndex + 1 + uoms.length) % uoms.length]!;
+          const nextPrice =
+            next.sellingPrice != null
+              ? Number(next.sellingPrice)
+              : product?.priceValue ?? l.unitPrice;
+          const factor = Number(next.conversionFactorToBase ?? 1);
+          return {
+            ...l,
+            unitType: next.symbol || next.code,
+            unitPrice:
+              Number.isFinite(nextPrice) && nextPrice > 0
+                ? nextPrice
+                : l.unitPrice,
+            uomId: next.uomId,
+            uomCode: next.code,
+            uomSymbol: next.symbol ?? undefined,
+            conversionFactorToBase: factor,
+            baseQty: l.qty * factor,
+          };
+        }
         const currentIndex = UNIT_TYPES.indexOf(l.unitType);
         const nextIndex = (currentIndex + 1) % UNIT_TYPES.length;
         return { ...l, unitType: UNIT_TYPES[nextIndex]! };
@@ -859,7 +948,7 @@ export function RegisterScreen() {
                   </div>
                   <div className="px-3 py-2 text-right">Amount</div>
                 </div>
-                {cart.length === 0 ? (
+                {cart.length === 0 && !selectedCustomer ? (
                   <p className="py-8 text-center text-sm text-muted-foreground">
                     Scan or enter a barcode from the keypad to add items to the
                     current order.
@@ -890,6 +979,50 @@ export function RegisterScreen() {
                         </div>
                         <div className="px-3 py-2 text-right tabular-nums">
                           {formatMoney(tax)}
+                        </div>
+                      </div>
+                    ) : null}
+                    {selectedCustomer ? (
+                      <div className="grid grid-cols-[2.8fr_0.5fr_0.6fr_1fr_0.9fr_1fr_1fr] bg-slate-100 text-sm font-bold text-slate-900 dark:bg-slate-900/40 dark:text-slate-100">
+                        <div className="border-r border-slate-300 px-3 py-2 dark:border-slate-700">
+                          <div className="truncate text-base font-bold">
+                            Customer
+                          </div>
+                          <div className="truncate text-xs font-semibold text-slate-600 dark:text-slate-300">
+                            {selectedCustomer.name?.trim() || "Unnamed customer"}
+                            {selectedCustomer.phone
+                              ? ` · ${selectedCustomer.phone}`
+                              : ""}
+                          </div>
+                          {customerCreditSummary ? (
+                            <div className="truncate text-[10px] font-medium text-slate-500 dark:text-slate-400">
+                              Balance{" "}
+                              {formatMoney(
+                                customerCreditSummary.outstandingBalance,
+                              )}
+                              {customerCreditSummary.creditLimit != null
+                                ? ` · Limit ${formatMoney(customerCreditSummary.creditLimit)}`
+                                : ""}
+                            </div>
+                          ) : null}
+                        </div>
+                        <div className="border-r border-slate-300 px-3 py-2 dark:border-slate-700">
+                          —
+                        </div>
+                        <div className="border-r border-slate-300 px-2 py-2 text-right dark:border-slate-700">
+                          —
+                        </div>
+                        <div className="border-r border-slate-300 px-2 py-2 text-right tabular-nums dark:border-slate-700">
+                          —
+                        </div>
+                        <div className="border-r border-slate-300 px-2 py-2 text-right tabular-nums dark:border-slate-700">
+                          0
+                        </div>
+                        <div className="border-r border-slate-300 px-2 py-2 text-right tabular-nums dark:border-slate-700">
+                          {formatMoney(0)}
+                        </div>
+                        <div className="px-3 py-2 text-right tabular-nums">
+                          —
                         </div>
                       </div>
                     ) : null}
@@ -1331,16 +1464,7 @@ export function RegisterScreen() {
             </Card>
 
             <Card className="w-[300px] shrink-0 flex flex-col gap-0 overflow-hidden rounded-none border-0 bg-slate-50 p-3 shadow-none dark:bg-[#0a1514]">
-              <div className="grid grid-cols-2 grid-rows-3 gap-[2px] bg-slate-900 border-2 border-slate-900">
-                <Button
-                  type="button"
-                  variant="secondary"
-                  disabled
-                  title="Member points — coming soon"
-                  className="h-full w-full aspect-square bg-amber-400 text-slate-900 font-bold text-center flex flex-col items-center justify-center p-4 uppercase rounded-none shadow-none border-0 whitespace-normal opacity-50 cursor-not-allowed"
-                >
-                  Member card
-                </Button>
+              <div className="grid grid-cols-2 grid-rows-2 gap-[2px] bg-slate-900 border-2 border-slate-900">
                 <Button
                   type="button"
                   variant="secondary"
@@ -1363,15 +1487,6 @@ export function RegisterScreen() {
                 >
                   Delivery Charge
                 </Button>
-                <Button
-                  type="button"
-                  variant="secondary"
-                  className="h-full w-full aspect-square bg-amber-400 text-slate-900 font-bold text-center flex flex-col items-center justify-center p-4 hover:bg-amber-500 active:scale-[0.98] transition-transform uppercase rounded-none shadow-none border-0 whitespace-normal"
-                  onClick={() => openMiscAmountDialog("tailor")}
-                >
-                  Tailor
-                </Button>
-
                 <Button
                   variant="secondary"
                   onClick={handleSuspendClick}

@@ -1,5 +1,8 @@
 import { redirect } from "next/navigation";
 
-export default function RolesAliasPage() {
+import { requireServerPermission } from "@/lib/auth-server";
+
+export default async function RolesAliasPage() {
+  await requireServerPermission("manage_users");
   redirect("/configuration/roles");
 }

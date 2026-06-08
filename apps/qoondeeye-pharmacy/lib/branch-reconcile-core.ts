@@ -92,9 +92,14 @@ export function reconcileBranchSelection(
   }
 
   if (raw && raw.toLowerCase() !== "all") {
-    const allowedByUser = allowed.length === 0 || allowed.includes(raw);
     const existsInTenant =
       !params.validBranchIds?.length || params.validBranchIds.includes(raw);
+    // Admins/owners: team switcher may select any tenant branch; JWT allowedBranchIds
+    // is often a single default and must not override localStorage for API headers.
+    if (canGlobal && existsInTenant) {
+      return { branchId: raw, aggregateAll: false, branchHeader: raw };
+    }
+    const allowedByUser = allowed.length === 0 || allowed.includes(raw);
     if (allowedByUser && existsInTenant) {
       return { branchId: raw, aggregateAll: false, branchHeader: raw };
     }

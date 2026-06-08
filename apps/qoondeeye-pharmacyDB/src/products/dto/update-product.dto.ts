@@ -1,4 +1,5 @@
 import {
+  IsArray,
   IsNumber,
   IsOptional,
   IsString,
@@ -6,7 +7,10 @@ import {
   Min,
   MinLength,
   ValidateIf,
+  ValidateNested,
 } from 'class-validator';
+import { Type } from 'class-transformer';
+import { ProductUomSetupDto } from './create-product.dto';
 
 export class UpdateProductDto {
   @IsOptional()
@@ -17,6 +21,10 @@ export class UpdateProductDto {
   @IsOptional()
   @IsString()
   genericName?: string;
+
+  @IsOptional()
+  @IsString()
+  itemNo?: string;
 
   @IsOptional()
   @IsString()
@@ -57,4 +65,10 @@ export class UpdateProductDto {
   @IsNumber()
   @Min(0)
   listPrice?: number | null;
+
+  @IsOptional()
+  @IsArray()
+  @ValidateNested({ each: true })
+  @Type(() => ProductUomSetupDto)
+  uoms?: ProductUomSetupDto[];
 }

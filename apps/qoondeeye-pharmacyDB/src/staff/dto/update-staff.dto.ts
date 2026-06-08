@@ -40,4 +40,9 @@ export class UpdateStaffDto {
   @IsOptional()
   @IsUUID()
   branchId?: string;
+
+  /** Super-admin only: move staff to another tenant schema. */
+  @IsOptional()
+  @IsString()
+  targetTenant?: string;
 }

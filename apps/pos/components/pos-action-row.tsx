@@ -9,12 +9,16 @@ import { clearAuthToken } from "@/lib/auth-client";
 import { Input } from "@/components/ui/input";
 
 import { usePos } from "./pos-context";
-import { PAYMENT_METHODS } from "@/features/register/model/constants";
+import {
+  CASH_PAYMENT_METHOD_ID,
+  PAYMENT_METHODS,
+} from "@/features/register/model/constants";
 import { CurrencyEntryDialog } from "@/components/currency-entry-dialog";
 import { PercentageEntryDialog } from "@/components/percentage-entry-dialog";
 import {
   billableCartLines,
   cartTotals,
+  roundMoney,
 } from "@/features/register/model/totals";
 import {
   Dialog,
@@ -29,7 +33,7 @@ import { getXReport } from "@/lib/api";
 /**
  * Three contextual button sets occupy the same footer strip:
  *   - "idle"        : cart is empty            (5 buttons)
- *   - "lineActions" : cart has items, in cart  (6 buttons)
+ *   - "lineActions" : cart has items, in cart  (7 buttons)
  *   - "payment"     : checkoutStep === payment (9 buttons)
  *
  * Adding/reordering buttons is a one-liner — each set is a config array
@@ -59,7 +63,7 @@ const TONE_CLASSES: Record<ActionTone, string> = {
 
 const MODE_GRID: Record<ActionMode, string> = {
   idle: "grid-cols-5",
-  lineActions: "grid-cols-6",
+  lineActions: "grid-cols-7",
   payment: "grid-cols-9",
   supervisor: "grid-cols-3",
 };
@@ -154,6 +158,12 @@ export function PosActionRow() {
     React.useState(false);
 
   const { total } = cartTotals(billableCartLines(cart), discount);
+  const payableTotal = roundMoney(total);
+
+  React.useEffect(() => {
+    if (!isCurrencyDialogOpen || !pendingPayment) return;
+    setEnteredAmount(payableTotal > 0 ? payableTotal.toFixed(2) : "");
+  }, [isCurrencyDialogOpen, pendingPayment?.id, payableTotal]);
 
   const handleLogout = React.useCallback(() => {
     setIsLogoutDialogOpen(true);
@@ -338,6 +348,12 @@ export function PosActionRow() {
         onClick: handleTotalDiscount,
       },
       {
+        id: "customer",
+        label: "Customer",
+        tone: "default",
+        href: "/customers",
+      },
+      {
         id: "total",
         label: "Total",
         tone: "brand",
@@ -362,12 +378,19 @@ export function PosActionRow() {
         label: m.label,
         tone: "warning" as const,
         onClick: () => {
+          if (payableTotal <= 0) {
+            posToast.warning(
+              "Nothing to pay",
+              "Add billable items to the cart before taking payment.",
+            );
+            return;
+          }
           setPendingPayment({ id: m.id, label: m.label });
-          setEnteredAmount(total > 0 ? total.toFixed(2) : "");
+          setEnteredAmount(payableTotal.toFixed(2));
           setIsCurrencyDialogOpen(true);
         },
       })),
-    [total],
+    [payableTotal],
   );
 
   const supervisorButtons: ActionDescriptor[] = React.useMemo(
@@ -467,8 +490,23 @@ export function PosActionRow() {
             );
             return;
           }
+          const amtRounded = roundMoney(amt);
+          if (
+            pendingPayment.id !== CASH_PAYMENT_METHOD_ID &&
+            Math.abs(amtRounded - payableTotal) > 0.009
+          ) {
+            posToast.error(
+              "Exact amount required",
+              `${pendingPayment.label} must match the balance due (${payableTotal.toFixed(2)}). Use Cash for change.`,
+            );
+            return;
+          }
           setIsCurrencyDialogOpen(false);
-          void completePayment(pendingPayment.label, pendingPayment.id, amt);
+          void completePayment(
+            pendingPayment.label,
+            pendingPayment.id,
+            amtRounded,
+          );
           setPendingPayment(null);
         }}
       />

@@ -30,6 +30,7 @@ import {
 } from "@/components/ui/sheet";
 import { cn } from "@/lib/utils";
 import { clearAuthToken, getResolvedStoredUser } from "@/lib/auth-client";
+import { getAdminDashboardUrl } from "@/lib/admin-dashboard-url";
 import {
   filterErpNavModulesForUser,
   getActiveErpModule,
@@ -42,6 +43,7 @@ type NavUserState = {
   role?: string;
   userType?: "system" | "tenant" | "admin" | "pharmacy";
   tenantSlug?: string | null;
+  permissions?: string[];
 };
 
 function readNavUserFromAuth(): NavUserState {
@@ -51,6 +53,7 @@ function readNavUserFromAuth(): NavUserState {
     role?: string;
     userType?: "system" | "tenant" | "admin" | "pharmacy";
     tenantSlug?: string | null;
+    permissions?: string[];
   } | null;
   if (!u) {
     return { name: "Guest", email: "Sign in" };
@@ -61,6 +64,7 @@ function readNavUserFromAuth(): NavUserState {
     role: u.role,
     userType: u.userType,
     tenantSlug: u.tenantSlug ?? null,
+    permissions: u.permissions ?? [],
   };
 }
 
@@ -143,11 +147,15 @@ export function AppTopNav() {
   const modules = filterErpNavModulesForUser({
     userType: navUser.userType,
     role: navUser.role,
+    permissions: navUser.permissions,
   });
+  const isSystemUser =
+    navUser.userType === "system" || navUser.userType === "admin";
   const isCashier = navUser.role?.toLowerCase() === "cashier";
-  const showTeamSwitcher = !isCashier;
-  const isAdmin = navUser.userType === "system" || navUser.userType === "admin";
-  const homeHref = isAdmin ? "/admin" : "/dashboard";
+  const showTeamSwitcher = !isCashier && !isSystemUser;
+  const homeHref = isSystemUser
+    ? getAdminDashboardUrl("/admin")
+    : "/dashboard";
 
   const handleLogout = React.useCallback(() => {
     clearAuthToken();
@@ -236,7 +244,7 @@ export function AppTopNav() {
           </NavigationMenu>
         </div>
         <div className="flex min-w-0 items-center justify-end justify-self-end gap-1.5 sm:gap-2">
-          {!isAdmin ? (
+          {!isSystemUser ? (
             <Button
               asChild
               variant="ghost"

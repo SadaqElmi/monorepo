@@ -1,6 +1,7 @@
 "use client";
 
 import { useQueryClient } from "@tanstack/react-query";
+import Link from "next/link";
 import * as React from "react";
 import {
   CalendarDays,
@@ -73,6 +74,10 @@ type EditableCustomer = {
   name: string;
   phone: string;
   address: string;
+  customerNo: string;
+  creditLimit: string;
+  creditStatus: string;
+  memberCardNo: string;
 };
 
 function formatDate(dateStr: string | null | undefined) {
@@ -191,6 +196,10 @@ export default function CustomersPage({
       name: "",
       phone: "",
       address: "",
+      customerNo: "",
+      creditLimit: "",
+      creditStatus: "active",
+      memberCardNo: "",
     });
     setFormOpen(true);
   };
@@ -203,6 +212,11 @@ export default function CustomersPage({
       name: c.name ?? "",
       phone: c.phone ?? "",
       address: c.address ?? "",
+      customerNo: c.customer_no ?? "",
+      creditLimit:
+        c.credit_limit != null ? String(c.credit_limit) : "",
+      creditStatus: c.credit_status ?? "active",
+      memberCardNo: c.member_card_no ?? "",
     });
     setFormOpen(true);
   };
@@ -215,6 +229,11 @@ export default function CustomersPage({
       name: c.name ?? "",
       phone: c.phone ?? "",
       address: c.address ?? "",
+      customerNo: c.customer_no ?? "",
+      creditLimit:
+        c.credit_limit != null ? String(c.credit_limit) : "",
+      creditStatus: c.credit_status ?? "active",
+      memberCardNo: c.member_card_no ?? "",
     });
     setFormOpen(true);
   };
@@ -243,10 +262,21 @@ export default function CustomersPage({
       return;
     }
 
+    const creditLimitRaw = activeCustomer.creditLimit.trim();
+    const creditLimit =
+      creditLimitRaw.length > 0 ? Number(creditLimitRaw) : undefined;
+
     const payload = {
       name,
       phone: phone.length ? phone : undefined,
       address: address.length ? address : undefined,
+      customerNo: activeCustomer.customerNo.trim() || undefined,
+      creditLimit:
+        creditLimit != null && Number.isFinite(creditLimit)
+          ? creditLimit
+          : undefined,
+      creditStatus: activeCustomer.creditStatus.trim() || undefined,
+      memberCardNo: activeCustomer.memberCardNo.trim() || undefined,
     };
 
     try {
@@ -556,9 +586,12 @@ export default function CustomersPage({
                                 {initialsFor(c.name)}
                               </div>
                               <div className="min-w-0">
-                                <p className="text-sm font-semibold truncate">
+                                <Link
+                                  href={`/customers/${c.id}`}
+                                  className="text-sm font-semibold truncate text-primary underline-offset-4 hover:underline"
+                                >
                                   {c.name ?? "Unnamed customer"}
-                                </p>
+                                </Link>
                                 <p className="text-[10px] text-muted-foreground font-medium truncate">
                                   ID:{" "}
                                   {c.id.length > 10 ? c.id.slice(0, 10) : c.id}
@@ -757,6 +790,75 @@ export default function CustomersPage({
                         )
                       }
                       placeholder="Street, city, country"
+                      disabled={formMode === "view" || saving}
+                    />
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label htmlFor="customer-no">Customer no.</Label>
+                    <Input
+                      id="customer-no"
+                      value={activeCustomer.customerNo}
+                      onChange={(e) =>
+                        setActiveCustomer((prev) =>
+                          prev
+                            ? { ...prev, customerNo: e.target.value }
+                            : prev,
+                        )
+                      }
+                      disabled={formMode === "view" || saving}
+                    />
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label htmlFor="credit-limit">Credit limit</Label>
+                    <Input
+                      id="credit-limit"
+                      type="number"
+                      min={0}
+                      step="0.01"
+                      value={activeCustomer.creditLimit}
+                      onChange={(e) =>
+                        setActiveCustomer((prev) =>
+                          prev
+                            ? { ...prev, creditLimit: e.target.value }
+                            : prev,
+                        )
+                      }
+                      placeholder="Leave empty for no limit"
+                      disabled={formMode === "view" || saving}
+                    />
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label htmlFor="credit-status">Credit status</Label>
+                    <Input
+                      id="credit-status"
+                      value={activeCustomer.creditStatus}
+                      onChange={(e) =>
+                        setActiveCustomer((prev) =>
+                          prev
+                            ? { ...prev, creditStatus: e.target.value }
+                            : prev,
+                        )
+                      }
+                      placeholder="active, blocked, hold"
+                      disabled={formMode === "view" || saving}
+                    />
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label htmlFor="member-card">Member card no.</Label>
+                    <Input
+                      id="member-card"
+                      value={activeCustomer.memberCardNo}
+                      onChange={(e) =>
+                        setActiveCustomer((prev) =>
+                          prev
+                            ? { ...prev, memberCardNo: e.target.value }
+                            : prev,
+                        )
+                      }
                       disabled={formMode === "view" || saving}
                     />
                   </div>

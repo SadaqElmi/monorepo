@@ -791,6 +791,275 @@ export class StaffService {
     return this.findOne(schemaName, updated.id);
   }
 
+  async transfer(
+    sourceSchema: string,
+    targetSchema: string,
+    id: string,
+    dto: {
+      name?: string;
+      staffId?: string;
+      email?: string;
+      password?: string;
+      role?: string;
+      pin?: string;
+      branchId?: string;
+    },
+    actorBranchId: string,
+    allowedBranchIds: string[],
+    actorRole?: string | null,
+  ) {
+    if (sourceSchema.toLowerCase() === targetSchema.toLowerCase()) {
+      return this.update(
+        sourceSchema,
+        id,
+        dto,
+        actorBranchId,
+        allowedBranchIds,
+        actorRole,
+      );
+    }
+
+    await this.ensureStaffTenantSchema(sourceSchema);
+    await this.ensureStaffTenantSchema(targetSchema);
+
+    const sourceMeta = await this.resolveTenantUserTables(sourceSchema);
+    const targetMeta = await this.resolveTenantUserTables(targetSchema);
+    if (!targetMeta.hasBranchId) {
+      throw new BadRequestException(
+        'Target pharmacy schema is missing branch_id on users',
+      );
+    }
+
+    const sourceUserTable = sourceMeta.userTable.startsWith('"')
+      ? `"${sourceSchema}".${sourceMeta.userTable}`
+      : `"${sourceSchema}".${sourceMeta.userTable}`;
+    const sourceRoleTable =
+      sourceMeta.roleTable &&
+      (sourceMeta.roleTable.startsWith('"')
+        ? `"${sourceSchema}".${sourceMeta.roleTable}`
+        : `"${sourceSchema}".${sourceMeta.roleTable}`);
+
+    const [sourceUser] = await this.prisma.queryRawUnsafe<
+      {
+        name: string | null;
+        staff_id: string | null;
+        email: string | null;
+        password: string | null;
+        pin_hash: string | null;
+        role_name: string | null;
+        branch_id: string | null;
+      }[]
+    >(
+      `SELECT u.name,
+              u.staff_id,
+              u.email,
+              u.password,
+              ${sourceMeta.hasPinHash ? 'u.pin_hash' : 'NULL::text AS pin_hash'},
+              ${
+                sourceMeta.hasRoleId && sourceRoleTable
+                  ? 'r.name'
+                  : sourceMeta.hasRoleText
+                    ? 'u.role'
+                    : 'NULL::text'
+              } AS role_name,
+              u.branch_id
+       FROM ${sourceUserTable} u
+       ${
+         sourceMeta.hasRoleId && sourceRoleTable
+           ? `LEFT JOIN ${sourceRoleTable} r ON u.role_id = r.id`
+           : ``
+       }
+       WHERE u.id = $1`,
+      id,
+    );
+    if (!sourceUser) {
+      throw new BadRequestException('Staff member not found in source pharmacy');
+    }
+
+    const roleName =
+      dto.role !== undefined
+        ? dto.role.trim() || null
+        : sourceUser.role_name?.trim() || null;
+    const staffId =
+      dto.staffId !== undefined
+        ? dto.staffId.trim() || null
+        : sourceUser.staff_id?.trim() || null;
+    const name =
+      dto.name !== undefined ? dto.name.trim() || null : sourceUser.name;
+    const email =
+      dto.email !== undefined
+        ? dto.email.trim() || null
+        : sourceUser.email?.trim() || null;
+
+    if (email) {
+      const targetUserTable = targetMeta.userTable.startsWith('"')
+        ? `"${targetSchema}".${targetMeta.userTable}`
+        : `"${targetSchema}".${targetMeta.userTable}`;
+      const [existing] = await this.prisma.queryRawUnsafe<{ id: string }[]>(
+        `SELECT id FROM ${targetUserTable} WHERE lower(email) = lower($1::text) LIMIT 1`,
+        email,
+      );
+      if (existing) {
+        throw new BadRequestException(
+          `Email "${email}" is already used in pharmacy "${targetSchema}"`,
+        );
+      }
+    }
+
+    const password =
+      dto.password && dto.password.length > 0
+        ? await import('bcrypt').then((m) => m.hash(dto.password!, 10))
+        : sourceUser.password;
+
+    const roleLower = normalizeRole(roleName);
+    if (roleLower === 'cashier' && !staffId) {
+      throw new BadRequestException(
+        'Staff ID is required for cashier accounts',
+      );
+    }
+
+    const [defaultBranch] = await this.prisma.queryRawUnsafe<{ id: string }[]>(
+      `SELECT id FROM "${targetSchema}"."branches" ORDER BY name LIMIT 1`,
+    );
+    const targetBranchId =
+      dto.branchId?.trim() ||
+      (requiresAssignedBranch(roleLower) ? defaultBranch?.id ?? null : null);
+    if (requiresAssignedBranch(roleLower) && !targetBranchId) {
+      throw new BadRequestException(
+        `Role "${roleName ?? 'staff'}" requires a branch in the target pharmacy`,
+      );
+    }
+
+    const targetUserTable = targetMeta.userTable.startsWith('"')
+      ? `"${targetSchema}".${targetMeta.userTable}`
+      : `"${targetSchema}".${targetMeta.userTable}`;
+    const targetRoleTable =
+      targetMeta.roleTable &&
+      (targetMeta.roleTable.startsWith('"')
+        ? `"${targetSchema}".${targetMeta.roleTable}`
+        : `"${targetSchema}".${targetMeta.roleTable}`);
+
+    let pinHash = sourceMeta.hasPinHash ? sourceUser.pin_hash : null;
+    if (targetMeta.hasPinHash && dto.pin !== undefined) {
+      const pinPlain = dto.pin.trim();
+      if (pinPlain.length > 0) {
+        if (!this.canUsePosPin(roleLower)) {
+          throw new BadRequestException(
+            'PIN can only be set for cashier, manager, admin, or pharmacist roles',
+          );
+        }
+        await this.assertPosPinUnique(targetSchema, targetMeta, pinPlain);
+        pinHash = await import('bcrypt').then((m) => m.hash(pinPlain, 10));
+      } else {
+        pinHash = null;
+      }
+    } else if (
+      targetMeta.hasPinHash &&
+      dto.password &&
+      dto.password.length > 0 &&
+      /^\d{4,12}$/.test(dto.password.trim()) &&
+      this.canUsePosPin(roleLower)
+    ) {
+      const syncPin = dto.password.trim();
+      await this.assertPosPinUnique(targetSchema, targetMeta, syncPin);
+      pinHash = await import('bcrypt').then((m) => m.hash(syncPin, 10));
+    }
+
+    let inserted: StaffIdOnlyRow | null = null;
+
+    if (targetMeta.hasRoleId && targetRoleTable) {
+      let roleId: string | null = null;
+      if (roleName) {
+        const [r] = await this.prisma.queryRawUnsafe<{ id: string }[]>(
+          `SELECT id FROM ${targetRoleTable} WHERE lower(name) = lower($1::text)`,
+          roleName,
+        );
+        if (!r?.id) {
+          throw new BadRequestException(
+            `Role "${roleName}" not found in pharmacy "${targetSchema}". Create the role first, then move the user.`,
+          );
+        }
+        roleId = r.id;
+      }
+
+      if (targetMeta.hasPinHash) {
+        [inserted] = await this.prisma.queryRawUnsafe<StaffIdOnlyRow[]>(
+          `INSERT INTO ${targetUserTable} (name, staff_id, email, password, role_id, pin_hash, branch_id)
+           VALUES ($1, $2, $3, $4, $5::uuid, $6, $7::uuid)
+           RETURNING id`,
+          name,
+          staffId,
+          email,
+          password,
+          roleId,
+          pinHash,
+          targetBranchId,
+        );
+      } else {
+        [inserted] = await this.prisma.queryRawUnsafe<StaffIdOnlyRow[]>(
+          `INSERT INTO ${targetUserTable} (name, staff_id, email, password, role_id, branch_id)
+           VALUES ($1, $2, $3, $4, $5::uuid, $6::uuid)
+           RETURNING id`,
+          name,
+          staffId,
+          email,
+          password,
+          roleId,
+          targetBranchId,
+        );
+      }
+    } else if (targetMeta.hasRoleText) {
+      if (targetMeta.hasPinHash) {
+        [inserted] = await this.prisma.queryRawUnsafe<StaffIdOnlyRow[]>(
+          `INSERT INTO ${targetUserTable} (name, staff_id, email, password, role, pin_hash, branch_id)
+           VALUES ($1, $2, $3, $4, $5, $6, $7::uuid)
+           RETURNING id`,
+          name,
+          staffId,
+          email,
+          password,
+          roleName,
+          pinHash,
+          targetBranchId,
+        );
+      } else {
+        [inserted] = await this.prisma.queryRawUnsafe<StaffIdOnlyRow[]>(
+          `INSERT INTO ${targetUserTable} (name, staff_id, email, password, role, branch_id)
+           VALUES ($1, $2, $3, $4, $5, $6::uuid)
+           RETURNING id`,
+          name,
+          staffId,
+          email,
+          password,
+          roleName,
+          targetBranchId,
+        );
+      }
+    } else {
+      [inserted] = await this.prisma.queryRawUnsafe<StaffIdOnlyRow[]>(
+        `INSERT INTO ${targetUserTable} (name, staff_id, email, password, branch_id)
+         VALUES ($1, $2, $3, $4, $5::uuid)
+         RETURNING id`,
+        name,
+        staffId,
+        email,
+        password,
+        targetBranchId,
+      );
+    }
+
+    if (!inserted) {
+      throw new BadRequestException('Failed to create staff in target pharmacy');
+    }
+
+    await this.prisma.queryRawUnsafe(
+      `DELETE FROM ${sourceUserTable} WHERE id = $1`,
+      id,
+    );
+
+    return this.findOne(targetSchema, inserted.id);
+  }
+
   async remove(schemaName: string, id: string) {
     await this.ensureStaffTenantSchema(schemaName);
     const meta = await this.resolveTenantUserTables(schemaName);

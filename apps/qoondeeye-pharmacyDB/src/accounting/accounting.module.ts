@@ -2,6 +2,7 @@ import { Module } from '@nestjs/common';
 import { NotificationsModule } from '../notifications/notifications.module';
 import { PrismaModule } from '../prisma/prisma.module';
 import { TenantModule } from '../tenant/tenant.module';
+import { UomsModule } from '../uoms/uoms.module';
 import { AccountingController } from './accounting.controller';
 import { AuditController } from './audit.controller';
 import { FinancialReportsController } from './financial-reports.controller';
@@ -26,7 +27,7 @@ import { AuditLogArchiveJob } from './audit-log-archive.job';
 import { BranchSecurityMetricsService } from './branch-security-metrics.service';
 
 @Module({
-  imports: [PrismaModule, TenantModule, NotificationsModule],
+  imports: [PrismaModule, TenantModule, NotificationsModule, UomsModule],
   controllers: [
     AccountingController,
     FinancialReportsController,

@@ -36,6 +36,11 @@ function isMutationMethod(method: string | undefined): boolean {
   return m !== 'GET' && m !== 'HEAD' && m !== 'OPTIONS';
 }
 
+function isStaffApiRoute(path: string): boolean {
+  const p = path.split('?')[0] ?? '';
+  return p === '/api/staff' || /^\/api\/staff\/[^/]+$/.test(p);
+}
+
 function normalizeBranchId(value: unknown): string | null {
   if (value == null) return null;
   const s = String(value).trim().toLowerCase();
@@ -396,6 +401,26 @@ export class BranchMiddleware implements NestMiddleware {
       );
 
       if (allBranchIds.length === 0) {
+        const staffRoute = isStaffApiRoute(path);
+        const staffRead = staffRoute && !mutation;
+        const staffDelete =
+          staffRoute &&
+          mutation &&
+          (req.method ?? '').toUpperCase() === 'DELETE';
+        if (staffRead || staffDelete) {
+          req.userId = superUserId;
+          req.userRole = superRoleLower;
+          req.userCanViewAllBranches = true;
+          req.permissionCodes = [...ALL_ACCOUNTING_PERMISSIONS];
+          req.isSuperAdmin = true;
+          req.allowedBranchIds = [];
+          req.branchReadScope = {
+            readBranchIds: [],
+            readAllBranches: staffRead,
+            mutationBranchId: '',
+          };
+          return;
+        }
         await this.appendSecurityAudit(schemaName, {
           userId: superUserId,
           role: superRoleLower,
@@ -411,32 +436,21 @@ export class BranchMiddleware implements NestMiddleware {
       const isBranchSuperUser = true;
       const defaultBranchId = allBranchIds[0]!;
       const normalizedHeader = normalizeBranchId(headerBranchValue);
+      const effectiveHeader =
+        normalizedHeader &&
+        normalizedHeader !== 'all' &&
+        !allBranchIds.includes(normalizedHeader)
+          ? null
+          : normalizedHeader;
       const selectedBranchId = (() => {
-        if (!normalizedHeader) return defaultBranchId;
-        if (normalizedHeader === 'all') return defaultBranchId;
-        return normalizedHeader;
+        if (!effectiveHeader) return defaultBranchId;
+        if (effectiveHeader === 'all') return defaultBranchId;
+        return effectiveHeader;
       })();
 
       const allowedAllBranchesHeader = isBranchSuperUser;
       const viewAllRequested =
-        normalizedHeader === 'all' && allowedAllBranchesHeader;
-
-      if (
-        normalizedHeader &&
-        normalizedHeader !== 'all' &&
-        !allBranchIds.includes(normalizedHeader)
-      ) {
-        await this.appendSecurityAudit(schemaName, {
-          userId: superUserId,
-          role: superRoleLower,
-          branchId: null,
-          reason: 'super_admin_requested_unknown_branch',
-          path,
-          method: req.method ?? 'UNKNOWN',
-          sourceIp: req.ip ?? null,
-        });
-        throw new ForbiddenException('Access denied to this branch');
-      }
+        effectiveHeader === 'all' && allowedAllBranchesHeader;
 
       const viewAllowedBranchIds = viewAllRequested
         ? allBranchIds
@@ -458,6 +472,7 @@ export class BranchMiddleware implements NestMiddleware {
       req.userRole = superRoleLower;
       req.userCanViewAllBranches = true;
       req.permissionCodes = [...ALL_ACCOUNTING_PERMISSIONS];
+      req.isSuperAdmin = true;
 
       return;
     }
@@ -512,12 +527,14 @@ export class BranchMiddleware implements NestMiddleware {
     const transferOperationalMutation =
       mutation && isStockTransferOperationalMutation(path);
 
-    // Global CRUD restriction:
-    // - Reads (GET) allowed for all tenant roles
-    // - Mutations (POST/PATCH/DELETE) allowed for admin/manager, cashier on POS APIs, or
-    //   pharmacist on `/api/pos` (shift/statement), or
-    //   any tenant user on operational transfer mutations (create/update/confirm/request-approval/ship/receive;
-    //   branch enforced in TransfersService)
+    // Phase 2: mutation access is enforced per-endpoint via PermissionGuard.
+    // Branch middleware only enforces tenant auth + branch scope (below).
+    void transferOperationalMutation;
+    void cashierPosMutation;
+    void pharmacistPosMutation;
+    void isBranchSuperUser;
+
+    /*
     if (
       mutation &&
       !isBranchSuperUser &&
@@ -538,6 +555,7 @@ export class BranchMiddleware implements NestMiddleware {
         'Access denied: CRUD requires admin/manager',
       );
     }
+    */
 
     // Branch superusers can view all branches; tenant-wide read allowlist loads the same list for scoped GETs.
     const needsTenantBranchList =
@@ -713,14 +731,35 @@ export class BranchMiddleware implements NestMiddleware {
           )
         : [];
     let permissionCodes = jwtPerms;
-    if (payload.type === 'tenant_user' && permissionCodes.length === 0) {
-      if (roleLower === 'admin' || roleLower === 'manager') {
-        permissionCodes = [...ALL_ACCOUNTING_PERMISSIONS];
+    if (payload.type === 'tenant_user') {
+      const fresh = await this.loadTenantPermissionCodes(schemaName, userId);
+      if (fresh.length > 0) {
+        permissionCodes = fresh;
       }
     }
     req.permissionCodes = permissionCodes;
 
   // Schema patches are non-blocking for request scope; run after branch context is set.
   void this.ensureBranchIsolationColumns(schemaName).catch(() => undefined);
+  }
+
+  /** Authoritative RBAC from DB (JWT permissions can be stale after new grants). */
+  private async loadTenantPermissionCodes(
+    schemaName: string,
+    userId: string,
+  ): Promise<string[]> {
+    try {
+      const rows = await this.prisma.$queryRawUnsafe<Array<{ name: string }>>(
+        `SELECT DISTINCT p.name AS name
+         FROM "${schemaName}"."permissions" p
+         INNER JOIN "${schemaName}"."role_permissions" rp ON rp.permission_id = p.id
+         INNER JOIN "${schemaName}"."users" u ON u.role_id = rp.role_id
+         WHERE u.id = $1::uuid`,
+        userId,
+      );
+      return (rows ?? []).map((r) => r.name).filter(Boolean);
+    } catch {
+      return [];
+    }
   }
 }

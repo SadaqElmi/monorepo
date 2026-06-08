@@ -2,6 +2,8 @@ import { BadRequestException, Injectable } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import { toPagedResult, type PagedResult } from '../common/pagination.util';
 import { PrismaService } from '../prisma/prisma.service';
+import { formatBaseQuantityDisplay } from '../uoms/uom-display.util';
+import { UomsService } from '../uoms/uoms.service';
 
 export interface InventoryLockRow {
   id: string;
@@ -16,6 +18,9 @@ export interface InventoryListRow {
   quantity: number | string;
   reorder_level: number | string;
   updated_at: Date;
+  base_uom_code?: string | null;
+  base_uom_symbol?: string | null;
+  converted_quantity?: string;
 }
 
 export interface BatchFifoRow {
@@ -34,7 +39,10 @@ export interface SumQtyRow {
 
 @Injectable()
 export class InventoryService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly uomsService: UomsService,
+  ) {}
 
   private async getOrCreateInventoryRow(
     tx: Prisma.TransactionClient,
@@ -66,7 +74,7 @@ export class InventoryService {
   }
 
   async findAll(schemaName: string, allowedBranchIds: string[]) {
-    return this.prisma.withTenantSchema(schemaName, (tx) =>
+    const rows = await this.prisma.withTenantSchema(schemaName, (tx) =>
       tx.$queryRawUnsafe<InventoryListRow[]>(
         `SELECT id, product_id, branch_id, quantity, reorder_level, updated_at
          FROM inventory
@@ -75,6 +83,7 @@ export class InventoryService {
         allowedBranchIds,
       ),
     );
+    return this.withQuantityDisplay(schemaName, rows);
   }
 
   /** Not cached — stock levels must stay fresh for picking and POS. */
@@ -84,7 +93,7 @@ export class InventoryService {
     skip: number,
     take: number,
   ): Promise<PagedResult<InventoryListRow>> {
-    return this.prisma.withTenantSchema(schemaName, async (tx) => {
+    const result = await this.prisma.withTenantSchema(schemaName, async (tx) => {
       const [countRow] = await tx.$queryRawUnsafe<{ c: bigint }[]>(
         `SELECT COUNT(*)::bigint AS c FROM inventory WHERE branch_id = ANY($1::uuid[])`,
         allowedBranchIds,
@@ -101,8 +110,10 @@ export class InventoryService {
         skip,
       );
       const page = Math.floor(skip / take) + 1;
-      return toPagedResult(items, total, page, take);
+      return { items, total, page };
     });
+    const decorated = await this.withQuantityDisplay(schemaName, result.items);
+    return toPagedResult(decorated, result.total, result.page, take);
   }
 
   /**
@@ -117,16 +128,18 @@ export class InventoryService {
     if (!allowedBranchIds.length) {
       return [];
     }
-    return this.prisma.withTenantSchema(schemaName, (tx) =>
+    const rows = await this.prisma.withTenantSchema(schemaName, (tx) =>
       tx.$queryRawUnsafe<
         Array<{
           branchId: string;
           branchName: string | null;
+          product_id: string;
           quantity: number;
         }>
       >(
         `SELECT b.id AS "branchId",
                 b.name AS "branchName",
+                $1::uuid AS product_id,
                 COALESCE(i.quantity, 0)::int AS quantity
          FROM branches b
          LEFT JOIN inventory i
@@ -137,10 +150,31 @@ export class InventoryService {
         allowedBranchIds,
       ),
     );
+    const decorated = await this.withQuantityDisplay(
+      schemaName,
+      rows.map((r) => ({
+        id: `${r.branchId}:${productId}`,
+        product_id: productId,
+        branch_id: r.branchId,
+        quantity: r.quantity,
+        reorder_level: 0,
+        updated_at: new Date(),
+        branchId: r.branchId,
+        branchName: r.branchName,
+      })) as Array<InventoryListRow & { branchId: string; branchName: string | null }>,
+    );
+    return decorated.map((r) => ({
+      branchId: r.branchId,
+      branchName: r.branchName,
+      quantity: Number(r.quantity),
+      baseUomCode: r.base_uom_code,
+      baseUomSymbol: r.base_uom_symbol,
+      convertedQuantity: r.converted_quantity,
+    }));
   }
 
   async findOne(schemaName: string, id: string, allowedBranchIds: string[]) {
-    return this.prisma.withTenantSchema(schemaName, async (tx) => {
+    const row = await this.prisma.withTenantSchema(schemaName, async (tx) => {
       const [row] = await tx.$queryRawUnsafe<InventoryListRow[]>(
         `SELECT id, product_id, branch_id, quantity, reorder_level, updated_at
          FROM inventory
@@ -149,6 +183,32 @@ export class InventoryService {
         allowedBranchIds,
       );
       return row ?? null;
+    });
+    if (!row) return null;
+    const [decorated] = await this.withQuantityDisplay(schemaName, [row]);
+    return decorated ?? row;
+  }
+
+  private async withQuantityDisplay<T extends { product_id: string | null; quantity: number | string }>(
+    schemaName: string,
+    rows: T[],
+  ): Promise<Array<T & {
+    base_uom_code?: string | null;
+    base_uom_symbol?: string | null;
+    converted_quantity?: string;
+  }>> {
+    const productIds = [...new Set(rows.map((r) => r.product_id).filter((id): id is string => Boolean(id)))];
+    if (!productIds.length) return rows;
+    const byProduct = await this.uomsService.listProductUomsForProducts(schemaName, productIds);
+    return rows.map((row) => {
+      const uoms = row.product_id ? byProduct[row.product_id] ?? [] : [];
+      const base = uoms.find((u) => u.isBase);
+      return {
+        ...row,
+        base_uom_code: base?.code ?? null,
+        base_uom_symbol: base?.symbol ?? null,
+        converted_quantity: formatBaseQuantityDisplay(Number(row.quantity ?? 0), uoms),
+      };
     });
   }
 

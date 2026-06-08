@@ -11,6 +11,7 @@ import {
   ForbiddenException,
   NotFoundException,
   Req,
+  UseGuards,
 } from '@nestjs/common';
 import { TenantContextService } from '../tenant/tenant-context.service';
 import { SalesService } from './sales.service';
@@ -18,8 +19,11 @@ import { CreateSaleDto } from './dto/create-sale.dto';
 import { UpdateSaleDto } from './dto/update-sale.dto';
 import type { FastifyRequest } from 'fastify';
 import { parsePagedQueryParam } from '../common/pagination.util';
+import { PermissionGuard } from '../common/security/permission.guard';
+import { RequirePermissions } from '../common/security/require-permissions.decorator';
 
 @Controller('sales')
+@UseGuards(PermissionGuard)
 export class SalesController {
   constructor(
     private readonly salesService: SalesService,
@@ -34,6 +38,7 @@ export class SalesController {
     }
   }
 
+  @RequirePermissions('view_sales')
   @Get()
   findAll(
     @Req() req: FastifyRequest,
@@ -60,6 +65,7 @@ export class SalesController {
     );
   }
 
+  @RequirePermissions('view_sales')
   @Get('by-receipt')
   findByReceipt(@Query('number') number: string, @Req() req: FastifyRequest) {
     this.ensureTenant();
@@ -89,6 +95,7 @@ export class SalesController {
       });
   }
 
+  @RequirePermissions('view_sales')
   @Get(':id')
   findOne(@Param('id') id: string, @Req() req: FastifyRequest) {
     this.ensureTenant();
@@ -100,6 +107,7 @@ export class SalesController {
   }
 
   @Post()
+  @RequirePermissions('create_sale')
   create(@Body() dto: CreateSaleDto, @Req() req: FastifyRequest) {
     this.ensureTenant();
     return this.salesService.create(
@@ -109,11 +117,13 @@ export class SalesController {
       {
         actorUserId: req.userId,
         requestUserRole: req.userRole ?? null,
+        permissionCodes: req.permissionCodes ?? [],
       },
     );
   }
 
   @Patch(':id')
+  @RequirePermissions('void_sale')
   update(
     @Param('id') id: string,
     @Body() dto: UpdateSaleDto,
@@ -131,6 +141,7 @@ export class SalesController {
   }
 
   @Delete(':id')
+  @RequirePermissions('void_sale')
   remove(@Param('id') id: string, @Req() req: FastifyRequest) {
     this.ensureTenant();
     return this.salesService.remove(

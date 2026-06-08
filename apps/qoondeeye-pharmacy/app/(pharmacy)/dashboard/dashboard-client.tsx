@@ -1144,7 +1144,7 @@ export default function DashboardPageClient({
             <div className="flex items-center justify-between border-b border-border/80 p-6">
               <h3 className="text-lg font-bold">Low Stock Products</h3>
               <Link
-                href="/inventory/stock"
+                href="/items"
                 className="text-xs font-semibold text-primary hover:underline"
               >
                 Inventory
@@ -1205,7 +1205,7 @@ export default function DashboardPageClient({
                 variant="outline"
                 className="mt-4 w-full rounded-xl bg-muted text-xs font-bold uppercase tracking-widest text-muted-foreground hover:bg-muted/80"
               >
-                <Link href="/inventory/stock">Open stock</Link>
+                <Link href="/items">View inventory items</Link>
               </Button>
             </div>
           </Card>

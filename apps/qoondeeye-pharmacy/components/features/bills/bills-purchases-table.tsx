@@ -1,6 +1,9 @@
 "use client";
 
-import { Edit2, Loader2, Trash2 } from "lucide-react";
+import Link from "next/link";
+import { Edit2, ExternalLink, Loader2, Trash2 } from "lucide-react";
+
+import { Badge } from "@/components/ui/badge";
 
 import { Button } from "@/components/ui/button";
 import {
@@ -47,6 +50,9 @@ export function BillsPurchasesTable({
               Invoice #
             </TableHead>
             <TableHead className="font-semibold uppercase tracking-wider text-muted-foreground">
+              Status
+            </TableHead>
+            <TableHead className="font-semibold uppercase tracking-wider text-muted-foreground">
               Total
             </TableHead>
             <TableHead className="font-semibold uppercase tracking-wider text-muted-foreground">
@@ -83,7 +89,12 @@ export function BillsPurchasesTable({
                   {branchName}
                 </TableCell>
                 <TableCell className="text-sm text-muted-foreground">
-                  {p.invoice_number ?? "—"}
+                  {p.supplier_invoice_no ?? p.invoice_number ?? "—"}
+                </TableCell>
+                <TableCell>
+                  <Badge variant="secondary" className="capitalize">
+                    {(p.status ?? "closed").replace(/_/g, " ")}
+                  </Badge>
                 </TableCell>
                 <TableCell className="text-sm font-semibold">
                   {formatMoney(p.total_amount)}
@@ -96,6 +107,17 @@ export function BillsPurchasesTable({
                 </TableCell>
                 <TableCell className="text-right">
                   <div className="flex justify-end gap-2">
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="h-8 w-8 rounded-lg"
+                      asChild
+                    >
+                      <Link href={`/vendors/bills/${p.id}`}>
+                        <ExternalLink className="h-4 w-4" />
+                        <span className="sr-only">Open document</span>
+                      </Link>
+                    </Button>
                     <Button
                       variant="ghost"
                       size="icon"

@@ -457,8 +457,8 @@ export function TransferDetailView({
           ) : detail.status === "draft" ? (
             "Confirm the transfer to lock quantities and trigger approval workflow."
           ) : detail.status === "confirmed" &&
-            approval?.toLowerCase() !== "approved" ? (
-            "Approve the transfer (manager/admin) before shipping is allowed."
+            approval?.toLowerCase() === "pending" ? (
+            "Approve the transfer (manager/admin/owner) before shipping is allowed."
           ) : detail.status === "confirmed" ? (
             "Ship transfer to post stock OUT and create shipment journal."
           ) : detail.status === "shipped" && detail.isReversed ? (

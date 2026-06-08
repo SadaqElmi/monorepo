@@ -1,20 +1,38 @@
 import { buildPagedQuery, unwrapListResponse } from "@repo/utils";
-import type { PagedList, Product } from "@repo/types";
+import type { PagedList, Product, ProductUomSetupInput } from "@repo/types";
 
 import { PRODUCTS_PREFIX } from "./endpoints";
 import { jsonFetch } from "./http";
 
 export type { Product };
 
+export type ProductSupplierLink = {
+  id: string;
+  productId: string;
+  supplierId: string;
+  supplierName: string | null;
+  supplierType: "local" | "international";
+  country: string | null;
+  city: string | null;
+  isPreferred: boolean;
+  lastCostPrice: number | string | null;
+  supplierItemCode: string | null;
+  createdAt?: string;
+  updatedAt?: string | null;
+};
+
 export async function getProducts(
   tenantSlug: string,
   init?: Pick<RequestInit, "signal">,
 ): Promise<Product[]> {
-  const data = await jsonFetch<Product[] | PagedList<Product>>(PRODUCTS_PREFIX, {
-    method: "GET",
-    tenantSlug,
-    signal: init?.signal,
-  });
+  const data = await jsonFetch<Product[] | PagedList<Product>>(
+    PRODUCTS_PREFIX,
+    {
+      method: "GET",
+      tenantSlug,
+      signal: init?.signal,
+    },
+  );
   return unwrapListResponse(data).items;
 }
 
@@ -47,7 +65,9 @@ export async function getProductsCatalog(
 }
 
 /** Transfer product list scoped to active branch + inventory rows. */
-export async function getTransferProducts(tenantSlug: string): Promise<Product[]> {
+export async function getTransferProducts(
+  tenantSlug: string,
+): Promise<Product[]> {
   const data = await jsonFetch<Product[] | PagedList<Product>>(
     `${PRODUCTS_PREFIX}/transfer-catalog`,
     { method: "GET", tenantSlug },
@@ -92,6 +112,8 @@ export async function createProduct(
     formulation?: string;
     unit?: string;
     description?: string;
+    uoms?: ProductUomSetupInput[];
+    reorderLevel?: number;
   },
 ) {
   return jsonFetch<Product>(PRODUCTS_PREFIX, {
@@ -115,6 +137,7 @@ export async function updateProduct(
     formulation?: string;
     unit?: string;
     description?: string;
+    uoms?: ProductUomSetupInput[];
   },
 ) {
   return jsonFetch<Product>(`${PRODUCTS_PREFIX}/${id}`, {
@@ -132,3 +155,76 @@ export async function deleteProduct(tenantSlug: string, id: string) {
   });
 }
 
+export async function getProductSuppliers(
+  tenantSlug: string,
+  productId: string,
+): Promise<ProductSupplierLink[]> {
+  return jsonFetch<ProductSupplierLink[]>(
+    `${PRODUCTS_PREFIX}/${productId}/suppliers`,
+    { method: "GET", tenantSlug },
+  );
+}
+
+export async function addProductSupplier(
+  tenantSlug: string,
+  productId: string,
+  input: {
+    supplierId: string;
+    isPreferred?: boolean;
+    lastCostPrice?: number | null;
+    supplierItemCode?: string | null;
+  },
+): Promise<ProductSupplierLink> {
+  return jsonFetch<ProductSupplierLink>(
+    `${PRODUCTS_PREFIX}/${productId}/suppliers`,
+    {
+      method: "POST",
+      tenantSlug,
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(input),
+    },
+  );
+}
+
+export async function updateProductSupplier(
+  tenantSlug: string,
+  productId: string,
+  supplierId: string,
+  input: {
+    isPreferred?: boolean;
+    lastCostPrice?: number | null;
+    supplierItemCode?: string | null;
+  },
+): Promise<ProductSupplierLink> {
+  return jsonFetch<ProductSupplierLink>(
+    `${PRODUCTS_PREFIX}/${productId}/suppliers/${supplierId}`,
+    {
+      method: "PATCH",
+      tenantSlug,
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(input),
+    },
+  );
+}
+
+export async function removeProductSupplier(
+  tenantSlug: string,
+  productId: string,
+  supplierId: string,
+): Promise<{ deleted: boolean }> {
+  return jsonFetch<{ deleted: boolean }>(
+    `${PRODUCTS_PREFIX}/${productId}/suppliers/${supplierId}`,
+    { method: "DELETE", tenantSlug },
+  );
+}
+
+export async function setProductPreferredSupplier(
+  tenantSlug: string,
+  productId: string,
+  supplierId: string,
+): Promise<ProductSupplierLink> {
+  return jsonFetch<ProductSupplierLink>(
+    `${PRODUCTS_PREFIX}/${productId}/suppliers/${supplierId}/preferred`,
+    { method: "POST", tenantSlug },
+  );
+}

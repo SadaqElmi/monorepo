@@ -1,6 +1,8 @@
 import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
 
+import { getAdminDashboardUrl } from "@/lib/admin-dashboard-url";
+
 const AUTH_USER_COOKIE = "auth_user";
 const AUTH_TOKEN_KEY = "auth_token";
 
@@ -36,7 +38,7 @@ export function proxy(request: NextRequest) {
     if (token) {
       const payload = getAuthPayload(request);
       if (payload?.userType === "system") {
-        return NextResponse.redirect(new URL("/admin", request.url));
+        return NextResponse.redirect(getAdminDashboardUrl("/admin"));
       }
       if (payload?.userType === "tenant") {
         if (payload.role?.toLowerCase() === "cashier") {
@@ -57,11 +59,25 @@ export function proxy(request: NextRequest) {
     return NextResponse.redirect(login);
   }
 
-  if (pathname.startsWith("/admin")) {
-    if (payload.userType !== "system" && payload.role !== "super_admin") {
-      return NextResponse.redirect(new URL("/dashboard", request.url));
-    }
-    return NextResponse.next();
+  const adminDashboardPaths = [
+    "/admin",
+    "/tenants",
+    "/domains",
+    "/system-users",
+    "/reports",
+  ];
+  const isAdminDashboardPath = adminDashboardPaths.some(
+    (p) => pathname === p || pathname.startsWith(`${p}/`),
+  );
+  if (isAdminDashboardPath) {
+    return NextResponse.redirect(getAdminDashboardUrl(pathname));
+  }
+
+  if (
+    pathname === "/notifications" &&
+    (payload.userType === "system" || payload.role === "super_admin")
+  ) {
+    return NextResponse.redirect(getAdminDashboardUrl("/notifications"));
   }
 
   const tenantPaths = [
@@ -97,7 +113,7 @@ export function proxy(request: NextRequest) {
       return NextResponse.redirect(new URL("/pos", request.url));
     }
     if (payload.userType !== "tenant" && payload.role === "super_admin") {
-      return NextResponse.redirect(new URL("/admin", request.url));
+      return NextResponse.redirect(getAdminDashboardUrl("/admin"));
     }
     if (payload.userType !== "tenant" && payload.userType !== "system") {
       return NextResponse.redirect(new URL("/login", request.url));
@@ -111,6 +127,14 @@ export const config = {
   matcher: [
     "/admin",
     "/admin/:path*",
+    "/tenants",
+    "/tenants/:path*",
+    "/domains",
+    "/domains/:path*",
+    "/system-users",
+    "/system-users/:path*",
+    "/reports",
+    "/reports/:path*",
     "/dashboard",
     "/dashboard/:path*",
     "/staff",

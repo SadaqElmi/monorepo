@@ -14,7 +14,7 @@ export const ROUTES = {
   },
   inventory: {
     products: "/inventory/products",
-    stock: "/inventory/stock",
+    items: "/items",
     history: "/inventory/history",
     batches: "/inventory/batches",
     categories: "/inventory/categories",
@@ -22,6 +22,13 @@ export const ROUTES = {
     transfers: "/inventory/transfers",
     transfersNew: "/inventory/transfers/new",
     transfersIncoming: "/inventory/transfers/incoming",
+  },
+  sales: {
+    offerLists: "/sales/offer-lists",
+    pricingManagement: "/sales/pricing-management",
+    priceGroups: "/sales/price-groups",
+    uoms: "/sales/uoms",
+    transactionRegister: "/sales/transaction-register",
   },
   configuration: {
     staff: "/configuration/staff",
@@ -31,6 +38,7 @@ export const ROUTES = {
     root: "/accounting",
     monitoring: "/accounting/monitoring",
     controlCenter: "/accounting/control-center",
+    importCenter: "/administration/import-center",
     posStatement: "/accounting/pos-statement",
   },
 } as const;
@@ -41,4 +49,8 @@ export function inventoryTransferDetailPath(
 ) {
   const base = `${ROUTES.inventory.transfers}/${encodeURIComponent(transferId)}`;
   return opts?.receiver ? `${base}?receiver=1` : base;
+}
+
+export function transactionRegisterDetailPath(registerId: string) {
+  return `${ROUTES.sales.transactionRegister}/${encodeURIComponent(registerId)}`;
 }

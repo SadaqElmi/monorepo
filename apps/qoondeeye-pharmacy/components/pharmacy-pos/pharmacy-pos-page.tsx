@@ -15,11 +15,11 @@ import {
 } from "@/lib/api";
 import { useErpBatches } from "@/hooks/queries/use-erp-batches";
 import { useErpCategories } from "@/hooks/queries/use-erp-categories";
-import { useErpProducts } from "@/hooks/queries/use-erp-products";
+import { useErpProductsCatalog } from "@/hooks/queries/use-erp-products-catalog";
 import { createSaleSchema, validateForSubmit } from "@/lib/validation";
 import { POS_DEFAULT_DISCOUNT } from "@repo/types";
 
-import { ALL_CATEGORIES_LABEL, brand, nextUnitType } from "./pharmacy-pos-constants";
+import { ALL_CATEGORIES_LABEL, brand } from "./pharmacy-pos-constants";
 import { PharmacyPosFooter } from "./pharmacy-pos-footer";
 import type { PosMainTab } from "./pharmacy-pos-toolbar";
 import { PharmacyPosToolbar } from "./pharmacy-pos-toolbar";
@@ -75,7 +75,7 @@ function PharmacyPosPageInner() {
   const router = useRouter();
   const tenantSlug = getStoredUser()?.tenantSlug ?? null;
 
-  const productsQuery = useErpProducts(tenantSlug);
+  const productsQuery = useErpProductsCatalog(tenantSlug);
   const batchesQuery = useErpBatches(tenantSlug);
   const categoriesQuery = useErpCategories(tenantSlug);
 
@@ -108,6 +108,38 @@ function PharmacyPosPageInner() {
   const scanBufferRef = React.useRef("");
   const scanFlushTimerRef = React.useRef<ReturnType<typeof setTimeout> | null>(
     null,
+  );
+
+  const activeProductUoms = React.useCallback((product: { uoms?: Product["uoms"] }) => {
+    return (product.uoms ?? []).filter((uom) => uom.isActive);
+  }, []);
+
+  const posDefaultUom = React.useCallback(
+    (product: { uoms?: Product["uoms"] }) => {
+      const uoms = activeProductUoms(product);
+      return (
+        uoms.find((uom) => uom.isPosDefault) ??
+        uoms.find((uom) => uom.isBase) ??
+        uoms[0]
+      );
+    },
+    [activeProductUoms],
+  );
+
+  const priceForUom = React.useCallback(
+    (
+      product: { priceValue?: number; conversionFactorToBase?: number },
+      uom?: NonNullable<Product["uoms"]>[number],
+    ) => {
+      const direct =
+        uom?.sellingPrice != null ? Number(uom.sellingPrice) : Number.NaN;
+      if (Number.isFinite(direct) && direct > 0) return direct;
+      const currentFactor = Number(product.conversionFactorToBase ?? 1) || 1;
+      const basePrice = Number(product.priceValue ?? 0) / currentFactor;
+      const nextFactor = Number(uom?.conversionFactorToBase ?? 1) || 1;
+      return basePrice * nextFactor;
+    },
+    [],
   );
 
   const productNameById = React.useMemo(() => {
@@ -237,11 +269,23 @@ function PharmacyPosPageInner() {
     setBatchesState(batchesData);
     const catNames = new Map(cats.map((c) => [c.id, c.name]));
     const mapped: Product[] = prods.map((p) => {
+      const selectedUom = posDefaultUom(p);
       const { sellingValue, listValue, showCompare } = resolvePosCatalogPricing(
         p,
         batchesData,
         p.id,
       );
+      const conversionFactorToBase =
+        Number(selectedUom?.conversionFactorToBase ?? 1) || 1;
+      const uomSelling =
+        selectedUom?.sellingPrice != null
+          ? Number(selectedUom.sellingPrice)
+          : Number.NaN;
+      const cardPrice =
+        Number.isFinite(uomSelling) && uomSelling > 0
+          ? uomSelling
+          : sellingValue * conversionFactorToBase;
+      const cardListPrice = listValue * conversionFactorToBase;
       return {
         id: p.id,
         sku: (p.sku ?? "").trim() || p.id.slice(0, 8),
@@ -251,12 +295,25 @@ function PharmacyPosPageInner() {
           "Catalog item",
         category:
           (p.categoryId && catNames.get(p.categoryId)) || "Uncategorized",
-        price: formatMoney(sellingValue),
-        priceValue: sellingValue,
-        listPriceValue: showCompare ? listValue : undefined,
-        showCompare,
+        price: formatMoney(cardPrice),
+        priceValue: cardPrice,
+        listPriceValue: showCompare ? cardListPrice : undefined,
+        showCompare:
+          cardListPrice > 0 &&
+          Math.round(cardListPrice * 100) > Math.round(cardPrice * 100),
         stock: "in" as const,
-        unitType: "PC" as UnitType,
+        unitType: (selectedUom?.symbol ||
+          selectedUom?.code ||
+          p.unit ||
+          "PC") as UnitType,
+        uomId: selectedUom?.uomId,
+        uomCode: selectedUom?.code,
+        uomSymbol: selectedUom?.symbol ?? undefined,
+        conversionFactorToBase,
+        uoms: p.uoms ?? [],
+        priceGroupId: (p as { priceGroupId?: string | null }).priceGroupId ?? undefined,
+        offerId: (p as { offerId?: string | null }).offerId ?? undefined,
+        discountSource: (p as { discountSource?: string | null }).discountSource ?? undefined,
       };
     });
     if (mapped.length > 0) {
@@ -275,6 +332,7 @@ function PharmacyPosPageInner() {
     batchesQuery.isError,
     categoriesQuery.data,
     categoriesQuery.isError,
+    posDefaultUom,
   ]);
 
   const addProductFromApi = React.useCallback(
@@ -286,12 +344,42 @@ function PharmacyPosPageInner() {
       strength?: string | null;
       unit?: string | null;
       listPrice?: number | string | null;
+      uomId?: string | null;
+      uomCode?: string | null;
+      uomSymbol?: string | null;
+      uomSellingPrice?: number | string | null;
+      conversionFactorToBase?: number | string | null;
+      uoms?: Product["uoms"];
+      priceGroupId?: string | null;
+      offerId?: string | null;
+      discountSource?: string | null;
     }) => {
+      const selectedUom =
+        p.uomId && p.uoms
+          ? p.uoms.find((uom) => uom.uomId === p.uomId)
+          : posDefaultUom(p);
       const { sellingValue, listValue, showCompare } = resolvePosCatalogPricing(
         p,
         batchesState,
         p.id,
       );
+      const conversionFactorToBase =
+        Number(
+          p.conversionFactorToBase ??
+            selectedUom?.conversionFactorToBase ??
+            1,
+        ) || 1;
+      const directUomPrice =
+        p.uomSellingPrice != null
+          ? Number(p.uomSellingPrice)
+          : selectedUom?.sellingPrice != null
+            ? Number(selectedUom.sellingPrice)
+            : Number.NaN;
+      const sellingForUom =
+        Number.isFinite(directUomPrice) && directUomPrice > 0
+          ? directUomPrice
+          : sellingValue * conversionFactorToBase;
+      const listForUom = listValue * conversionFactorToBase;
       const mapped: Product = {
         id: p.id,
         sku: (p.sku ?? "").trim() || p.id.slice(0, 8),
@@ -300,18 +388,45 @@ function PharmacyPosPageInner() {
           [p.genericName, p.strength, p.unit].filter(Boolean).join(" • ") ||
           "Catalog item",
         category: "Scanned",
-        price: formatMoney(sellingValue),
-        priceValue: sellingValue,
-        listPriceValue: showCompare ? listValue : undefined,
-        showCompare,
-        stock: sellingValue > 0 ? "in" : "low",
-        unitType: "PC",
+        price: formatMoney(sellingForUom),
+        priceValue: sellingForUom,
+        listPriceValue: showCompare ? listForUom : undefined,
+        showCompare:
+          listForUom > 0 &&
+          Math.round(listForUom * 100) > Math.round(sellingForUom * 100),
+        stock: sellingForUom > 0 ? "in" : "low",
+        unitType:
+          p.uomSymbol ||
+          p.uomCode ||
+          selectedUom?.symbol ||
+          selectedUom?.code ||
+          p.unit ||
+          "PC",
+        uomId: p.uomId ?? selectedUom?.uomId,
+        uomCode: p.uomCode ?? selectedUom?.code,
+        uomSymbol: p.uomSymbol ?? selectedUom?.symbol ?? undefined,
+        conversionFactorToBase,
+        uoms: p.uoms ?? [],
+        priceGroupId: p.priceGroupId ?? undefined,
+        offerId: p.offerId ?? undefined,
+        discountSource: p.discountSource ?? undefined,
       };
       setCart((prev) => {
-        const existing = prev.find((l) => l.productId === mapped.id);
+        const existing = prev.find(
+          (l) =>
+            l.productId === mapped.id &&
+            (l.uomId ?? null) === (mapped.uomId ?? null),
+        );
         if (existing) {
           return prev.map((l) =>
-            l.productId === mapped.id ? { ...l, qty: l.qty + 1 } : l,
+            l.lineId === existing.lineId
+              ? {
+                  ...l,
+                  qty: l.qty + 1,
+                  baseQty:
+                    (l.qty + 1) * (l.conversionFactorToBase ?? 1),
+                }
+              : l,
           );
         }
         return [
@@ -327,11 +442,19 @@ function PharmacyPosPageInner() {
                 : undefined,
             qty: 1,
             unitType: mapped.unitType,
+            uomId: mapped.uomId,
+            uomCode: mapped.uomCode,
+            uomSymbol: mapped.uomSymbol,
+            conversionFactorToBase: mapped.conversionFactorToBase,
+            baseQty: mapped.conversionFactorToBase ?? 1,
+            priceGroupId: mapped.priceGroupId,
+            offerId: mapped.offerId,
+            discountSource: mapped.discountSource,
           },
         ];
       });
     },
-    [batchesState],
+    [batchesState, posDefaultUom],
   );
 
   const resolveBarcodeScan = React.useCallback(
@@ -482,10 +605,20 @@ function PharmacyPosPageInner() {
 
   const addProduct = (p: Product) => {
     setCart((prev) => {
-      const existing = prev.find((l) => l.productId === p.id);
+      const existing = prev.find(
+        (l) =>
+          l.productId === p.id &&
+          (l.uomId ?? null) === (p.uomId ?? null),
+      );
       if (existing) {
         return prev.map((l) =>
-          l.productId === p.id ? { ...l, qty: l.qty + 1 } : l,
+          l.lineId === existing.lineId
+            ? {
+                ...l,
+                qty: l.qty + 1,
+                baseQty: (l.qty + 1) * (l.conversionFactorToBase ?? 1),
+              }
+            : l,
         );
       }
       return [
@@ -501,6 +634,14 @@ function PharmacyPosPageInner() {
               : undefined,
           qty: 1,
           unitType: p.unitType,
+          uomId: p.uomId,
+          uomCode: p.uomCode,
+          uomSymbol: p.uomSymbol,
+          conversionFactorToBase: p.conversionFactorToBase,
+          baseQty: p.conversionFactorToBase ?? 1,
+          priceGroupId: p.priceGroupId,
+          offerId: p.offerId,
+          discountSource: p.discountSource,
         },
       ];
     });
@@ -512,7 +653,44 @@ function PharmacyPosPageInner() {
       return;
     }
     setCart((prev) =>
-      prev.map((l) => (l.lineId === lineId ? { ...l, qty } : l)),
+      prev.map((l) =>
+        l.lineId === lineId
+          ? { ...l, qty, baseQty: qty * (l.conversionFactorToBase ?? 1) }
+          : l,
+      ),
+    );
+  };
+
+  const cycleCartLineUom = (lineId: string) => {
+    setCart((prev) =>
+      prev.map((line) => {
+        if (line.lineId !== lineId) return line;
+        const product = catalogProducts.find((p) => p.id === line.productId);
+        const uoms = activeProductUoms(product ?? {});
+        if (!product || uoms.length === 0) return line;
+        const currentIndex = uoms.findIndex(
+          (uom) => uom.uomId === line.uomId || uom.code === line.uomCode,
+        );
+        const next = uoms[(currentIndex + 1 + uoms.length) % uoms.length]!;
+        const factor = Number(next.conversionFactorToBase ?? 1) || 1;
+        const unitPrice = priceForUom(product, next);
+        return {
+          ...line,
+          unitType: next.symbol || next.code,
+          uomId: next.uomId,
+          uomCode: next.code,
+          uomSymbol: next.symbol ?? undefined,
+          conversionFactorToBase: factor,
+          baseQty: line.qty * factor,
+          unitPrice,
+          listUnitPrice:
+            product.showCompare && product.listPriceValue != null
+              ? (product.listPriceValue /
+                  (product.conversionFactorToBase ?? 1)) *
+                factor
+              : undefined,
+        };
+      }),
     );
   };
 
@@ -603,11 +781,20 @@ function PharmacyPosPageInner() {
                   miscChargeKind: l.miscChargeKind,
                   quantity: l.qty,
                   price: l.unitPrice,
+                  priceGroupId: l.priceGroupId,
+                  offerId: l.offerId,
+                  lineDiscount: l.lineDiscount ?? 0,
+                  discountSource: l.discountSource,
                 }
               : {
                   productId: l.productId,
+                  uomId: l.uomId,
                   quantity: l.qty,
                   price: l.unitPrice,
+                  priceGroupId: l.priceGroupId,
+                  offerId: l.offerId,
+                  lineDiscount: l.lineDiscount ?? 0,
+                  discountSource: l.discountSource ?? (l.offerId ? "offer" : undefined),
                 },
           ),
         };
@@ -769,15 +956,7 @@ function PharmacyPosPageInner() {
             onHoldOrder={holdOrder}
             onOpenHeldSheet={() => setHeldSheetOpen(true)}
             onSetQty={setQty}
-            onCycleUnit={(lineId) => {
-              setCart((prev) =>
-                prev.map((l) =>
-                  l.lineId === lineId
-                    ? { ...l, unitType: nextUnitType(l.unitType) }
-                    : l,
-                ),
-              );
-            }}
+            onCycleUnit={cycleCartLineUom}
             onEditDiscount={() => {
               const v = window.prompt(
                 "Discount amount (USD)",

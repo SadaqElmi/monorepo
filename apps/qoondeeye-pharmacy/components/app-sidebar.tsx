@@ -7,15 +7,12 @@ import {
   Activity,
   BarChart2,
   Boxes,
-  Building2,
   GalleryVerticalEnd,
   Globe2,
   LayoutDashboard,
   Package2,
-  PieChart,
   Settings2,
   ShoppingCart,
-  ShieldCheck,
   Stethoscope,
   Truck,
   Users2,
@@ -60,10 +57,10 @@ const pharmacyNavMain = [
   },
   {
     title: "Inventory",
-    url: "/inventory/stock",
+    url: "/items",
     icon: Warehouse,
     items: [
-      { title: "Stock", url: "/inventory/stock" },
+      { title: "Items", url: "/items" },
       { title: "Inventory history", url: "/inventory/history" },
       { title: "Batches", url: "/inventory/batches" },
       { title: "Branches", url: "/inventory/branches" },
@@ -124,43 +121,6 @@ const cashierNavMain = [
     url: "/pos",
     icon: ShoppingCart,
     isActive: true,
-  },
-];
-
-const adminNavMain = [
-  {
-    title: "Admin control",
-    url: "/admin",
-    icon: ShieldCheck,
-    isActive: true,
-    items: [{ title: "Overview", url: "/admin" }],
-  },
-  {
-    title: "Clients & domains",
-    url: "/tenants",
-    icon: Building2,
-    items: [
-      { title: "Clients", url: "/tenants" },
-      { title: "Domains", url: "/domains" },
-    ],
-  },
-  {
-    title: "System users & staff",
-    url: "/system-users",
-    icon: Users2,
-    items: [
-      { title: "System users", url: "/system-users" },
-      { title: "Staff & roles", url: "/admin/staff" },
-    ],
-  },
-  {
-    title: "System",
-    url: "/system",
-    icon: PieChart,
-    items: [
-      { title: "Notifications", url: "/notifications" },
-      { title: "Reports (coming soon)", url: "/reports" },
-    ],
   },
 ];
 
@@ -247,21 +207,15 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
     router.push("/login");
   }, [router]);
 
-  const isAdmin =
-    sidebarUser.userType === "system" || sidebarUser.userType === "admin";
   const isCashier = sidebarUser.role?.toLowerCase() === "cashier";
-  const navMain = isAdmin
-    ? adminNavMain
-    : isCashier
-      ? cashierNavMain
-      : pharmacyNavMain;
+  const navMain = isCashier ? cashierNavMain : pharmacyNavMain;
 
   return (
     <Sidebar collapsible="icon" {...props}>
       <SidebarContent>
         <NavMain
           items={navMain}
-          prepend={isAdmin || isCashier ? null : <TeamSwitcher />}
+          prepend={isCashier ? null : <TeamSwitcher />}
           onCollapsiblePointerEnter={prefetchSidebarModule}
           onCollapsibleOpenChange={onCollapsibleOpenChange}
         />

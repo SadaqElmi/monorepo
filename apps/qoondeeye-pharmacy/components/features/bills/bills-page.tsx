@@ -11,13 +11,17 @@ import {
   deletePurchase,
   getBranches,
   getInventoryStockByProduct,
+  getProductUoms,
   getProductsCatalog,
+  getPurchaseLinePricingByProduct,
   getPurchases,
   getSuppliers,
+  type PurchaseLinePricingRow,
   createPurchase,
   updatePurchase,
   type Branch,
   type Product,
+  type ProductUom,
   type ProductStockByBranch,
   type Purchase,
   type Supplier,
@@ -31,6 +35,12 @@ import { BillsIntroAndStats } from "./bills-intro-and-stats";
 import { BillsPurchasesPagination } from "./bills-purchases-pagination";
 import { BillsPurchasesTable } from "./bills-purchases-table";
 import { BillsStickyHeader } from "./bills-sticky-header";
+import {
+  applyProductDefaultsToEditable,
+  normalizePricingRow,
+  parseMoneyField,
+  resolveProductLinePricing,
+} from "./purchase-line-defaults";
 import type { EditablePurchase, FormMode } from "./bills-types";
 
 export type BillsPageProps = {
@@ -52,6 +62,9 @@ export default function PurchasesPage({
   const [suppliers, setSuppliers] = React.useState<Supplier[]>([]);
   const [branches, setBranches] = React.useState<Branch[]>([]);
   const [products, setProducts] = React.useState<Product[]>([]);
+  const [linePricing, setLinePricing] = React.useState<
+    PurchaseLinePricingRow[]
+  >([]);
 
   const [loading, setLoading] = React.useState(false);
   const [error, setError] = React.useState<string | null>(null);
@@ -93,6 +106,7 @@ export default function PurchasesPage({
   const [productStockByBranch, setProductStockByBranch] = React.useState<
     ProductStockByBranch[]
   >([]);
+  const [selectedProductUoms, setSelectedProductUoms] = React.useState<ProductUom[]>([]);
   const [stockLoading, setStockLoading] = React.useState(false);
 
   const skipPurchasesOnceRef = React.useRef(
@@ -151,6 +165,18 @@ export default function PurchasesPage({
     () => new Map(branches.map((b) => [b.id, b])),
     [branches],
   );
+  const productMap = React.useMemo(
+    () => new Map(products.map((p) => [p.id, p])),
+    [products],
+  );
+  const pricingByProduct = React.useMemo(() => {
+    const m = new Map<string, PurchaseLinePricingRow>();
+    for (const row of linePricing) {
+      const normalized = normalizePricingRow(row);
+      if (normalized?.product_id) m.set(normalized.product_id, normalized);
+    }
+    return m;
+  }, [linePricing]);
 
   const filteredPurchases = React.useMemo(() => {
     const q = query.trim().toLowerCase();
@@ -219,17 +245,34 @@ export default function PurchasesPage({
   React.useEffect(() => {
     if (!tenantSlug || !formOpen || !activePurchase?.productId?.trim()) {
       setProductStockByBranch([]);
+      setSelectedProductUoms([]);
       return;
     }
     const pid = activePurchase.productId;
     let cancelled = false;
     setStockLoading(true);
-    void getInventoryStockByProduct(tenantSlug, pid)
-      .then((rows) => {
-        if (!cancelled) setProductStockByBranch(rows);
+    void Promise.all([
+      getInventoryStockByProduct(tenantSlug, pid),
+      getProductUoms(tenantSlug, pid),
+    ])
+      .then(([rows, uoms]) => {
+        if (cancelled) return;
+        setProductStockByBranch(rows);
+        setSelectedProductUoms(uoms);
+        setActivePurchase((prev) => {
+          if (!prev || prev.productId !== pid || prev.uomId) return prev;
+          const def =
+            uoms.find((u) => u.isPurchaseDefault && u.isActive) ??
+            uoms.find((u) => u.isBase && u.isActive) ??
+            uoms[0];
+          return def ? { ...prev, uomId: def.uomId } : prev;
+        });
       })
       .catch(() => {
-        if (!cancelled) setProductStockByBranch([]);
+        if (!cancelled) {
+          setProductStockByBranch([]);
+          setSelectedProductUoms([]);
+        }
       })
       .finally(() => {
         if (!cancelled) setStockLoading(false);
@@ -238,6 +281,25 @@ export default function PurchasesPage({
       cancelled = true;
     };
   }, [tenantSlug, formOpen, activePurchase?.productId]);
+
+  React.useEffect(() => {
+    if (!tenantSlug || !formOpen || !activePurchase?.branchId?.trim()) {
+      return;
+    }
+    let cancelled = false;
+    void getPurchaseLinePricingByProduct(tenantSlug, {
+      includeAllBranches: true,
+    })
+      .then((pricing) => {
+        if (!cancelled) setLinePricing(pricing);
+      })
+      .catch(() => {
+        if (!cancelled) setLinePricing([]);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [tenantSlug, formOpen, activePurchase?.branchId]);
 
   const withAutoTotal = (
     prev: EditablePurchase,
@@ -252,15 +314,98 @@ export default function PurchasesPage({
     return next;
   };
 
+  React.useEffect(() => {
+    if (!formOpen || !activePurchase?.productId?.trim()) return;
+    const pid = activePurchase.productId;
+    const branchId = activePurchase.branchId;
+    let cancelled = false;
+    void resolveProductLinePricing(tenantSlug, pid, {
+      branchId,
+      supplierId: activePurchase.supplierId || undefined,
+      cached: pricingByProduct.get(pid),
+    }).then((pricing) => {
+      if (cancelled || !pricing) return;
+      const hasCost = (parseMoneyField(pricing.cost_price) ?? 0) > 0;
+      const hasBatch = Boolean(pricing.batch_number?.trim());
+      if (!hasCost && !hasBatch) return;
+      setActivePurchase((prev) => {
+        if (!prev || prev.productId !== pid) return prev;
+        if (Number(prev.costPrice) > 0 || prev.batchNumber.trim()) return prev;
+        const preferredSupplierId = normalizePricingRow(pricing)?.supplier_id;
+        return withAutoTotal(
+          applyProductDefaultsToEditable(
+            {
+              ...prev,
+              supplierId: prev.supplierId || preferredSupplierId || "",
+            },
+            pricing,
+            productMap.get(pid),
+          ),
+          {},
+        );
+      });
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [
+    formOpen,
+    linePricing,
+    activePurchase?.productId,
+    activePurchase?.branchId,
+    activePurchase?.supplierId,
+    tenantSlug,
+    pricingByProduct,
+    productMap,
+    withAutoTotal,
+  ]);
+
+  const onQuickBillProductChange = React.useCallback(
+    (productId: string) => {
+      void (async () => {
+        const prev = activePurchase;
+        if (!prev) return;
+        const pricing = await resolveProductLinePricing(tenantSlug, productId, {
+          branchId: prev.branchId,
+          supplierId: prev.supplierId || undefined,
+          cached: pricingByProduct.get(productId),
+        });
+        const preferredSupplierId = normalizePricingRow(pricing)?.supplier_id;
+        setActivePurchase((current) => {
+          if (!current) return current;
+          const next = applyProductDefaultsToEditable(
+            {
+              ...current,
+              productId,
+              uomId: "",
+              supplierId: current.supplierId || preferredSupplierId || "",
+            },
+            pricing,
+            productMap.get(productId),
+          );
+          return withAutoTotal(next, {});
+        });
+      })();
+    },
+    [
+      tenantSlug,
+      activePurchase,
+      pricingByProduct,
+      productMap,
+      withAutoTotal,
+    ],
+  );
+
   const openCreate = () => {
     setFormMode("create");
     setProductStockByBranch([]);
     setActivePurchase({
       id: "",
-      supplierId: suppliers[0]?.id ?? "",
+      supplierId: "",
       branchId: defaultBranchIdForForm(),
       invoiceNumber: "",
       productId: "",
+      uomId: "",
       quantity: "1",
       batchNumber: "",
       costPrice: "",
@@ -281,6 +426,7 @@ export default function PurchasesPage({
       branchId: p.branch_id ?? "",
       invoiceNumber: p.invoice_number ?? "",
       productId: "",
+      uomId: "",
       quantity: "1",
       batchNumber: "",
       costPrice: "",
@@ -325,14 +471,17 @@ export default function PurchasesPage({
       return setError("Total amount must be a valid number.");
 
     const purchaseBody = {
+      workflow: "immediate" as const,
       supplierId,
       branchId,
       invoiceNumber,
+      supplierInvoiceNo: invoiceNumber,
       totalAmount: totalAmountNum,
       purchaseDate,
       items: [
         {
           productId: activePurchase.productId,
+          uomId: activePurchase.uomId || undefined,
           quantity: quantityNum,
           batchNumber: activePurchase.batchNumber.trim() || undefined,
           costPrice: Number.isFinite(costPriceNum) ? costPriceNum : undefined,
@@ -484,11 +633,13 @@ export default function PurchasesPage({
         suppliers={suppliers}
         branches={branches}
         products={products}
+        selectedProductUoms={selectedProductUoms}
         productStockByBranch={productStockByBranch}
         stockLoading={stockLoading}
         saving={saving}
         syncBranchToSession={syncBranchToSession}
         withAutoTotal={withAutoTotal}
+        onProductChange={onQuickBillProductChange}
         closeForm={closeForm}
         onSubmit={handleSubmit}
       />

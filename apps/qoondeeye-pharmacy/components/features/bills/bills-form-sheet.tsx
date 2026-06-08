@@ -29,9 +29,16 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import type { Branch, Product, ProductStockByBranch, Supplier } from "@/lib/api";
+import type {
+  Branch,
+  Product,
+  ProductStockByBranch,
+  ProductUom,
+  Supplier,
+} from "@/lib/api";
 
 import type { EditablePurchase, FormMode } from "./bills-types";
+import { ProductSearchInput } from "./product-search-input";
 
 export type BillsFormSheetProps = {
   open: boolean;
@@ -44,6 +51,7 @@ export type BillsFormSheetProps = {
   suppliers: Supplier[];
   branches: Branch[];
   products: Product[];
+  selectedProductUoms: ProductUom[];
   productStockByBranch: ProductStockByBranch[];
   stockLoading: boolean;
   saving: boolean;
@@ -52,6 +60,7 @@ export type BillsFormSheetProps = {
     prev: EditablePurchase,
     patch: Partial<EditablePurchase>,
   ) => EditablePurchase;
+  onProductChange: (productId: string) => void;
   closeForm: () => void;
   onSubmit: (e: React.FormEvent) => void;
 };
@@ -65,11 +74,13 @@ export function BillsFormSheet({
   suppliers,
   branches,
   products,
+  selectedProductUoms,
   productStockByBranch,
   stockLoading,
   saving,
   syncBranchToSession,
   withAutoTotal,
+  onProductChange,
   closeForm,
   onSubmit,
 }: BillsFormSheetProps) {
@@ -167,25 +178,13 @@ export function BillsFormSheet({
 
                 <div className="space-y-2">
                   <Label>Product</Label>
-                  <Select
+                  <ProductSearchInput
+                    products={products}
                     value={activePurchase.productId}
-                    onValueChange={(v) =>
-                      setActivePurchase((prev) =>
-                        prev ? { ...prev, productId: v } : prev,
-                      )
-                    }
-                  >
-                    <SelectTrigger className="w-full rounded-lg">
-                      <SelectValue placeholder="Select product" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {products.map((p) => (
-                        <SelectItem key={p.id} value={p.id}>
-                          {p.name}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
+                    onValueChange={onProductChange}
+                    placeholder="Search by item no or name…"
+                    inputClassName="h-9 rounded-lg"
+                  />
                   {activePurchase.productId ? (
                     <div className="rounded-lg border bg-muted/30 p-3">
                       <p className="mb-2 text-xs font-medium text-muted-foreground">
@@ -252,6 +251,47 @@ export function BillsFormSheet({
                       }
                     />
                   </div>
+                  <div className="space-y-2">
+                    <Label>UOM</Label>
+                    <Select
+                      value={activePurchase.uomId}
+                      onValueChange={(v) =>
+                        setActivePurchase((prev) =>
+                          prev ? { ...prev, uomId: v } : prev,
+                        )
+                      }
+                      disabled={!selectedProductUoms.length}
+                    >
+                      <SelectTrigger className="w-full rounded-lg">
+                        <SelectValue placeholder="Base" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {selectedProductUoms.map((uom) => (
+                          <SelectItem key={uom.id} value={uom.uomId}>
+                            {uom.symbol || uom.code}
+                            {uom.isPurchaseDefault ? " · Purchase" : ""}
+                            {uom.isBase ? " · Base" : ""}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    {activePurchase.uomId ? (
+                      <p className="text-xs text-muted-foreground">
+                        Base qty:{" "}
+                        {(
+                          Number(activePurchase.quantity || 0) *
+                          Number(
+                            selectedProductUoms.find(
+                              (u) => u.uomId === activePurchase.uomId,
+                            )?.conversionFactorToBase ?? 1,
+                          )
+                        ).toLocaleString()}
+                      </p>
+                    ) : null}
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-2 gap-3">
                   <div className="space-y-2">
                     <Label htmlFor="line-batch-number">Batch number</Label>
                     <Input

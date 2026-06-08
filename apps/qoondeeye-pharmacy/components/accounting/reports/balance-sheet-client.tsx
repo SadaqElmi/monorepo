@@ -3,12 +3,17 @@
 import * as React from "react";
 import { Suspense } from "react";
 import { endOfMonth, format, parseISO, subMonths } from "date-fns";
+import { useQuery } from "@tanstack/react-query";
 import {
   AlertCircle,
+  Calendar,
   ChevronDown,
-  ChevronRight,
+  DollarSign,
+  FileText,
   Loader2,
   MoreHorizontal,
+  Percent,
+  Settings,
 } from "lucide-react";
 import Link from "next/link";
 
@@ -17,6 +22,7 @@ import {
   AlertDescription,
   AlertTitle,
 } from "@/components/ui/alert";
+import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
   Card,
@@ -26,11 +32,7 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
-import {
-  Collapsible,
-  CollapsibleContent,
-  CollapsibleTrigger,
-} from "@/components/ui/collapsible";
+import { Checkbox } from "@/components/ui/checkbox";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -39,23 +41,31 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Separator } from "@/components/ui/separator";
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover";
 import { RouteLoading } from "@/components/loading/route-loading";
 import { Skeleton } from "@/components/ui/skeleton";
 import { ReportScopeBadge } from "@/components/accounting/report-scope-badge";
 import { ReportCertificationBadge } from "@/components/accounting/report-certification-badge";
 import { ReportExportButtons } from "@/components/accounting/report-export-buttons";
 import { ReportVariancePanel } from "@/components/accounting/report-variance-panel";
-import { Checkbox } from "@/components/ui/checkbox";
 import { useErpReportQuery } from "@/hooks/queries/use-erp-report-query";
 import { useReportBranchQuery } from "@/hooks/use-branch-for-reports";
-import { buildBalanceSheetTree } from "@/lib/balance-sheet-tree";
-import type { BsLine } from "@/lib/balance-sheet-tree";
+import {
+  buildBalanceSheetAccountTree,
+  buildBalanceSheetTree,
+  enrichBalanceSheetLines,
+  type BalanceSheetAccountItem,
+} from "@/lib/balance-sheet-tree";
 import { money } from "@/lib/accounting-display";
 import { getStoredUser } from "@/lib/auth-client";
 import { validateReportAsOf } from "@/lib/report-date-validation";
 import {
   getBalanceSheet,
+  getChartOfAccounts,
   type BalanceSheetResult,
   type ReportEnvelope,
 } from "@/lib/services/accounting";
@@ -68,48 +78,77 @@ export type BalanceSheetReportClientProps = {
   defaultCompareAsOf?: string;
 };
 
-function Bal({ n }: { n: number }) {
-  const neg = n < 0;
+const INDENT_CLASS: Record<BalanceSheetAccountItem["level"], string> = {
+  0: "pl-0",
+  1: "pl-4",
+  2: "pl-8",
+  3: "pl-12",
+};
+
+function BalanceAmount({ balance }: { balance: number }) {
+  const neg = balance < 0;
   return (
     <span
       className={cn(
-        "tabular-nums tracking-tight",
-        neg ? "font-medium text-red-500" : "text-foreground",
+        "min-w-[120px] text-right font-mono text-sm font-semibold tabular-nums",
+        neg ? "text-destructive" : "text-foreground",
       )}
     >
-      {money(n)}
+      {money(balance)}
     </span>
   );
 }
 
-function RowLine({
-  label,
-  balance,
-  indent = 0,
-  bold,
-  dim,
-  linkHref,
-  actionMenu,
+function AccountRow({
+  item,
+  expanded,
+  onToggle,
 }: {
-  label: React.ReactNode;
-  balance: React.ReactNode;
-  indent?: number;
-  bold?: boolean;
-  dim?: boolean;
-  linkHref?: string;
-  actionMenu?: boolean;
+  item: BalanceSheetAccountItem;
+  expanded: boolean;
+  onToggle: () => void;
 }) {
-  return (
-    <div
-      className={cn(
-        "flex min-h-10 items-center justify-between gap-4 border-b border-border/80 px-3 py-2",
-        dim && "text-muted-foreground",
-        bold && "font-semibold text-foreground",
-      )}
-      style={{ paddingLeft: 12 + indent * 16 }}
+  const isExpandable = !!(item.children && item.children.length > 0);
+
+  const labelClass = cn(
+    item.isSection && "text-xs font-bold uppercase tracking-wide text-foreground",
+    item.isTotal && "font-semibold text-foreground",
+    !item.isSection &&
+      !item.isTotal &&
+      (item.balance < 0
+        ? "text-destructive"
+        : item.isHighlight
+          ? "text-emerald-600"
+          : "text-muted-foreground"),
+  );
+
+  const rowClass = cn(
+    "flex items-center justify-between border-b border-border px-3 py-2",
+    item.isSection && "bg-muted font-bold",
+    item.isTotal && "bg-muted/50",
+  );
+
+  const primaryHref = item.coaPath ?? item.drilldownPath;
+  const labelContent = primaryHref ? (
+    <Link
+      href={primaryHref}
+      className="text-primary underline-offset-2 hover:underline"
     >
-      <div className="flex min-w-0 flex-1 items-center gap-2">
-        {actionMenu ? (
+      {item.label}
+    </Link>
+  ) : (
+    item.label
+  );
+
+  return (
+    <div className={rowClass}>
+      <div
+        className={cn(
+          "flex flex-1 items-center gap-2",
+          INDENT_CLASS[item.level],
+        )}
+      >
+        {item.isAccount && (item.coaPath || item.drilldownPath) ? (
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <Button
@@ -117,106 +156,117 @@ function RowLine({
                 variant="ghost"
                 size="icon"
                 className="h-7 w-7 shrink-0 text-muted-foreground hover:bg-muted hover:text-foreground"
-                aria-label="Row actions"
+                aria-label={`Actions for ${item.label}`}
               >
                 <MoreHorizontal className="h-4 w-4" />
               </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="start">
-              <DropdownMenuItem asChild>
-                <Link href="/accounting/journals">View journals</Link>
-              </DropdownMenuItem>
-              <DropdownMenuItem asChild>
-                <Link href="/accounting/chart-of-accounts">Chart of accounts</Link>
-              </DropdownMenuItem>
+              {item.coaPath ? (
+                <DropdownMenuItem asChild>
+                  <Link href={item.coaPath}>Chart of accounts</Link>
+                </DropdownMenuItem>
+              ) : null}
+              {item.drilldownPath ? (
+                <DropdownMenuItem asChild>
+                  <Link href={item.drilldownPath}>View journal lines</Link>
+                </DropdownMenuItem>
+              ) : null}
             </DropdownMenuContent>
           </DropdownMenu>
+        ) : item.isAccount ? (
+          <div className="w-7 shrink-0" />
+        ) : isExpandable ? (
+          <button
+            type="button"
+            onClick={onToggle}
+            className="flex h-4 w-4 items-center justify-center text-muted-foreground transition-colors hover:text-foreground"
+            aria-expanded={expanded}
+            aria-label={`Toggle ${item.label}`}
+          >
+            <ChevronDown
+              size={16}
+              className={cn(
+                "transition-transform",
+                expanded ? "rotate-0" : "-rotate-90",
+              )}
+            />
+          </button>
         ) : (
-          <span className="w-7 shrink-0" />
+          <div className="w-4 shrink-0" />
         )}
-        <div className="min-w-0 truncate text-sm">
-          {linkHref ? (
-            <Link
-              href={linkHref}
-              className="text-primary underline-offset-2 hover:underline"
-            >
-              {label}
-            </Link>
-          ) : (
-            label
-          )}
-        </div>
-      </div>
-      <div className="shrink-0 text-right text-sm">{balance}</div>
-    </div>
-  );
-}
-
-function SectionTitle({ children }: { children: React.ReactNode }) {
-  return (
-    <div className="bg-muted px-3 py-2 text-xs font-bold uppercase tracking-wider text-muted-foreground">
-      {children}
-    </div>
-  );
-}
-
-function CollapsibleBlock({
-  title,
-  balance,
-  defaultOpen,
-  indent,
-  children,
-}: {
-  title: string;
-  balance: React.ReactNode;
-  defaultOpen?: boolean;
-  indent?: number;
-  children: React.ReactNode;
-}) {
-  const [open, setOpen] = React.useState(defaultOpen ?? false);
-  return (
-    <Collapsible open={open} onOpenChange={setOpen}>
-      <CollapsibleTrigger
-        className={cn(
-          "flex min-h-10 w-full items-center justify-between gap-4 border-b border-border/80 py-2 text-left text-sm text-foreground hover:bg-muted/50",
-        )}
-        style={{ paddingLeft: 12 + (indent ?? 0) * 16, paddingRight: 12 }}
-      >
-        <span className="flex items-center gap-1">
-          {open ? (
-            <ChevronDown className="h-4 w-4 shrink-0 text-muted-foreground" />
-          ) : (
-            <ChevronRight className="h-4 w-4 shrink-0 text-muted-foreground" />
-          )}
-          {title}
+        <span className={cn("min-w-0 truncate text-sm", labelClass)}>
+          {labelContent}
         </span>
-        <span className="shrink-0 text-sm">{balance}</span>
-      </CollapsibleTrigger>
-      <CollapsibleContent>{children}</CollapsibleContent>
-    </Collapsible>
+      </div>
+      {!item.isSection && <BalanceAmount balance={item.balance} />}
+      {item.isSection ? <span className="min-w-[120px]" /> : null}
+    </div>
   );
 }
 
-function AccountRows({
-  lines,
-  baseIndent,
+function ExpandableAccountRow({
+  item,
+  defaultExpanded = true,
 }: {
-  lines: BsLine[];
-  baseIndent: number;
+  item: BalanceSheetAccountItem;
+  defaultExpanded?: boolean;
 }) {
+  const [expanded, setExpanded] = React.useState(defaultExpanded);
+  const isExpandable = !!(item.children && item.children.length > 0);
+
   return (
     <>
-      {lines.map((ln) => (
-        <RowLine
-          key={`${ln.accountKey}-${ln.name}`}
-          label={<span>{ln.name}</span>}
-          balance={<Bal n={ln.balance} />}
-          indent={baseIndent + 1}
-          linkHref={ln.drilldownPath}
-          actionMenu
-        />
-      ))}
+      <AccountRow
+        item={item}
+        expanded={expanded}
+        onToggle={() => setExpanded((prev) => !prev)}
+      />
+      {isExpandable && expanded
+        ? item.children!.map((child) => (
+            <ExpandableAccountRow key={child.id} item={child} />
+          ))
+        : null}
     </>
+  );
+}
+
+function BalanceSheetTreeView({ sections }: { sections: BalanceSheetAccountItem[] }) {
+  const [expandedSections, setExpandedSections] = React.useState({
+    assets: true,
+    liabilities: true,
+    equity: true,
+  });
+
+  const toggleSection = (sectionId: string) => {
+    setExpandedSections((prev) => ({
+      ...prev,
+      [sectionId]: !prev[sectionId as keyof typeof prev],
+    }));
+  };
+
+  return (
+    <div className="overflow-hidden rounded-lg border border-border bg-background">
+      {sections.map((section) => {
+        const isOpen =
+          expandedSections[section.id as keyof typeof expandedSections] ?? true;
+
+        return (
+          <div key={section.id}>
+            <AccountRow
+              item={section}
+              expanded={isOpen}
+              onToggle={() => toggleSection(section.id)}
+            />
+            {isOpen && section.children
+              ? section.children.map((child) => (
+                  <ExpandableAccountRow key={child.id} item={child} />
+                ))
+              : null}
+          </div>
+        );
+      })}
+    </div>
   );
 }
 
@@ -278,30 +328,48 @@ export default function BalanceSheetReportClient({
     setCompareAsOf(format(endOfMonth(prev), "yyyy-MM-dd"));
   }, []);
 
-  const tree = data ? buildBalanceSheetTree(data) : null;
+  const coaQuery = useQuery({
+    queryKey: ["erp", "chart-of-accounts", tenantSlug, branchId, aggregateAll],
+    queryFn: () => getChartOfAccounts(tenantSlug, branchId),
+    enabled: Boolean(data),
+    staleTime: 60_000,
+  });
 
-  const equityLines = data?.lines.filter((l) => l.accountType === "equity") ?? [];
-  const cyRetained = equityLines.find((l) => l.accountKey === "current_year_profit");
-  const pyRetained = equityLines.find((l) => l.accountKey === "equity_retained");
-  const cyBal = cyRetained?.balance ?? 0;
-  const pyBal = pyRetained?.balance ?? 0;
-  const previousUnallocated =
-    tree?.equity.equityExcludingImplicit != null
-      ? tree.equity.equityExcludingImplicit - cyBal - pyBal
-      : 0;
-  const totalUnallocated =
-    tree != null ? tree.equity.implicit + previousUnallocated : 0;
-  const totalRetainedSub = cyBal + pyBal;
+  const coaByKey = React.useMemo(() => {
+    const map = new Map<string, { id: string; code: string | null }>();
+    for (const row of coaQuery.data ?? []) {
+      if (!row.account_key) continue;
+      map.set(row.account_key, { id: row.id, code: row.code });
+    }
+    return map;
+  }, [coaQuery.data]);
+
+  const enrichedData = React.useMemo(
+    () => (data ? enrichBalanceSheetLines(data, coaByKey) : null),
+    [data, coaByKey],
+  );
+
+  const tree = enrichedData ? buildBalanceSheetTree(enrichedData) : null;
+  const accountTree = tree ? buildBalanceSheetAccountTree(tree) : null;
 
   let displayAsOf = asOf;
   try {
-    displayAsOf = format(parseISO(asOf), "dd/MM/yyyy");
+    displayAsOf = format(parseISO(asOf), "MM/dd/yyyy");
   } catch {
     /* keep raw */
   }
 
+  let displayCompareAsOf = compareAsOf;
+  if (compareAsOf) {
+    try {
+      displayCompareAsOf = format(parseISO(compareAsOf), "MM/dd/yyyy");
+    } catch {
+      /* keep raw */
+    }
+  }
+
   return (
-    <Card className="mx-4 mb-4 mt-4 flex min-h-0 flex-1 flex-col gap-0 overflow-hidden py-0">
+    <Card className="mx-4 mb-4 mt-4 flex min-h-0 flex-1 flex-col gap-0 overflow-hidden border-border bg-background py-0 shadow-sm">
       <CardHeader className="border-b pb-4">
         <CardTitle className="text-lg">Balance Sheet</CardTitle>
         <CardDescription>
@@ -325,24 +393,11 @@ export default function BalanceSheetReportClient({
           </div>
         ) : null}
         <CardAction>
-          <div className="flex flex-wrap items-end gap-3">
-            <div className="space-y-1.5">
-              <Label htmlFor="bs-asof" className="text-xs text-muted-foreground">
-                As of
-              </Label>
-              <Input
-                id="bs-asof"
-                type="date"
-                value={asOf}
-                onChange={(e) => setAsOf(e.target.value)}
-                className="h-8 w-[148px]"
-              />
-            </div>
+          <div className="flex flex-wrap items-center gap-2">
             <Button
               type="button"
               size="sm"
               variant="secondary"
-              className="h-8"
               disabled={loading}
               onClick={() => void reportQuery.refetch()}
             >
@@ -355,11 +410,10 @@ export default function BalanceSheetReportClient({
               type="button"
               size="sm"
               variant="outline"
-              className="h-8"
               disabled={loading}
               onClick={applyMonthEndVsPrior}
             >
-              Month-end vs prior month-end
+              Month-end vs prior
             </Button>
             <ReportExportButtons
               tenantSlug={tenantSlug}
@@ -370,290 +424,218 @@ export default function BalanceSheetReportClient({
               disabled={loading || (!branchId && !aggregateAll)}
             />
           </div>
-          <div className="mt-2 flex flex-wrap items-center gap-4">
-            <div className="flex items-center gap-2">
-              <Checkbox
-                id="bs-compare-snapshot"
-                checked={compareSnapshot}
-                onCheckedChange={(v) => setCompareSnapshot(v === true)}
-              />
-              <label
-                htmlFor="bs-compare-snapshot"
-                className="text-xs text-muted-foreground"
-              >
-                Compare to prior saved snapshot (previous day)
-              </label>
-            </div>
-          </div>
-          <div className="mt-2 flex flex-wrap items-end gap-3">
-            <div className="space-y-1.5">
-              <Label htmlFor="bs-compare-asof" className="text-xs text-muted-foreground">
-                Compare as of
-              </Label>
-              <Input
-                id="bs-compare-asof"
-                type="date"
-                value={compareAsOf}
-                onChange={(e) => setCompareAsOf(e.target.value)}
-                className="h-8 w-[148px]"
-              />
-            </div>
-          </div>
         </CardAction>
       </CardHeader>
 
-      <div className="flex justify-end gap-8 px-4 py-2 text-sm text-muted-foreground">
-        <span className="tabular-nums">As of {displayAsOf}</span>
-        <span className="w-28 text-right font-medium text-foreground">Balance</span>
-      </div>
+      <CardContent className="space-y-4 px-6 pt-6">
+        <div className="flex flex-wrap gap-2">
+            <Popover>
+              <PopoverTrigger asChild>
+                <Button variant="outline" size="sm" className="gap-2">
+                  <Calendar size={16} />
+                  <span>As of {displayAsOf}</span>
+                </Button>
+              </PopoverTrigger>
+              <PopoverContent className="w-auto space-y-3" align="start">
+                <div className="space-y-1.5">
+                  <Label htmlFor="bs-asof" className="text-xs text-muted-foreground">
+                    As of date
+                  </Label>
+                  <Input
+                    id="bs-asof"
+                    type="date"
+                    value={asOf}
+                    onChange={(e) => setAsOf(e.target.value)}
+                    className="h-8"
+                  />
+                </div>
+              </PopoverContent>
+            </Popover>
 
-      <Separator />
+            <Popover>
+              <PopoverTrigger asChild>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className={cn("gap-2", compareAsOf && "border-primary/50")}
+                >
+                  <Percent size={16} />
+                  <span>
+                    {compareAsOf ? `% vs ${displayCompareAsOf}` : "% Comparison"}
+                  </span>
+                </Button>
+              </PopoverTrigger>
+              <PopoverContent className="w-auto space-y-3" align="start">
+                <div className="space-y-1.5">
+                  <Label
+                    htmlFor="bs-compare-asof"
+                    className="text-xs text-muted-foreground"
+                  >
+                    Compare as of
+                  </Label>
+                  <Input
+                    id="bs-compare-asof"
+                    type="date"
+                    value={compareAsOf}
+                    onChange={(e) => setCompareAsOf(e.target.value)}
+                    className="h-8"
+                  />
+                </div>
+                <div className="flex items-center gap-2">
+                  <Checkbox
+                    id="bs-compare-snapshot"
+                    checked={compareSnapshot}
+                    onCheckedChange={(v) => setCompareSnapshot(v === true)}
+                  />
+                  <label
+                    htmlFor="bs-compare-snapshot"
+                    className="text-xs text-muted-foreground"
+                  >
+                    Compare to prior saved snapshot
+                  </label>
+                </div>
+              </PopoverContent>
+            </Popover>
 
-      <CardContent className="flex min-h-0 flex-1 flex-col px-0 pb-0 pt-0">
-        {err ? (
-          <Alert variant="destructive" className="mx-4 mt-4">
-            <AlertCircle />
-            <AlertTitle>Error</AlertTitle>
-            <AlertDescription>{err}</AlertDescription>
-          </Alert>
-        ) : null}
+            <Button variant="outline" size="sm" className="gap-2" asChild>
+              <Link href="/accounting/journals">
+                <FileText size={16} />
+                <span>All Journals</span>
+              </Link>
+            </Button>
 
-        {data?.warnings?.length ? (
-          <Alert
-            variant={data.isValid ? "default" : "destructive"}
-            className="mx-4 mt-4 border-amber-200 bg-amber-50 text-amber-950"
-          >
-            <AlertCircle />
-            <AlertTitle>
-              {data.isValid
-                ? "Validation warnings"
-                : "Critical validation warnings"}
-            </AlertTitle>
-            <AlertDescription>
-              <div className="space-y-1 text-xs">
-                {data.warnings.slice(0, 5).map((w, idx) => (
-                  <p key={`${w.code}-${idx}`}>
-                    {w.severity.toUpperCase()}: {w.message}
-                  </p>
-                ))}
-              </div>
-            </AlertDescription>
-          </Alert>
-        ) : null}
+            <Button variant="outline" size="sm" className="gap-2" disabled>
+              <Settings size={16} />
+              <span>Posted Entries, Accrual Basis</span>
+            </Button>
 
-        {loading && !data ? (
-          <div className="space-y-2 p-4">
-            {Array.from({ length: 12 }).map((_, i) => (
-              <Skeleton
-                key={i}
-                className="h-9 w-full"
-              />
-            ))}
+            <Button variant="outline" size="sm" className="gap-2" disabled>
+              <DollarSign size={16} />
+              <span>In USD</span>
+            </Button>
           </div>
-        ) : null}
 
-        {tree ? (
-          <Suspense
-            fallback={<RouteLoading variant="section" />}
-          >
-          <div className="flex-1 overflow-auto pb-10">
-          <div className="mx-3 my-2 flex items-center justify-between rounded border border-border bg-muted/40 px-3 py-2 text-xs text-muted-foreground">
-            <span>Reconciliation check</span>
-            <span className={cn(
-              "font-medium",
-              Math.abs((data?.totals.assets ?? 0) - (data?.totals.liabilitiesAndEquity ?? 0)) < 0.01
-                ? "text-emerald-400"
-                : "text-amber-400",
-            )}>
-              Difference: {money((data?.totals.assets ?? 0) - (data?.totals.liabilitiesAndEquity ?? 0))}
-            </span>
-          </div>
-          {data?.drilldownCheck ? (
-            <div className="mx-3 mb-2 rounded border border-border bg-muted/40 px-3 py-2 text-xs text-muted-foreground">
-              Drill-down consistency:{" "}
-              <span className={cn("font-medium", data.drilldownCheck.isConsistent ? "text-emerald-400" : "text-amber-400")}>
-                {data.drilldownCheck.isConsistent
-                  ? "Consistent"
-                  : `${data.drilldownCheck.mismatches} mismatches`}
-              </span>
+          {err ? (
+            <Alert variant="destructive">
+              <AlertCircle />
+              <AlertTitle>Error</AlertTitle>
+              <AlertDescription>{err}</AlertDescription>
+            </Alert>
+          ) : null}
+
+          {data?.warnings?.length ? (
+            <Alert
+              variant={data.isValid ? "default" : "destructive"}
+              className="border-amber-200 bg-amber-50 text-amber-950"
+            >
+              <AlertCircle />
+              <AlertTitle>
+                {data.isValid
+                  ? "Validation warnings"
+                  : "Critical validation warnings"}
+              </AlertTitle>
+              <AlertDescription>
+                <div className="space-y-1 text-xs">
+                  {data.warnings.slice(0, 5).map((w, idx) => (
+                    <p key={`${w.code}-${idx}`}>
+                      {w.severity.toUpperCase()}: {w.message}
+                    </p>
+                  ))}
+                </div>
+              </AlertDescription>
+            </Alert>
+          ) : null}
+
+          {loading && !data ? (
+            <div className="space-y-2">
+              {Array.from({ length: 12 }).map((_, i) => (
+                <Skeleton key={i} className="h-9 w-full" />
+              ))}
             </div>
           ) : null}
-          {data?.comparison ? (
-            <div className="mx-3 mb-2 grid grid-cols-1 gap-2 rounded border border-border bg-muted/40 px-3 py-2 text-xs text-foreground md:grid-cols-3">
-              <div>
-                Compare Assets: <span className="font-medium">{money(data.comparison.totals.assets)}</span>
+
+          {accountTree ? (
+            <Suspense fallback={<RouteLoading variant="section" />}>
+              <div className="space-y-3">
+                <div className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-border bg-muted/30 px-3 py-2 text-xs text-muted-foreground">
+                  <span>Reconciliation check</span>
+                  <Badge
+                    variant={
+                      Math.abs(
+                        (data?.totals.assets ?? 0) -
+                          (data?.totals.liabilitiesAndEquity ?? 0),
+                      ) < 0.01
+                        ? "default"
+                        : "destructive"
+                    }
+                  >
+                    Difference:{" "}
+                    {money(
+                      (data?.totals.assets ?? 0) -
+                        (data?.totals.liabilitiesAndEquity ?? 0),
+                    )}
+                  </Badge>
+                </div>
+
+                {data?.drilldownCheck ? (
+                  <div className="rounded-lg border border-border bg-muted/30 px-3 py-2 text-xs text-muted-foreground">
+                    Drill-down consistency:{" "}
+                    <Badge
+                      variant={
+                        data.drilldownCheck.isConsistent ? "default" : "destructive"
+                      }
+                    >
+                      {data.drilldownCheck.isConsistent
+                        ? "Consistent"
+                        : `${data.drilldownCheck.mismatches} mismatches`}
+                    </Badge>
+                  </div>
+                ) : null}
+
+                {data?.comparison ? (
+                  <div className="grid grid-cols-1 gap-2 rounded-lg border border-border bg-muted/30 px-3 py-2 text-xs text-foreground md:grid-cols-3">
+                    <div>
+                      Compare Assets:{" "}
+                      <span className="font-medium">
+                        {money(data.comparison.totals.assets)}
+                      </span>
+                    </div>
+                    <div>
+                      Compare Liabilities:{" "}
+                      <span className="font-medium">
+                        {money(data.comparison.totals.liabilities)}
+                      </span>
+                    </div>
+                    <div>
+                      Compare Equity:{" "}
+                      <span className="font-medium">
+                        {money(data.comparison.totals.totalEquity)}
+                      </span>
+                    </div>
+                  </div>
+                ) : null}
+
+                {data?.snapshotComparison ? (
+                  <div className="rounded-lg border border-border bg-muted/30 px-3 py-2 text-xs text-muted-foreground">
+                    <span className="font-medium text-foreground">Prior snapshot</span>{" "}
+                    {data.snapshotComparison.baselineSnapshotDate} (v
+                    {data.snapshotComparison.baselineVersion}) — Assets{" "}
+                    {money(data.snapshotComparison.baseline.assets)}, Liabilities{" "}
+                    {money(data.snapshotComparison.baseline.liabilities)}, Equity{" "}
+                    {money(data.snapshotComparison.baseline.totalEquity)}
+                  </div>
+                ) : null}
+
+                <ReportVariancePanel
+                  mode="bs"
+                  variance={data?.variance}
+                  snapshotDate={data?.snapshotComparison?.baselineSnapshotDate}
+                />
+
+                <BalanceSheetTreeView sections={accountTree} />
               </div>
-              <div>
-                Compare Liabilities: <span className="font-medium">{money(data.comparison.totals.liabilities)}</span>
-              </div>
-              <div>
-                Compare Equity: <span className="font-medium">{money(data.comparison.totals.totalEquity)}</span>
-              </div>
-            </div>
+            </Suspense>
           ) : null}
-          {data?.snapshotComparison ? (
-            <div className="mx-3 mb-2 rounded border border-border bg-muted/30 px-3 py-2 text-xs text-muted-foreground">
-              <span className="font-medium text-foreground">Prior snapshot</span>{" "}
-              {data.snapshotComparison.baselineSnapshotDate} (v
-              {data.snapshotComparison.baselineVersion}) — Assets{" "}
-              {money(data.snapshotComparison.baseline.assets)}, Liabilities{" "}
-              {money(data.snapshotComparison.baseline.liabilities)}, Equity{" "}
-              {money(data.snapshotComparison.baseline.totalEquity)}
-            </div>
-          ) : null}
-          <ReportVariancePanel
-            mode="bs"
-            variance={data?.variance}
-            snapshotDate={data?.snapshotComparison?.baselineSnapshotDate}
-          />
-          <SectionTitle>ASSETS</SectionTitle>
-          <p className="px-3 py-2 text-xs font-semibold uppercase text-muted-foreground">
-            Current Assets
-          </p>
-
-          <CollapsibleBlock
-            title="Bank and Cash Accounts"
-            balance={<Bal n={tree.assets.totalBankCash} />}
-            defaultOpen
-            indent={0}
-          >
-            <AccountRows lines={tree.assets.bankCash} baseIndent={1} />
-            <RowLine
-              label="Total Bank and Cash Accounts"
-              balance={<Bal n={tree.assets.totalBankCash} />}
-              indent={1}
-              bold
-            />
-          </CollapsibleBlock>
-
-          <CollapsibleBlock
-            title="Receivables"
-            balance={<Bal n={tree.assets.totalReceivables} />}
-            indent={0}
-          >
-            <AccountRows lines={tree.assets.receivables} baseIndent={1} />
-          </CollapsibleBlock>
-
-          <RowLine
-            label="Inventory"
-            balance={<Bal n={tree.assets.inventoryBal} />}
-            indent={1}
-          />
-          <RowLine
-            label="Prepayments"
-            balance={<Bal n={tree.assets.prepayBal} />}
-            indent={1}
-          />
-          {tree.assets.otherAssets.length ? (
-            <AccountRows lines={tree.assets.otherAssets} baseIndent={1} />
-          ) : null}
-
-          <RowLine
-            label="Total Current Assets"
-            balance={<Bal n={tree.assets.totalCurrentAssets} />}
-            indent={0}
-            bold
-          />
-          <RowLine
-            label="Plus Fixed Assets"
-            balance={<Bal n={tree.assets.fixedBal} />}
-            indent={0}
-          />
-          <RowLine
-            label="Plus Non-current Assets"
-            balance={<Bal n={tree.assets.nonCurrentBal} />}
-            indent={0}
-          />
-          <RowLine
-            label="Total ASSETS"
-            balance={<Bal n={tree.assets.totalAssets} />}
-            bold
-          />
-
-          <SectionTitle>LIABILITIES</SectionTitle>
-          <p className="px-3 py-2 text-xs font-semibold uppercase text-muted-foreground">
-            Current Liabilities
-          </p>
-          <RowLine
-            label="Payables"
-            balance={<Bal n={tree.liabilities.totalPayables} />}
-            indent={1}
-          />
-          {tree.liabilities.otherCurrentLiab.length ? (
-            <AccountRows
-              lines={tree.liabilities.otherCurrentLiab}
-              baseIndent={1}
-            />
-          ) : null}
-          {tree.liabilities.otherLiabs.length ? (
-            <AccountRows lines={tree.liabilities.otherLiabs} baseIndent={1} />
-          ) : null}
-          <RowLine
-            label="Total Current Liabilities"
-            balance={<Bal n={tree.liabilities.totalCurrentLiabilities} />}
-            indent={0}
-            bold
-          />
-          <RowLine
-            label="Plus Non-current Liabilities"
-            balance={<Bal n={tree.liabilities.totalNonCurrentLiab} />}
-            indent={0}
-          />
-          <RowLine
-            label="Total LIABILITIES"
-            balance={<Bal n={tree.liabilities.totalLiabilities} />}
-            bold
-          />
-
-          <SectionTitle>EQUITY</SectionTitle>
-          <p className="px-3 py-2 text-xs font-semibold uppercase text-muted-foreground">
-            Unallocated Earnings
-          </p>
-          <RowLine
-            label="Current Year Unallocated Earnings"
-            balance={<Bal n={tree.equity.implicit} />}
-            indent={1}
-            linkHref="/accounting/reports/profit-loss"
-          />
-          <RowLine
-            label="Previous Years Unallocated Earnings"
-            balance={<Bal n={previousUnallocated} />}
-            indent={1}
-          />
-          <RowLine
-            label="Total Unallocated Earnings"
-            balance={<Bal n={totalUnallocated} />}
-            indent={0}
-            bold
-          />
-
-          <p className="px-3 py-2 text-xs font-semibold uppercase text-muted-foreground">
-            Retained Earnings
-          </p>
-          <RowLine
-            label="Current Year Retained Earnings"
-            balance={<Bal n={cyBal} />}
-            indent={1}
-          />
-          <RowLine
-            label="Previous Years Retained Earnings"
-            balance={<Bal n={pyBal} />}
-            indent={1}
-          />
-          <RowLine
-            label="Total Retained Earnings"
-            balance={<Bal n={totalRetainedSub} />}
-            indent={0}
-            bold
-          />
-          <RowLine
-            label="Total EQUITY"
-            balance={<Bal n={tree.equity.totalEquity} />}
-            bold
-          />
-          </div>
-          </Suspense>
-        ) : null}
       </CardContent>
     </Card>
   );

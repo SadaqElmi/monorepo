@@ -8,6 +8,17 @@ import {
 import { PrismaService } from '../prisma/prisma.service';
 import { Tenant } from '@prisma/client';
 
+export type TenantSchemaHealth = {
+  schemaName: string;
+  checkedAt: string;
+  ok: boolean;
+  missingTables: string[];
+  missingColumns: Array<{ table: string; column: string }>;
+  missingIndexes: string[];
+  duplicateItemNos: Array<{ itemNo: string; count: number }>;
+  duplicateBarcodes: Array<{ barcode: string; count: number }>;
+};
+
 @Injectable()
 export class TenantService {
   private readonly logger = new Logger(TenantService.name);
@@ -368,11 +379,36 @@ export class TenantService {
       `CREATE TABLE IF NOT EXISTS "${schemaName}"."suppliers" (
         id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
         name VARCHAR(255),
+        supplier_type VARCHAR(20) NOT NULL DEFAULT 'local',
+        country VARCHAR(100),
+        city VARCHAR(100),
         phone VARCHAR(50),
         email VARCHAR(255),
         address TEXT,
-        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        active BOOLEAN NOT NULL DEFAULT TRUE,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        CONSTRAINT suppliers_supplier_type_check CHECK (supplier_type IN ('local', 'international'))
       )`,
+      `CREATE TABLE IF NOT EXISTS "${schemaName}"."product_suppliers" (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        product_id UUID NOT NULL REFERENCES "${schemaName}"."products"(id) ON DELETE CASCADE,
+        supplier_id UUID NOT NULL REFERENCES "${schemaName}"."suppliers"(id) ON DELETE CASCADE,
+        is_preferred BOOLEAN NOT NULL DEFAULT FALSE,
+        last_cost_price NUMERIC(10,2),
+        supplier_item_code VARCHAR(100),
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      )`,
+      `CREATE UNIQUE INDEX IF NOT EXISTS product_suppliers_product_supplier_uq
+        ON "${schemaName}"."product_suppliers"(product_id, supplier_id)`,
+      `CREATE UNIQUE INDEX IF NOT EXISTS product_suppliers_one_preferred_per_product
+        ON "${schemaName}"."product_suppliers"(product_id)
+        WHERE is_preferred`,
+      `CREATE INDEX IF NOT EXISTS idx_product_suppliers_product_preferred
+        ON "${schemaName}"."product_suppliers"(product_id, is_preferred)`,
+      `CREATE INDEX IF NOT EXISTS idx_product_suppliers_supplier_product
+        ON "${schemaName}"."product_suppliers"(supplier_id, product_id)`,
       `CREATE TABLE IF NOT EXISTS "${schemaName}"."customers" (
         id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
         name VARCHAR(255),
@@ -476,6 +512,25 @@ export class TenantService {
         sale_item_id UUID REFERENCES "${schemaName}"."sale_items"(id),
         quantity INTEGER NOT NULL
       )`,
+      `CREATE TABLE IF NOT EXISTS "${schemaName}"."return_vouchers" (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        branch_id UUID NOT NULL REFERENCES "${schemaName}"."branches"(id),
+        sale_id UUID NOT NULL REFERENCES "${schemaName}"."sales"(id) ON DELETE CASCADE,
+        sale_item_id UUID NOT NULL REFERENCES "${schemaName}"."sale_items"(id),
+        quantity INTEGER NOT NULL,
+        unit_price NUMERIC(10,2) NOT NULL,
+        token VARCHAR(80) NOT NULL,
+        status VARCHAR(20) NOT NULL DEFAULT 'pending',
+        reason TEXT,
+        sale_return_id UUID REFERENCES "${schemaName}"."sale_returns"(id) ON DELETE SET NULL,
+        expires_at TIMESTAMP,
+        used_at TIMESTAMP,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      )`,
+      `CREATE UNIQUE INDEX IF NOT EXISTS return_vouchers_token_key ON "${schemaName}"."return_vouchers"(token)`,
+      `CREATE INDEX IF NOT EXISTS idx_return_vouchers_sale_id ON "${schemaName}"."return_vouchers"(sale_id)`,
+      `CREATE INDEX IF NOT EXISTS idx_return_vouchers_branch_id ON "${schemaName}"."return_vouchers"(branch_id)`,
+      `CREATE INDEX IF NOT EXISTS idx_return_vouchers_token ON "${schemaName}"."return_vouchers"(token)`,
       `CREATE TABLE IF NOT EXISTS "${schemaName}"."payments" (
         id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
         sale_id UUID REFERENCES "${schemaName}"."sales"(id),
@@ -520,9 +575,13 @@ export class TenantService {
         account_type VARCHAR(20) NOT NULL,
         account_key VARCHAR(50) NOT NULL,
         is_system BOOLEAN DEFAULT TRUE,
+        allow_reconciliation BOOLEAN NOT NULL DEFAULT FALSE,
+        active BOOLEAN NOT NULL DEFAULT TRUE,
+        description TEXT,
         payment_method_key VARCHAR(50),
         parent_id UUID REFERENCES "${schemaName}"."chart_of_accounts"(id),
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
         UNIQUE(branch_id, account_key)
       )`,
       `CREATE UNIQUE INDEX IF NOT EXISTS chart_of_accounts_branch_payment_key_uq ON "${schemaName}"."chart_of_accounts"(branch_id, payment_method_key) WHERE payment_method_key IS NOT NULL`,
@@ -600,9 +659,29 @@ export class TenantService {
         ('delete_product'),
         ('view_reports'),
         ('manage_users'),
+        ('import_products'),
+        ('import_opening_stock'),
+        ('view_import_center'),
         ('run_consolidation'),
         ('reverse_consolidation'),
-        ('view_consolidation_history')
+        ('view_consolidation_history'),
+        ('manage_accounting_configuration'),
+        ('manage_pricing'),
+        ('manage_price_groups'),
+        ('manage_offers'),
+        ('view_transaction_register'),
+        ('view_customer_credit'),
+        ('create_customer_credit_sale'),
+        ('record_customer_repayment'),
+        ('override_credit_limit'),
+        ('delete_supplier'),
+        ('delete_customer'),
+        ('delete_purchase'),
+        ('post_journal'),
+        ('reverse_journal'),
+        ('close_period'),
+        ('reopen_period'),
+        ('change_lock_date')
        ON CONFLICT (name) DO NOTHING`,
       `INSERT INTO "${schemaName}"."role_permissions" (role_id, permission_id)
         SELECT r.id, p.id
@@ -669,6 +748,188 @@ export class TenantService {
     }
   }
 
+  async getTenantSchemaHealth(schemaName: string): Promise<TenantSchemaHealth> {
+    const requiredTables = [
+      'products',
+      'branches',
+      'tenant_settings',
+      'import_jobs',
+      'import_job_rows',
+      'opening_stock_entries',
+      'suppliers',
+      'product_suppliers',
+      'uoms',
+      'product_uoms',
+      'product_uom_prices',
+      'product_uom_barcodes',
+      'product_supplier_uom_costs',
+      'supplier_price_history',
+      'price_groups',
+      'product_price_group_prices',
+      'product_price_history',
+      'offer_lists',
+      'offer_rules',
+      'offer_redemptions',
+    ];
+    const requiredColumns = [
+      { table: 'products', column: 'item_no' },
+      { table: 'branches', column: 'code' },
+      { table: 'suppliers', column: 'supplier_type' },
+      { table: 'suppliers', column: 'country' },
+      { table: 'suppliers', column: 'city' },
+      { table: 'suppliers', column: 'active' },
+      { table: 'suppliers', column: 'updated_at' },
+      { table: 'product_suppliers', column: 'product_id' },
+      { table: 'product_suppliers', column: 'supplier_id' },
+      { table: 'product_suppliers', column: 'is_preferred' },
+      { table: 'product_suppliers', column: 'last_cost_price' },
+      { table: 'import_jobs', column: 'reversed_at' },
+      { table: 'import_jobs', column: 'reversed_by' },
+      { table: 'import_job_rows', column: 'resolved_batch_id' },
+      { table: 'import_job_rows', column: 'opening_stock_record_id' },
+      { table: 'opening_stock_entries', column: 'reversed_at' },
+      { table: 'opening_stock_entries', column: 'reversal_journal_entry_id' },
+      { table: 'product_uoms', column: 'conversion_factor_to_base' },
+      { table: 'product_uoms', column: 'is_base' },
+      { table: 'product_uoms', column: 'is_purchase_default' },
+      { table: 'product_uoms', column: 'is_sales_default' },
+      { table: 'product_uoms', column: 'is_pos_default' },
+      { table: 'product_uom_prices', column: 'initial_cost_price' },
+      { table: 'product_uom_prices', column: 'last_purchase_cost' },
+      { table: 'product_uom_prices', column: 'last_purchase_at' },
+      { table: 'product_supplier_uom_costs', column: 'current_cost_price' },
+      { table: 'supplier_price_history', column: 'new_cost_price' },
+      { table: 'purchase_items', column: 'uom_id' },
+      { table: 'purchase_items', column: 'conversion_factor_snapshot' },
+      { table: 'purchase_items', column: 'base_quantity' },
+      { table: 'purchase_items', column: 'base_unit_cost' },
+      { table: 'purchase_items', column: 'update_selling_price' },
+      { table: 'sale_items', column: 'uom_id' },
+      { table: 'sale_items', column: 'entered_quantity' },
+      { table: 'sale_items', column: 'conversion_factor_snapshot' },
+      { table: 'sale_items', column: 'base_quantity' },
+      { table: 'sale_items', column: 'price_group_id' },
+      { table: 'sale_items', column: 'offer_id' },
+      { table: 'sale_items', column: 'line_discount' },
+      { table: 'sale_items', column: 'discount_source' },
+      { table: 'return_vouchers', column: 'uom_id' },
+      { table: 'return_vouchers', column: 'base_quantity' },
+      { table: 'sale_return_items', column: 'uom_id' },
+      { table: 'sale_return_items', column: 'base_quantity' },
+      { table: 'price_groups', column: 'code' },
+      { table: 'product_price_group_prices', column: 'price_group_id' },
+      { table: 'product_price_history', column: 'new_selling_price' },
+      { table: 'offer_lists', column: 'priority' },
+      { table: 'offer_rules', column: 'product_id' },
+      { table: 'offer_redemptions', column: 'discount_amount' },
+    ];
+    const requiredIndexes = [
+      'products_item_no_unique',
+      'idx_products_item_no',
+      'products_barcode_unique_not_null',
+      'branches_code_unique',
+      'idx_import_jobs_type_status',
+      'idx_import_job_rows_job',
+      'idx_import_job_rows_commit',
+      'opening_stock_import_row_unique',
+      'product_suppliers_product_supplier_uq',
+      'product_suppliers_one_preferred_per_product',
+      'idx_product_suppliers_product_preferred',
+      'idx_product_suppliers_supplier_product',
+      'journal_lines_partner_account_entry_idx',
+      'journal_entries_branch_entry_created_idx',
+      'idx_purchases_supplier_branch_date',
+      'idx_purchase_items_product_purchase',
+      'uoms_code_key',
+      'product_uoms_product_uom_uq',
+      'product_uoms_one_base_per_product',
+      'product_uoms_one_purchase_default',
+      'product_uoms_one_sales_default',
+      'product_uoms_one_pos_default',
+      'idx_product_uoms_product_id',
+      'product_uom_prices_active_product_uom_uq',
+      'product_uom_barcodes_active_barcode_uq',
+      'idx_product_uom_barcodes_barcode',
+      'product_supplier_uom_costs_product_supplier_uom_uq',
+      'idx_product_supplier_uom_costs_lookup',
+      'idx_supplier_price_history_lookup',
+      'idx_return_vouchers_uom_id',
+      'idx_sale_return_items_uom_id',
+      'price_groups_code_key',
+      'price_groups_one_default',
+      'product_price_group_prices_active_uq',
+      'idx_product_price_group_prices_lookup',
+      'idx_product_price_history_product_created',
+      'offer_lists_no_key',
+      'idx_offer_lists_status_dates_priority',
+      'idx_offer_rules_product_id',
+      'idx_offer_redemptions_offer_created',
+    ];
+
+    const [tableRows, columnRows, indexRows, duplicateItemNos, duplicateBarcodes] =
+      await Promise.all([
+        this.prisma.$queryRawUnsafe<Array<{ table_name: string }>>(
+          `SELECT table_name
+           FROM information_schema.tables
+           WHERE table_schema = $1
+             AND table_name = ANY($2::text[])`,
+          schemaName,
+          requiredTables,
+        ),
+        this.prisma.$queryRawUnsafe<Array<{ table_name: string; column_name: string }>>(
+          `SELECT table_name, column_name
+           FROM information_schema.columns
+           WHERE table_schema = $1
+             AND table_name = ANY($2::text[])`,
+          schemaName,
+          [...new Set(requiredColumns.map((c) => c.table))],
+        ),
+        this.prisma.$queryRawUnsafe<Array<{ indexname: string }>>(
+          `SELECT indexname
+           FROM pg_indexes
+           WHERE schemaname = $1
+             AND indexname = ANY($2::text[])`,
+          schemaName,
+          requiredIndexes,
+        ),
+        this.duplicateColumnValues(schemaName, 'products', 'item_no'),
+        this.duplicateColumnValues(schemaName, 'products', 'barcode'),
+      ]);
+
+    const tableSet = new Set(tableRows.map((r) => r.table_name));
+    const columnSet = new Set(
+      columnRows.map((r) => `${r.table_name}.${r.column_name}`),
+    );
+    const indexSet = new Set(indexRows.map((r) => r.indexname));
+    const missingTables = requiredTables.filter((t) => !tableSet.has(t));
+    const missingColumns = requiredColumns.filter(
+      (c) => !columnSet.has(`${c.table}.${c.column}`),
+    );
+    const missingIndexes = requiredIndexes.filter((i) => !indexSet.has(i));
+
+    return {
+      schemaName,
+      checkedAt: new Date().toISOString(),
+      ok:
+        missingTables.length === 0 &&
+        missingColumns.length === 0 &&
+        missingIndexes.length === 0 &&
+        duplicateItemNos.length === 0 &&
+        duplicateBarcodes.length === 0,
+      missingTables,
+      missingColumns,
+      missingIndexes,
+      duplicateItemNos: duplicateItemNos.map((r) => ({
+        itemNo: r.value,
+        count: r.count,
+      })),
+      duplicateBarcodes: duplicateBarcodes.map((r) => ({
+        barcode: r.value,
+        count: r.count,
+      })),
+    };
+  }
+
   private async runTenantSchemaPatches(schemaName: string): Promise<void> {
     await this.ensureTenantBranchIsolationColumns(schemaName);
     await this.ensureProductCategoryColumns(schemaName);
@@ -684,6 +945,8 @@ export class TenantService {
     await this.ensureReportExportJobsRetryColumns(schemaName);
     await this.ensureChartOfAccountsIsInterbranchColumn(schemaName);
     await this.ensureChartOfAccountsInterbranchTypeColumn(schemaName);
+    await this.ensureChartOfAccountsAllowReconciliationColumn(schemaName);
+    await this.ensureChartOfAccountsCrudColumns(schemaName);
     await this.ensureBranchAccountBalanceSnapshotTable(schemaName);
     await this.ensureJournalEntriesBranchDateSourceIndex(schemaName);
     await this.ensureAuditLogHashChainColumns(schemaName);
@@ -693,8 +956,30 @@ export class TenantService {
     await this.ensureEnterpriseConsolidationTables(schemaName);
     await this.ensureConsolidationBranch(schemaName);
     await this.ensureConsolidationPermissions(schemaName);
+    await this.ensureAccountingConfigurationPermission(schemaName);
     await this.ensureAuditLogArchiveTable(schemaName);
     await this.ensureTenantPerformanceIndexes(schemaName);
+    await this.ensureProductItemNoColumn(schemaName);
+    await this.ensureProductSupplierIdColumn(schemaName);
+    await this.ensureSupplierManagementV1(schemaName);
+    await this.ensureBranchCodeColumn(schemaName);
+    await this.ensureTenantSettingsTable(schemaName);
+    await this.ensureImportJobsTables(schemaName);
+    await this.ensureOpeningStockEntriesTable(schemaName);
+    await this.ensureOpeningStockReversalColumns(schemaName);
+    await this.ensureImportJobsReversalColumns(schemaName);
+    await this.ensureImportProductsPermission(schemaName);
+    await this.ensureUomSystem(schemaName);
+    await this.ensurePricingAndOffersV1(schemaName);
+    await this.ensurePurchaseWorkflowExtensions(schemaName);
+    await this.ensureBaseUomCostConsolidation(schemaName);
+    await this.ensureSaleItemsCostSnapshotColumns(schemaName);
+    await this.ensureTransactionRegisterIndexes(schemaName);
+    await this.ensureTransactionRegisterPermission(schemaName);
+    await this.ensureCustomerCreditV1(schemaName);
+    await this.ensureRbacPhase1Permissions(schemaName);
+    await this.ensureRbacPhase2Permissions(schemaName);
+    await this.ensureRolesV2Columns(schemaName);
   }
 
   private async tenantColumnExists(
@@ -736,6 +1021,93 @@ export class TenantService {
       tableName,
     );
     return Boolean(row?.ok);
+  }
+
+  /** Keep one active product_uom_prices row per (product_id, uom_id). */
+  private async deduplicateActiveProductUomPrices(
+    schemaName: string,
+  ): Promise<void> {
+    if (!(await this.tenantTableExists(schemaName, 'product_uom_prices'))) {
+      return;
+    }
+    await this.prisma.$executeRawUnsafe(
+      `WITH ranked AS (
+         SELECT id,
+                ROW_NUMBER() OVER (
+                  PARTITION BY product_id, uom_id
+                  ORDER BY updated_at DESC NULLS LAST, created_at DESC, id DESC
+                ) AS rn
+         FROM "${schemaName}"."product_uom_prices"
+         WHERE active IS TRUE
+       )
+       UPDATE "${schemaName}"."product_uom_prices" target
+       SET active = FALSE, updated_at = CURRENT_TIMESTAMP
+       FROM ranked r
+       WHERE target.id = r.id
+         AND r.rn > 1`,
+    );
+  }
+
+  private async addForeignKeyIfMissing(
+    schemaName: string,
+    table: string,
+    constraintName: string,
+    ddl: string,
+  ): Promise<void> {
+    const esc = schemaName.replace(/"/g, '""');
+    await this.prisma.$executeRawUnsafe(
+      `DO $$
+       BEGIN
+         ALTER TABLE "${esc}"."${table}"
+           ADD CONSTRAINT "${constraintName}" ${ddl};
+       EXCEPTION
+         WHEN duplicate_object THEN NULL;
+       END $$`,
+    );
+  }
+
+  private async addCheckConstraintIfMissing(
+    schemaName: string,
+    table: string,
+    constraintName: string,
+    checkExpression: string,
+  ): Promise<void> {
+    const esc = schemaName.replace(/"/g, '""');
+    await this.prisma.$executeRawUnsafe(
+      `DO $$
+       BEGIN
+         ALTER TABLE "${esc}"."${table}"
+           ADD CONSTRAINT "${constraintName}"
+           CHECK (${checkExpression});
+       EXCEPTION
+         WHEN duplicate_object THEN NULL;
+       END $$`,
+    );
+  }
+
+  private async duplicateColumnValues(
+    schemaName: string,
+    tableName: string,
+    columnName: string,
+    limit = 20,
+  ): Promise<Array<{ value: string; count: number }>> {
+    if (!(await this.tenantTableExists(schemaName, tableName))) return [];
+    if (!(await this.tenantColumnExists(schemaName, tableName, columnName))) {
+      return [];
+    }
+    const rows = await this.prisma.$queryRawUnsafe<
+      Array<{ value: string; count: number }>
+    >(
+      `SELECT ${columnName}::text AS value, COUNT(*)::int AS count
+       FROM "${schemaName}"."${tableName}"
+       WHERE ${columnName} IS NOT NULL AND TRIM(${columnName}::text) <> ''
+       GROUP BY ${columnName}
+       HAVING COUNT(*) > 1
+       ORDER BY COUNT(*) DESC, ${columnName}::text ASC
+       LIMIT $1`,
+      limit,
+    );
+    return rows;
   }
 
   /** Mirrors tenant_template product category columns on live snake_case schemas. */
@@ -884,9 +1256,11 @@ export class TenantService {
       `CREATE INDEX IF NOT EXISTS idx_purchases_supplier_id ON "${schemaName}"."purchases"(supplier_id)`,
       `CREATE INDEX IF NOT EXISTS idx_purchases_invoice_number ON "${schemaName}"."purchases"(invoice_number)`,
       `CREATE INDEX IF NOT EXISTS idx_purchases_branch_created ON "${schemaName}"."purchases"(branch_id, created_at DESC)`,
+      `CREATE INDEX IF NOT EXISTS idx_purchases_supplier_branch_date ON "${schemaName}"."purchases"(supplier_id, branch_id, purchase_date DESC, created_at DESC)`,
       `CREATE INDEX IF NOT EXISTS idx_purchase_items_purchase_id ON "${schemaName}"."purchase_items"(purchase_id)`,
       `CREATE INDEX IF NOT EXISTS idx_purchase_items_product_id ON "${schemaName}"."purchase_items"(product_id)`,
       `CREATE INDEX IF NOT EXISTS idx_purchase_items_branch_id ON "${schemaName}"."purchase_items"(branch_id)`,
+      `CREATE INDEX IF NOT EXISTS idx_purchase_items_product_purchase ON "${schemaName}"."purchase_items"(product_id, purchase_id)`,
       `CREATE INDEX IF NOT EXISTS idx_sale_items_sale_id ON "${schemaName}"."sale_items"(sale_id)`,
       `CREATE INDEX IF NOT EXISTS idx_sale_items_product_id ON "${schemaName}"."sale_items"(product_id)`,
       `CREATE INDEX IF NOT EXISTS idx_sale_items_branch_id ON "${schemaName}"."sale_items"(branch_id)`,
@@ -1168,23 +1542,17 @@ export class TenantService {
       `ALTER TABLE "${schemaName}"."entity_ownership"
        DROP CONSTRAINT IF EXISTS entity_ownership_100_only`,
     );
-    await this.prisma.$executeRawUnsafe(
-      `ALTER TABLE "${schemaName}"."entity_ownership"
-       DROP CONSTRAINT IF EXISTS entity_ownership_percent_range`,
+    await this.addCheckConstraintIfMissing(
+      schemaName,
+      'entity_ownership',
+      'entity_ownership_percent_range',
+      'ownership_percent > 0 AND ownership_percent <= 100.00',
     );
-    await this.prisma.$executeRawUnsafe(
-      `ALTER TABLE "${schemaName}"."entity_ownership"
-       ADD CONSTRAINT entity_ownership_percent_range
-       CHECK (ownership_percent > 0 AND ownership_percent <= 100.00)`,
-    );
-    await this.prisma.$executeRawUnsafe(
-      `ALTER TABLE "${schemaName}"."entity_ownership"
-       DROP CONSTRAINT IF EXISTS entity_ownership_effective_range`,
-    );
-    await this.prisma.$executeRawUnsafe(
-      `ALTER TABLE "${schemaName}"."entity_ownership"
-       ADD CONSTRAINT entity_ownership_effective_range
-       CHECK (effective_to IS NULL OR effective_to >= effective_from)`,
+    await this.addCheckConstraintIfMissing(
+      schemaName,
+      'entity_ownership',
+      'entity_ownership_effective_range',
+      'effective_to IS NULL OR effective_to >= effective_from',
     );
     await this.prisma.$executeRawUnsafe(
       `CREATE INDEX IF NOT EXISTS idx_entity_ownership_parent
@@ -1365,6 +1733,25 @@ export class TenantService {
     );
   }
 
+  private async ensureAccountingConfigurationPermission(
+    schemaName: string,
+  ): Promise<void> {
+    await this.prisma.$executeRawUnsafe(
+      `INSERT INTO "${schemaName}"."permissions" (name)
+       VALUES ('manage_accounting_configuration')
+       ON CONFLICT (name) DO NOTHING`,
+    );
+    await this.prisma.$executeRawUnsafe(
+      `INSERT INTO "${schemaName}"."role_permissions" (role_id, permission_id)
+       SELECT r.id, p.id
+       FROM "${schemaName}"."roles" r
+       INNER JOIN "${schemaName}"."permissions" p
+         ON p.name = 'manage_accounting_configuration'
+       WHERE r.name IN ('admin', 'owner', 'finance_manager')
+       ON CONFLICT (role_id, permission_id) DO NOTHING`,
+    );
+  }
+
   /** Inter-company GL flag on chart rows (consolidation / reports). */
   private async ensureChartOfAccountsIsInterbranchColumn(
     schemaName: string,
@@ -1399,6 +1786,66 @@ export class TenantService {
        SET interbranch_type = 'payable'
        WHERE account_key = 'due_to_branch'`,
     );
+  }
+
+  private async ensureChartOfAccountsAllowReconciliationColumn(
+    schemaName: string,
+  ): Promise<void> {
+    const alreadyExists = await this.tenantColumnExists(
+      schemaName,
+      'chart_of_accounts',
+      'allow_reconciliation',
+    );
+    await this.prisma.$executeRawUnsafe(
+      `ALTER TABLE "${schemaName}"."chart_of_accounts" ADD COLUMN IF NOT EXISTS allow_reconciliation BOOLEAN NOT NULL DEFAULT FALSE`,
+    );
+    if (alreadyExists) {
+      return;
+    }
+    await this.prisma.$executeRawUnsafe(
+      `UPDATE "${schemaName}"."chart_of_accounts"
+       SET allow_reconciliation = TRUE
+       WHERE account_key IN (
+         'accounts_receivable',
+         'accounts_payable',
+         'receivables',
+         'payables',
+         'customer_control',
+         'supplier_control',
+         'bank',
+         'bank_account',
+         'checking',
+         'checking_account',
+         'savings',
+         'savings_account',
+         'cash',
+         'cash_account',
+         'card_clearing',
+         'wallet_clearing',
+         'payment_clearing',
+         'cash_clearing',
+         'due_from_branch',
+         'due_to_branch'
+       )`,
+    );
+  }
+
+  private async ensureChartOfAccountsCrudColumns(
+    schemaName: string,
+  ): Promise<void> {
+    if (!(await this.tenantTableExists(schemaName, 'chart_of_accounts'))) {
+      return;
+    }
+    const alters = [
+      `ADD COLUMN IF NOT EXISTS active BOOLEAN NOT NULL DEFAULT TRUE`,
+      `ADD COLUMN IF NOT EXISTS description TEXT`,
+      `ADD COLUMN IF NOT EXISTS updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP`,
+    ];
+    for (const alter of alters) {
+      await this.prisma.$executeRawUnsafe(
+        `ALTER TABLE "${schemaName}"."chart_of_accounts" ${alter}`,
+      );
+    }
   }
 
   /**
@@ -1613,7 +2060,10 @@ export class TenantService {
         id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
         transfer_id UUID NOT NULL REFERENCES "${schemaName}"."stock_transfers"(id) ON DELETE CASCADE,
         product_id UUID NOT NULL REFERENCES "${schemaName}"."products"(id),
+        uom_id UUID,
         quantity INTEGER NOT NULL,
+        conversion_factor_snapshot NUMERIC(18,6) NOT NULL DEFAULT 1,
+        base_quantity INTEGER NOT NULL DEFAULT 0,
         received_quantity INTEGER,
         unit_cost_snapshot NUMERIC(14,4),
         line_cost_snapshot NUMERIC(14,2),
@@ -1857,6 +2307,21 @@ export class TenantService {
 
     const itemCols: Array<{ column: string; alterSql: string }> = [
       {
+        column: 'uom_id',
+        alterSql: `ALTER TABLE "${schemaName}"."stock_transfer_items"
+          ADD COLUMN uom_id UUID`,
+      },
+      {
+        column: 'conversion_factor_snapshot',
+        alterSql: `ALTER TABLE "${schemaName}"."stock_transfer_items"
+          ADD COLUMN conversion_factor_snapshot NUMERIC(18,6) NOT NULL DEFAULT 1`,
+      },
+      {
+        column: 'base_quantity',
+        alterSql: `ALTER TABLE "${schemaName}"."stock_transfer_items"
+          ADD COLUMN base_quantity INTEGER NOT NULL DEFAULT 0`,
+      },
+      {
         column: 'unit_cost_snapshot',
         alterSql: `ALTER TABLE "${schemaName}"."stock_transfer_items"
           ADD COLUMN unit_cost_snapshot NUMERIC(14,4)`,
@@ -1882,6 +2347,15 @@ export class TenantService {
         await this.prisma.$executeRawUnsafe(alterSql);
       }
     }
+    await this.prisma.$executeRawUnsafe(
+      `UPDATE "${schemaName}"."stock_transfer_items"
+       SET base_quantity = COALESCE(quantity, 0)
+       WHERE COALESCE(base_quantity, 0) = 0`,
+    );
+    await this.prisma.$executeRawUnsafe(
+      `CREATE INDEX IF NOT EXISTS idx_stock_transfer_items_uom
+       ON "${schemaName}"."stock_transfer_items"(uom_id)`,
+    );
 
     const eventCols: Array<{ column: string; alterSql: string }> = [
       {
@@ -2064,10 +2538,28 @@ export class TenantService {
       `CREATE TABLE IF NOT EXISTS "${schemaName}"."suppliers" (
         id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
         name VARCHAR(255),
+        supplier_type VARCHAR(20) NOT NULL DEFAULT 'local',
+        country VARCHAR(100),
+        city VARCHAR(100),
         phone VARCHAR(50),
         email VARCHAR(255),
         address TEXT,
-        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        active BOOLEAN NOT NULL DEFAULT TRUE,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        CONSTRAINT suppliers_supplier_type_check CHECK (supplier_type IN ('local', 'international'))
+      )`,
+    );
+    await this.prisma.$executeRawUnsafe(
+      `CREATE TABLE IF NOT EXISTS "${schemaName}"."product_suppliers" (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        product_id UUID NOT NULL REFERENCES "${schemaName}"."products"(id) ON DELETE CASCADE,
+        supplier_id UUID NOT NULL REFERENCES "${schemaName}"."suppliers"(id) ON DELETE CASCADE,
+        is_preferred BOOLEAN NOT NULL DEFAULT FALSE,
+        last_cost_price NUMERIC(10,2),
+        supplier_item_code VARCHAR(100),
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
       )`,
     );
     await this.prisma.$executeRawUnsafe(
@@ -2202,24 +2694,18 @@ export class TenantService {
         CONSTRAINT "pos_sessions_pkey" PRIMARY KEY ("id")
       )`,
     );
-    await this.prisma.$executeRawUnsafe(
-      `ALTER TABLE "${esc}"."pos_sessions"
-       DROP CONSTRAINT IF EXISTS "pos_sessions_branch_id_fkey"`,
-    );
-    await this.prisma.$executeRawUnsafe(
-      `ALTER TABLE "${esc}"."pos_sessions"
-       ADD CONSTRAINT "pos_sessions_branch_id_fkey"
-       FOREIGN KEY ("branch_id") REFERENCES "${esc}"."branches"("id")
+    await this.addForeignKeyIfMissing(
+      schemaName,
+      'pos_sessions',
+      'pos_sessions_branch_id_fkey',
+      `FOREIGN KEY ("branch_id") REFERENCES "${esc}"."branches"("id")
        ON DELETE CASCADE ON UPDATE CASCADE`,
     );
-    await this.prisma.$executeRawUnsafe(
-      `ALTER TABLE "${esc}"."pos_sessions"
-       DROP CONSTRAINT IF EXISTS "pos_sessions_staff_user_id_fkey"`,
-    );
-    await this.prisma.$executeRawUnsafe(
-      `ALTER TABLE "${esc}"."pos_sessions"
-       ADD CONSTRAINT "pos_sessions_staff_user_id_fkey"
-       FOREIGN KEY ("staff_user_id") REFERENCES "${esc}"."users"("id")
+    await this.addForeignKeyIfMissing(
+      schemaName,
+      'pos_sessions',
+      'pos_sessions_staff_user_id_fkey',
+      `FOREIGN KEY ("staff_user_id") REFERENCES "${esc}"."users"("id")
        ON DELETE SET NULL ON UPDATE CASCADE`,
     );
     await this.prisma.$executeRawUnsafe(
@@ -2247,24 +2733,18 @@ export class TenantService {
         CONSTRAINT "pos_statements_pkey" PRIMARY KEY ("id")
       )`,
     );
-    await this.prisma.$executeRawUnsafe(
-      `ALTER TABLE "${esc}"."pos_statements"
-       DROP CONSTRAINT IF EXISTS "pos_statements_session_id_fkey"`,
-    );
-    await this.prisma.$executeRawUnsafe(
-      `ALTER TABLE "${esc}"."pos_statements"
-       ADD CONSTRAINT "pos_statements_session_id_fkey"
-       FOREIGN KEY ("session_id") REFERENCES "${esc}"."pos_sessions"("id")
+    await this.addForeignKeyIfMissing(
+      schemaName,
+      'pos_statements',
+      'pos_statements_session_id_fkey',
+      `FOREIGN KEY ("session_id") REFERENCES "${esc}"."pos_sessions"("id")
        ON DELETE CASCADE ON UPDATE CASCADE`,
     );
-    await this.prisma.$executeRawUnsafe(
-      `ALTER TABLE "${esc}"."pos_statements"
-       DROP CONSTRAINT IF EXISTS "pos_statements_journal_entry_id_fkey"`,
-    );
-    await this.prisma.$executeRawUnsafe(
-      `ALTER TABLE "${esc}"."pos_statements"
-       ADD CONSTRAINT "pos_statements_journal_entry_id_fkey"
-       FOREIGN KEY ("journal_entry_id") REFERENCES "${esc}"."journal_entries"("id")
+    await this.addForeignKeyIfMissing(
+      schemaName,
+      'pos_statements',
+      'pos_statements_journal_entry_id_fkey',
+      `FOREIGN KEY ("journal_entry_id") REFERENCES "${esc}"."journal_entries"("id")
        ON DELETE SET NULL ON UPDATE CASCADE`,
     );
     await this.prisma.$executeRawUnsafe(
@@ -2289,28 +2769,22 @@ export class TenantService {
         CONSTRAINT "pos_statement_lines_statement_bucket_unique" UNIQUE ("statement_id", "payment_bucket")
       )`,
     );
-    await this.prisma.$executeRawUnsafe(
-      `ALTER TABLE "${esc}"."pos_statement_lines"
-       DROP CONSTRAINT IF EXISTS "pos_statement_lines_statement_id_fkey"`,
-    );
-    await this.prisma.$executeRawUnsafe(
-      `ALTER TABLE "${esc}"."pos_statement_lines"
-       ADD CONSTRAINT "pos_statement_lines_statement_id_fkey"
-       FOREIGN KEY ("statement_id") REFERENCES "${esc}"."pos_statements"("id")
+    await this.addForeignKeyIfMissing(
+      schemaName,
+      'pos_statement_lines',
+      'pos_statement_lines_statement_id_fkey',
+      `FOREIGN KEY ("statement_id") REFERENCES "${esc}"."pos_statements"("id")
        ON DELETE CASCADE ON UPDATE CASCADE`,
     );
 
     await this.prisma.$executeRawUnsafe(
       `ALTER TABLE "${esc}"."sales" ADD COLUMN IF NOT EXISTS "pos_session_id" UUID`,
     );
-    await this.prisma.$executeRawUnsafe(
-      `ALTER TABLE "${esc}"."sales"
-       DROP CONSTRAINT IF EXISTS "sales_pos_session_id_fkey"`,
-    );
-    await this.prisma.$executeRawUnsafe(
-      `ALTER TABLE "${esc}"."sales"
-       ADD CONSTRAINT "sales_pos_session_id_fkey"
-       FOREIGN KEY ("pos_session_id") REFERENCES "${esc}"."pos_sessions"("id")
+    await this.addForeignKeyIfMissing(
+      schemaName,
+      'sales',
+      'sales_pos_session_id_fkey',
+      `FOREIGN KEY ("pos_session_id") REFERENCES "${esc}"."pos_sessions"("id")
        ON DELETE SET NULL ON UPDATE CASCADE`,
     );
     await this.prisma.$executeRawUnsafe(
@@ -2498,6 +2972,7 @@ export class TenantService {
         quantity INTEGER NOT NULL
       )`,
     );
+    await this.ensureReturnVouchersTable(schemaName);
     await this.ensureAccountingSchema(schemaName);
   }
 
@@ -2514,9 +2989,13 @@ export class TenantService {
         account_type VARCHAR(20) NOT NULL,
         account_key VARCHAR(50) NOT NULL,
         is_system BOOLEAN DEFAULT TRUE,
+        allow_reconciliation BOOLEAN NOT NULL DEFAULT FALSE,
+        active BOOLEAN NOT NULL DEFAULT TRUE,
+        description TEXT,
         payment_method_key VARCHAR(50),
         parent_id UUID REFERENCES "${schemaName}"."chart_of_accounts"(id),
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
         UNIQUE(branch_id, account_key)
       )`,
     );
@@ -2681,6 +3160,26 @@ export class TenantService {
         column: 'on_account',
         alterSql: `ALTER TABLE "${schemaName}"."sales"
           ADD COLUMN on_account BOOLEAN NOT NULL DEFAULT FALSE`,
+      },
+      {
+        column: 'credit_override_manager_id',
+        alterSql: `ALTER TABLE "${schemaName}"."sales"
+          ADD COLUMN credit_override_manager_id UUID REFERENCES "${schemaName}"."users"(id)`,
+      },
+      {
+        column: 'credit_override_reason',
+        alterSql: `ALTER TABLE "${schemaName}"."sales"
+          ADD COLUMN credit_override_reason TEXT`,
+      },
+      {
+        column: 'credit_override_at',
+        alterSql: `ALTER TABLE "${schemaName}"."sales"
+          ADD COLUMN credit_override_at TIMESTAMP`,
+      },
+      {
+        column: 'due_date',
+        alterSql: `ALTER TABLE "${schemaName}"."sales"
+          ADD COLUMN due_date DATE`,
       },
     ];
     for (const { column, alterSql } of salesCols) {
@@ -2937,6 +3436,1923 @@ export class TenantService {
     await this.prisma.$executeRawUnsafe(
       `CREATE INDEX IF NOT EXISTS idx_report_snapshots_lookup
        ON "${schemaName}"."report_snapshots"(report_type, scope_hash, period_key, snapshot_date DESC)`,
+    );
+  }
+
+  /** products.item_no — primary business identifier for imports. */
+  private async ensureProductItemNoColumn(schemaName: string): Promise<void> {
+    if (!(await this.tenantTableExists(schemaName, 'products'))) return;
+    if (!(await this.tenantColumnExists(schemaName, 'products', 'item_no'))) {
+      await this.prisma.$executeRawUnsafe(
+        `ALTER TABLE "${schemaName}"."products"
+         ADD COLUMN IF NOT EXISTS item_no VARCHAR(50)`,
+      );
+    }
+    const duplicates = await this.duplicateColumnValues(
+      schemaName,
+      'products',
+      'item_no',
+      5,
+    );
+    if (duplicates.length) {
+      this.logger.warn(
+        `Skipping ${schemaName}.products_item_no_unique: duplicate item_no values exist (${duplicates
+          .map((d) => `${d.value} x${d.count}`)
+          .join(', ')})`,
+      );
+    } else {
+      await this.prisma.$executeRawUnsafe(
+        `CREATE UNIQUE INDEX IF NOT EXISTS products_item_no_unique
+         ON "${schemaName}"."products"(item_no)
+         WHERE item_no IS NOT NULL AND TRIM(item_no) <> ''`,
+      );
+    }
+    await this.prisma.$executeRawUnsafe(
+      `CREATE INDEX IF NOT EXISTS idx_products_item_no
+       ON "${schemaName}"."products"(item_no)`,
+    );
+  }
+
+  /** products.supplier_id — default vendor from catalog / Excel import. */
+  private async ensureProductSupplierIdColumn(schemaName: string): Promise<void> {
+    if (!(await this.tenantTableExists(schemaName, 'products'))) return;
+    if (!(await this.tenantColumnExists(schemaName, 'products', 'supplier_id'))) {
+      await this.prisma.$executeRawUnsafe(
+        `ALTER TABLE "${schemaName}"."products"
+         ADD COLUMN IF NOT EXISTS supplier_id UUID REFERENCES "${schemaName}"."suppliers"(id) ON DELETE SET NULL`,
+      );
+    }
+    await this.prisma.$executeRawUnsafe(
+      `CREATE INDEX IF NOT EXISTS idx_products_supplier_id
+       ON "${schemaName}"."products"(supplier_id)`,
+    );
+  }
+
+  /** Supplier metadata and product-supplier join table for purchasing V1. */
+  private async ensureSupplierManagementV1(schemaName: string): Promise<void> {
+    const hasSuppliers = await this.tenantTableExists(schemaName, 'suppliers');
+    const hasProducts = await this.tenantTableExists(schemaName, 'products');
+    if (!hasSuppliers || !hasProducts) return;
+
+    await this.prisma.$executeRawUnsafe(
+      `ALTER TABLE "${schemaName}"."suppliers"
+       ADD COLUMN IF NOT EXISTS supplier_type VARCHAR(20) NOT NULL DEFAULT 'local',
+       ADD COLUMN IF NOT EXISTS country VARCHAR(100),
+       ADD COLUMN IF NOT EXISTS city VARCHAR(100),
+       ADD COLUMN IF NOT EXISTS active BOOLEAN NOT NULL DEFAULT TRUE,
+       ADD COLUMN IF NOT EXISTS updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP`,
+    );
+    await this.prisma.$executeRawUnsafe(
+      `DO $$
+       BEGIN
+         IF NOT EXISTS (
+           SELECT 1
+           FROM pg_constraint
+           WHERE conname = 'suppliers_supplier_type_check'
+             AND connamespace = '"${schemaName}"'::regnamespace
+         ) THEN
+           ALTER TABLE "${schemaName}"."suppliers"
+             ADD CONSTRAINT suppliers_supplier_type_check
+             CHECK (supplier_type IN ('local', 'international'));
+         END IF;
+       END $$`,
+    );
+    await this.prisma.$executeRawUnsafe(
+      `CREATE INDEX IF NOT EXISTS idx_suppliers_type_active_name
+       ON "${schemaName}"."suppliers"(supplier_type, active, name)`,
+    );
+    await this.prisma.$executeRawUnsafe(
+      `CREATE INDEX IF NOT EXISTS idx_suppliers_active_name
+       ON "${schemaName}"."suppliers"(active, name)`,
+    );
+
+    await this.prisma.$executeRawUnsafe(
+      `CREATE TABLE IF NOT EXISTS "${schemaName}"."product_suppliers" (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        product_id UUID NOT NULL REFERENCES "${schemaName}"."products"(id) ON DELETE CASCADE,
+        supplier_id UUID NOT NULL REFERENCES "${schemaName}"."suppliers"(id) ON DELETE CASCADE,
+        is_preferred BOOLEAN NOT NULL DEFAULT FALSE,
+        last_cost_price NUMERIC(10,2),
+        supplier_item_code VARCHAR(100),
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      )`,
+    );
+    await this.prisma.$executeRawUnsafe(
+      `WITH ranked AS (
+         SELECT id,
+                ROW_NUMBER() OVER (
+                  PARTITION BY product_id
+                  ORDER BY updated_at DESC NULLS LAST, created_at DESC NULLS LAST, id DESC
+                ) AS rn
+         FROM "${schemaName}"."product_suppliers"
+         WHERE is_preferred
+       )
+       UPDATE "${schemaName}"."product_suppliers" ps
+       SET is_preferred = FALSE,
+           updated_at = CURRENT_TIMESTAMP
+       FROM ranked r
+       WHERE ps.id = r.id
+         AND r.rn > 1`,
+    );
+    await this.prisma.$executeRawUnsafe(
+      `CREATE UNIQUE INDEX IF NOT EXISTS product_suppliers_product_supplier_uq
+       ON "${schemaName}"."product_suppliers"(product_id, supplier_id)`,
+    );
+    await this.prisma.$executeRawUnsafe(
+      `CREATE UNIQUE INDEX IF NOT EXISTS product_suppliers_one_preferred_per_product
+       ON "${schemaName}"."product_suppliers"(product_id)
+       WHERE is_preferred`,
+    );
+    await this.prisma.$executeRawUnsafe(
+      `CREATE INDEX IF NOT EXISTS idx_product_suppliers_product_preferred
+       ON "${schemaName}"."product_suppliers"(product_id, is_preferred)`,
+    );
+    await this.prisma.$executeRawUnsafe(
+      `CREATE INDEX IF NOT EXISTS idx_product_suppliers_supplier_product
+       ON "${schemaName}"."product_suppliers"(supplier_id, product_id)`,
+    );
+
+    if (await this.tenantColumnExists(schemaName, 'products', 'supplier_id')) {
+      await this.prisma.$executeRawUnsafe(
+        `INSERT INTO "${schemaName}"."product_suppliers" AS ps (
+           product_id, supplier_id, is_preferred, last_cost_price
+         )
+         SELECT
+           p.id,
+           p.supplier_id,
+           NOT EXISTS (
+             SELECT 1
+             FROM "${schemaName}"."product_suppliers" existing
+             WHERE existing.product_id = p.id
+               AND existing.is_preferred
+           ),
+           NULL
+         FROM "${schemaName}"."products" p
+         WHERE p.supplier_id IS NOT NULL
+         ON CONFLICT (product_id, supplier_id) DO UPDATE
+           SET is_preferred = CASE
+                 WHEN ps.is_preferred THEN TRUE
+                 WHEN NOT EXISTS (
+                   SELECT 1
+                   FROM "${schemaName}"."product_suppliers" existing
+                   WHERE existing.product_id = EXCLUDED.product_id
+                     AND existing.is_preferred
+                     AND existing.supplier_id <> EXCLUDED.supplier_id
+                 ) THEN TRUE
+                 ELSE ps.is_preferred
+               END,
+               updated_at = CURRENT_TIMESTAMP`,
+      );
+    }
+
+    const hasPurchases = await this.tenantTableExists(schemaName, 'purchases');
+    const hasPurchaseItems = await this.tenantTableExists(
+      schemaName,
+      'purchase_items',
+    );
+    if (hasPurchases && hasPurchaseItems) {
+      await this.prisma.$executeRawUnsafe(
+        `WITH latest_purchase_cost AS (
+           SELECT DISTINCT ON (pi.product_id, p.supplier_id)
+             pi.product_id,
+             p.supplier_id,
+             pi.cost_price
+           FROM "${schemaName}"."purchase_items" pi
+           JOIN "${schemaName}"."purchases" p ON p.id = pi.purchase_id
+           WHERE pi.product_id IS NOT NULL
+             AND p.supplier_id IS NOT NULL
+           ORDER BY
+             pi.product_id,
+             p.supplier_id,
+             p.purchase_date DESC NULLS LAST,
+             p.created_at DESC NULLS LAST,
+             pi.id DESC
+         )
+         INSERT INTO "${schemaName}"."product_suppliers" AS ps (
+           product_id, supplier_id, is_preferred, last_cost_price
+         )
+         SELECT product_id, supplier_id, FALSE, cost_price
+         FROM latest_purchase_cost
+         ON CONFLICT (product_id, supplier_id) DO UPDATE
+           SET last_cost_price = COALESCE(EXCLUDED.last_cost_price, ps.last_cost_price),
+               updated_at = CURRENT_TIMESTAMP`,
+      );
+      await this.prisma.$executeRawUnsafe(
+        `WITH latest_supplier_per_product AS (
+           SELECT DISTINCT ON (pi.product_id)
+             pi.product_id,
+             p.supplier_id
+           FROM "${schemaName}"."purchase_items" pi
+           JOIN "${schemaName}"."purchases" p ON p.id = pi.purchase_id
+           WHERE pi.product_id IS NOT NULL
+             AND p.supplier_id IS NOT NULL
+           ORDER BY
+             pi.product_id,
+             p.purchase_date DESC NULLS LAST,
+             p.created_at DESC NULLS LAST,
+             pi.id DESC
+         )
+         UPDATE "${schemaName}"."product_suppliers" ps
+         SET is_preferred = TRUE,
+             updated_at = CURRENT_TIMESTAMP
+         FROM latest_supplier_per_product latest
+         WHERE ps.product_id = latest.product_id
+           AND ps.supplier_id = latest.supplier_id
+           AND NOT EXISTS (
+             SELECT 1
+             FROM "${schemaName}"."product_suppliers" existing
+             WHERE existing.product_id = latest.product_id
+               AND existing.is_preferred
+           )`,
+      );
+      await this.prisma.$executeRawUnsafe(
+        `CREATE INDEX IF NOT EXISTS idx_purchases_supplier_branch_date
+         ON "${schemaName}"."purchases"(supplier_id, branch_id, purchase_date DESC, created_at DESC)`,
+      );
+      await this.prisma.$executeRawUnsafe(
+        `CREATE INDEX IF NOT EXISTS idx_purchase_items_product_purchase
+         ON "${schemaName}"."purchase_items"(product_id, purchase_id)`,
+      );
+    }
+
+    const hasJournalPartner =
+      (await this.tenantTableExists(schemaName, 'journal_lines')) &&
+      (await this.tenantColumnExists(schemaName, 'journal_lines', 'partner_kind')) &&
+      (await this.tenantColumnExists(schemaName, 'journal_lines', 'partner_id'));
+    if (hasJournalPartner) {
+      await this.prisma.$executeRawUnsafe(
+        `CREATE INDEX IF NOT EXISTS journal_lines_partner_account_entry_idx
+         ON "${schemaName}"."journal_lines"(partner_kind, partner_id, account_id, journal_entry_id)`,
+      );
+    }
+    if (await this.tenantTableExists(schemaName, 'journal_entries')) {
+      await this.prisma.$executeRawUnsafe(
+        `CREATE INDEX IF NOT EXISTS journal_entries_branch_entry_created_idx
+         ON "${schemaName}"."journal_entries"(branch_id, entry_date, created_at, id)`,
+      );
+    }
+  }
+
+  /** branches.code - short code for Excel import branch_code column. */
+  private async ensureBranchCodeColumn(schemaName: string): Promise<void> {
+    if (!(await this.tenantTableExists(schemaName, 'branches'))) return;
+    if (!(await this.tenantColumnExists(schemaName, 'branches', 'code'))) {
+      await this.prisma.$executeRawUnsafe(
+        `ALTER TABLE "${schemaName}"."branches"
+         ADD COLUMN IF NOT EXISTS code VARCHAR(32)`,
+      );
+    }
+    await this.prisma.$executeRawUnsafe(
+      `CREATE UNIQUE INDEX IF NOT EXISTS branches_code_unique
+       ON "${schemaName}"."branches"(code)
+       WHERE code IS NOT NULL AND TRIM(code) <> ''`,
+    );
+    // Backfill codes from name slug for existing branches without code
+    await this.prisma.$executeRawUnsafe(
+      `UPDATE "${schemaName}"."branches"
+       SET code = UPPER(LEFT(REGEXP_REPLACE(COALESCE(name, id::text), '[^a-zA-Z0-9]', '', 'g'), 8))
+       WHERE code IS NULL OR TRIM(code) = ''`,
+    );
+  }
+
+  /** Tenant-wide settings (business type, import policies). */
+  private async ensureTenantSettingsTable(schemaName: string): Promise<void> {
+    await this.prisma.$executeRawUnsafe(
+      `CREATE TABLE IF NOT EXISTS "${schemaName}"."tenant_settings" (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        business_type VARCHAR(32) NOT NULL DEFAULT 'pharmacy',
+        import_policies JSONB NOT NULL DEFAULT '{}'::jsonb,
+        invoice_before_receive BOOLEAN NOT NULL DEFAULT FALSE,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      )`,
+    );
+    await this.prisma.$executeRawUnsafe(
+      `INSERT INTO "${schemaName}"."tenant_settings" (business_type)
+       SELECT 'pharmacy'
+      WHERE NOT EXISTS (SELECT 1 FROM "${schemaName}"."tenant_settings")`,
+    );
+  }
+
+  private async ensureUomSystem(schemaName: string): Promise<void> {
+    await this.prisma.$executeRawUnsafe(
+      `CREATE TABLE IF NOT EXISTS "${schemaName}"."uoms" (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        code VARCHAR(32) NOT NULL,
+        name VARCHAR(100) NOT NULL,
+        symbol VARCHAR(32),
+        active BOOLEAN NOT NULL DEFAULT TRUE,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      )`,
+    );
+    await this.prisma.$executeRawUnsafe(
+      `CREATE UNIQUE INDEX IF NOT EXISTS uoms_code_key
+       ON "${schemaName}"."uoms"(code)`,
+    );
+
+    await this.prisma.$executeRawUnsafe(
+      `CREATE TABLE IF NOT EXISTS "${schemaName}"."product_uoms" (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        product_id UUID NOT NULL REFERENCES "${schemaName}"."products"(id) ON DELETE CASCADE,
+        uom_id UUID NOT NULL REFERENCES "${schemaName}"."uoms"(id),
+        conversion_factor_to_base NUMERIC(18,6) NOT NULL,
+        is_base BOOLEAN NOT NULL DEFAULT FALSE,
+        is_purchase_default BOOLEAN NOT NULL DEFAULT FALSE,
+        is_sales_default BOOLEAN NOT NULL DEFAULT FALSE,
+        is_pos_default BOOLEAN NOT NULL DEFAULT FALSE,
+        is_active BOOLEAN NOT NULL DEFAULT TRUE,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        CONSTRAINT product_uoms_factor_positive CHECK (conversion_factor_to_base > 0),
+        CONSTRAINT product_uoms_base_factor_one CHECK ((NOT is_base) OR conversion_factor_to_base = 1)
+      )`,
+    );
+    await this.prisma.$executeRawUnsafe(
+      `CREATE UNIQUE INDEX IF NOT EXISTS product_uoms_product_uom_uq
+       ON "${schemaName}"."product_uoms"(product_id, uom_id)`,
+    );
+    await this.prisma.$executeRawUnsafe(
+      `CREATE UNIQUE INDEX IF NOT EXISTS product_uoms_one_base_per_product
+       ON "${schemaName}"."product_uoms"(product_id)
+       WHERE is_base IS TRUE AND is_active IS TRUE`,
+    );
+    await this.prisma.$executeRawUnsafe(
+      `CREATE UNIQUE INDEX IF NOT EXISTS product_uoms_one_purchase_default
+       ON "${schemaName}"."product_uoms"(product_id)
+       WHERE is_purchase_default IS TRUE AND is_active IS TRUE`,
+    );
+    await this.prisma.$executeRawUnsafe(
+      `CREATE UNIQUE INDEX IF NOT EXISTS product_uoms_one_sales_default
+       ON "${schemaName}"."product_uoms"(product_id)
+       WHERE is_sales_default IS TRUE AND is_active IS TRUE`,
+    );
+    await this.prisma.$executeRawUnsafe(
+      `CREATE UNIQUE INDEX IF NOT EXISTS product_uoms_one_pos_default
+       ON "${schemaName}"."product_uoms"(product_id)
+       WHERE is_pos_default IS TRUE AND is_active IS TRUE`,
+    );
+    await this.prisma.$executeRawUnsafe(
+      `CREATE INDEX IF NOT EXISTS idx_product_uoms_product_id
+       ON "${schemaName}"."product_uoms"(product_id)`,
+    );
+    await this.prisma.$executeRawUnsafe(
+      `CREATE INDEX IF NOT EXISTS idx_product_uoms_uom_id
+       ON "${schemaName}"."product_uoms"(uom_id)`,
+    );
+
+    await this.prisma.$executeRawUnsafe(
+      `CREATE TABLE IF NOT EXISTS "${schemaName}"."product_uom_prices" (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        product_id UUID NOT NULL REFERENCES "${schemaName}"."products"(id) ON DELETE CASCADE,
+        uom_id UUID NOT NULL REFERENCES "${schemaName}"."uoms"(id),
+        selling_price NUMERIC(14,2),
+        cost_price NUMERIC(14,4),
+        active BOOLEAN NOT NULL DEFAULT TRUE,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      )`,
+    );
+    await this.prisma.$executeRawUnsafe(
+      `CREATE UNIQUE INDEX IF NOT EXISTS product_uom_prices_active_product_uom_uq
+       ON "${schemaName}"."product_uom_prices"(product_id, uom_id)
+       WHERE active IS TRUE`,
+    );
+    await this.prisma.$executeRawUnsafe(
+      `CREATE INDEX IF NOT EXISTS idx_product_uom_prices_product_uom
+       ON "${schemaName}"."product_uom_prices"(product_id, uom_id)`,
+    );
+    const productUomPriceCols = [
+      `ADD COLUMN IF NOT EXISTS initial_cost_price NUMERIC(14,4)`,
+      `ADD COLUMN IF NOT EXISTS last_purchase_cost NUMERIC(14,4)`,
+      `ADD COLUMN IF NOT EXISTS last_purchase_at TIMESTAMP`,
+      `ADD COLUMN IF NOT EXISTS last_purchase_id UUID REFERENCES "${schemaName}"."purchases"(id) ON DELETE SET NULL`,
+      `ADD COLUMN IF NOT EXISTS last_purchase_item_id UUID REFERENCES "${schemaName}"."purchase_items"(id) ON DELETE SET NULL`,
+    ];
+    for (const alter of productUomPriceCols) {
+      await this.prisma.$executeRawUnsafe(
+        `ALTER TABLE "${schemaName}"."product_uom_prices" ${alter}`,
+      );
+    }
+    await this.prisma.$executeRawUnsafe(
+      `UPDATE "${schemaName}"."product_uom_prices"
+       SET initial_cost_price = COALESCE(initial_cost_price, cost_price)
+       WHERE cost_price IS NOT NULL`,
+    );
+
+    await this.prisma.$executeRawUnsafe(
+      `CREATE TABLE IF NOT EXISTS "${schemaName}"."product_supplier_uom_costs" (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        product_id UUID NOT NULL REFERENCES "${schemaName}"."products"(id) ON DELETE CASCADE,
+        supplier_id UUID NOT NULL REFERENCES "${schemaName}"."suppliers"(id) ON DELETE CASCADE,
+        uom_id UUID NOT NULL REFERENCES "${schemaName}"."uoms"(id),
+        current_cost_price NUMERIC(14,4),
+        last_purchase_cost NUMERIC(14,4),
+        last_purchase_at TIMESTAMP,
+        last_purchase_id UUID REFERENCES "${schemaName}"."purchases"(id) ON DELETE SET NULL,
+        last_purchase_item_id UUID REFERENCES "${schemaName}"."purchase_items"(id) ON DELETE SET NULL,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      )`,
+    );
+    await this.prisma.$executeRawUnsafe(
+      `CREATE UNIQUE INDEX IF NOT EXISTS product_supplier_uom_costs_product_supplier_uom_uq
+       ON "${schemaName}"."product_supplier_uom_costs"(product_id, supplier_id, uom_id)`,
+    );
+    await this.prisma.$executeRawUnsafe(
+      `CREATE INDEX IF NOT EXISTS idx_product_supplier_uom_costs_lookup
+       ON "${schemaName}"."product_supplier_uom_costs"(supplier_id, product_id, uom_id)`,
+    );
+    await this.prisma.$executeRawUnsafe(
+      `CREATE INDEX IF NOT EXISTS idx_product_supplier_uom_costs_product_uom
+       ON "${schemaName}"."product_supplier_uom_costs"(product_id, uom_id)`,
+    );
+
+    await this.prisma.$executeRawUnsafe(
+      `CREATE TABLE IF NOT EXISTS "${schemaName}"."supplier_price_history" (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        product_id UUID NOT NULL REFERENCES "${schemaName}"."products"(id) ON DELETE CASCADE,
+        supplier_id UUID NOT NULL REFERENCES "${schemaName}"."suppliers"(id) ON DELETE CASCADE,
+        uom_id UUID NOT NULL REFERENCES "${schemaName}"."uoms"(id),
+        purchase_id UUID REFERENCES "${schemaName}"."purchases"(id) ON DELETE SET NULL,
+        purchase_item_id UUID REFERENCES "${schemaName}"."purchase_items"(id) ON DELETE SET NULL,
+        old_cost_price NUMERIC(14,4),
+        new_cost_price NUMERIC(14,4) NOT NULL,
+        entered_quantity NUMERIC(14,4),
+        base_quantity INTEGER,
+        conversion_factor_snapshot NUMERIC(18,6),
+        purchase_date DATE,
+        source VARCHAR(50) NOT NULL DEFAULT 'purchase_invoice',
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      )`,
+    );
+    await this.prisma.$executeRawUnsafe(
+      `CREATE INDEX IF NOT EXISTS idx_supplier_price_history_lookup
+       ON "${schemaName}"."supplier_price_history"(product_id, supplier_id, uom_id, created_at DESC)`,
+    );
+    await this.prisma.$executeRawUnsafe(
+      `CREATE INDEX IF NOT EXISTS idx_supplier_price_history_purchase
+       ON "${schemaName}"."supplier_price_history"(purchase_id)`,
+    );
+
+    await this.prisma.$executeRawUnsafe(
+      `CREATE TABLE IF NOT EXISTS "${schemaName}"."product_uom_barcodes" (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        product_id UUID NOT NULL REFERENCES "${schemaName}"."products"(id) ON DELETE CASCADE,
+        uom_id UUID NOT NULL REFERENCES "${schemaName}"."uoms"(id),
+        barcode VARCHAR(100) NOT NULL,
+        active BOOLEAN NOT NULL DEFAULT TRUE,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      )`,
+    );
+    await this.prisma.$executeRawUnsafe(
+      `CREATE UNIQUE INDEX IF NOT EXISTS product_uom_barcodes_active_barcode_uq
+       ON "${schemaName}"."product_uom_barcodes"(barcode)
+       WHERE active IS TRUE AND btrim(barcode) <> ''`,
+    );
+    await this.prisma.$executeRawUnsafe(
+      `CREATE INDEX IF NOT EXISTS idx_product_uom_barcodes_barcode
+       ON "${schemaName}"."product_uom_barcodes"(barcode)`,
+    );
+    await this.prisma.$executeRawUnsafe(
+      `CREATE INDEX IF NOT EXISTS idx_product_uom_barcodes_product_uom
+       ON "${schemaName}"."product_uom_barcodes"(product_id, uom_id)`,
+    );
+
+    await this.ensureUomDocumentColumns(schemaName);
+    await this.seedDefaultUoms(schemaName);
+    await this.backfillProductBaseUoms(schemaName);
+    await this.backfillUomDocumentQuantities(schemaName);
+  }
+
+  private async ensurePricingAndOffersV1(schemaName: string): Promise<void> {
+    await this.prisma.$executeRawUnsafe(
+      `CREATE TABLE IF NOT EXISTS "${schemaName}"."price_groups" (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        code VARCHAR(50) NOT NULL,
+        name VARCHAR(100) NOT NULL,
+        description TEXT,
+        is_default BOOLEAN NOT NULL DEFAULT FALSE,
+        active BOOLEAN NOT NULL DEFAULT TRUE,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      )`,
+    );
+    await this.prisma.$executeRawUnsafe(
+      `CREATE UNIQUE INDEX IF NOT EXISTS price_groups_code_key
+       ON "${schemaName}"."price_groups"(code)`,
+    );
+    await this.prisma.$executeRawUnsafe(
+      `CREATE UNIQUE INDEX IF NOT EXISTS price_groups_one_default
+       ON "${schemaName}"."price_groups"(is_default)
+       WHERE is_default IS TRUE AND active IS TRUE`,
+    );
+    await this.prisma.$executeRawUnsafe(
+      `CREATE INDEX IF NOT EXISTS idx_price_groups_active
+       ON "${schemaName}"."price_groups"(active)`,
+    );
+
+    await this.prisma.$executeRawUnsafe(
+      `CREATE TABLE IF NOT EXISTS "${schemaName}"."product_price_group_prices" (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        product_id UUID NOT NULL REFERENCES "${schemaName}"."products"(id) ON DELETE CASCADE,
+        uom_id UUID NOT NULL REFERENCES "${schemaName}"."uoms"(id),
+        price_group_id UUID NOT NULL REFERENCES "${schemaName}"."price_groups"(id) ON DELETE CASCADE,
+        selling_price NUMERIC(14,2) NOT NULL,
+        active BOOLEAN NOT NULL DEFAULT TRUE,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        CONSTRAINT product_price_group_prices_nonnegative CHECK (selling_price >= 0)
+      )`,
+    );
+    await this.prisma.$executeRawUnsafe(
+      `CREATE UNIQUE INDEX IF NOT EXISTS product_price_group_prices_active_uq
+       ON "${schemaName}"."product_price_group_prices"(product_id, uom_id, price_group_id)
+       WHERE active IS TRUE`,
+    );
+    await this.prisma.$executeRawUnsafe(
+      `CREATE INDEX IF NOT EXISTS idx_product_price_group_prices_lookup
+       ON "${schemaName}"."product_price_group_prices"(product_id, uom_id, price_group_id)`,
+    );
+    await this.prisma.$executeRawUnsafe(
+      `CREATE INDEX IF NOT EXISTS idx_product_price_group_prices_group_active
+       ON "${schemaName}"."product_price_group_prices"(price_group_id, active)`,
+    );
+
+    await this.prisma.$executeRawUnsafe(
+      `CREATE TABLE IF NOT EXISTS "${schemaName}"."product_price_history" (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        product_id UUID NOT NULL REFERENCES "${schemaName}"."products"(id) ON DELETE CASCADE,
+        uom_id UUID REFERENCES "${schemaName}"."uoms"(id) ON DELETE SET NULL,
+        price_group_id UUID REFERENCES "${schemaName}"."price_groups"(id) ON DELETE SET NULL,
+        old_selling_price NUMERIC(14,2),
+        new_selling_price NUMERIC(14,2),
+        old_cost_price NUMERIC(14,4),
+        new_cost_price NUMERIC(14,4),
+        change_reason TEXT,
+        source VARCHAR(50) NOT NULL DEFAULT 'manual',
+        actor_user_id UUID,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      )`,
+    );
+    await this.prisma.$executeRawUnsafe(
+      `CREATE INDEX IF NOT EXISTS idx_product_price_history_product_created
+       ON "${schemaName}"."product_price_history"(product_id, created_at DESC)`,
+    );
+    await this.prisma.$executeRawUnsafe(
+      `CREATE INDEX IF NOT EXISTS idx_product_price_history_group_created
+       ON "${schemaName}"."product_price_history"(price_group_id, created_at DESC)`,
+    );
+
+    await this.prisma.$executeRawUnsafe(
+      `CREATE TABLE IF NOT EXISTS "${schemaName}"."offer_lists" (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        no VARCHAR(50) NOT NULL,
+        description TEXT NOT NULL,
+        status VARCHAR(20) NOT NULL DEFAULT 'disabled',
+        price_group_id UUID REFERENCES "${schemaName}"."price_groups"(id) ON DELETE SET NULL,
+        priority INTEGER NOT NULL DEFAULT 0,
+        validation_period_id VARCHAR(100),
+        start_date DATE,
+        end_date DATE,
+        offer_type VARCHAR(50) NOT NULL,
+        discount_type VARCHAR(50) NOT NULL,
+        discount_value NUMERIC(14,2) NOT NULL DEFAULT 0,
+        apply_to VARCHAR(50) NOT NULL DEFAULT 'product',
+        branch_scope VARCHAR(50) NOT NULL DEFAULT 'all',
+        stacking_enabled BOOLEAN NOT NULL DEFAULT FALSE,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        CONSTRAINT offer_lists_status_check CHECK (status IN ('enabled', 'disabled')),
+        CONSTRAINT offer_lists_discount_nonnegative CHECK (discount_value >= 0)
+      )`,
+    );
+    await this.prisma.$executeRawUnsafe(
+      `CREATE UNIQUE INDEX IF NOT EXISTS offer_lists_no_key
+       ON "${schemaName}"."offer_lists"(no)`,
+    );
+    await this.prisma.$executeRawUnsafe(
+      `CREATE INDEX IF NOT EXISTS idx_offer_lists_status_dates_priority
+       ON "${schemaName}"."offer_lists"(status, start_date, end_date, priority)`,
+    );
+    await this.prisma.$executeRawUnsafe(
+      `CREATE INDEX IF NOT EXISTS idx_offer_lists_group_status
+       ON "${schemaName}"."offer_lists"(price_group_id, status)`,
+    );
+
+    await this.prisma.$executeRawUnsafe(
+      `CREATE TABLE IF NOT EXISTS "${schemaName}"."offer_rules" (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        offer_id UUID NOT NULL REFERENCES "${schemaName}"."offer_lists"(id) ON DELETE CASCADE,
+        product_id UUID REFERENCES "${schemaName}"."products"(id) ON DELETE CASCADE,
+        category_id UUID REFERENCES "${schemaName}"."product_categories"(id) ON DELETE CASCADE,
+        min_quantity NUMERIC(14,4),
+        buy_quantity NUMERIC(14,4),
+        get_quantity NUMERIC(14,4),
+        special_price NUMERIC(14,2),
+        bundle_product_ids JSONB,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      )`,
+    );
+    await this.prisma.$executeRawUnsafe(
+      `CREATE INDEX IF NOT EXISTS idx_offer_rules_offer_id
+       ON "${schemaName}"."offer_rules"(offer_id)`,
+    );
+    await this.prisma.$executeRawUnsafe(
+      `CREATE INDEX IF NOT EXISTS idx_offer_rules_product_id
+       ON "${schemaName}"."offer_rules"(product_id)`,
+    );
+    await this.prisma.$executeRawUnsafe(
+      `CREATE INDEX IF NOT EXISTS idx_offer_rules_category_id
+       ON "${schemaName}"."offer_rules"(category_id)`,
+    );
+
+    await this.prisma.$executeRawUnsafe(
+      `CREATE TABLE IF NOT EXISTS "${schemaName}"."offer_redemptions" (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        offer_id UUID NOT NULL REFERENCES "${schemaName}"."offer_lists"(id) ON DELETE CASCADE,
+        sale_id UUID REFERENCES "${schemaName}"."sales"(id) ON DELETE SET NULL,
+        sale_item_id UUID REFERENCES "${schemaName}"."sale_items"(id) ON DELETE SET NULL,
+        branch_id UUID REFERENCES "${schemaName}"."branches"(id) ON DELETE SET NULL,
+        product_id UUID REFERENCES "${schemaName}"."products"(id) ON DELETE SET NULL,
+        price_group_id UUID REFERENCES "${schemaName}"."price_groups"(id) ON DELETE SET NULL,
+        discount_amount NUMERIC(14,2) NOT NULL DEFAULT 0,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      )`,
+    );
+    await this.prisma.$executeRawUnsafe(
+      `CREATE INDEX IF NOT EXISTS idx_offer_redemptions_offer_created
+       ON "${schemaName}"."offer_redemptions"(offer_id, created_at DESC)`,
+    );
+    await this.prisma.$executeRawUnsafe(
+      `CREATE INDEX IF NOT EXISTS idx_offer_redemptions_sale_id
+       ON "${schemaName}"."offer_redemptions"(sale_id)`,
+    );
+
+    const saleItemColumns = [
+      `ADD COLUMN IF NOT EXISTS price_group_id UUID REFERENCES "${schemaName}"."price_groups"(id) ON DELETE SET NULL`,
+      `ADD COLUMN IF NOT EXISTS offer_id UUID REFERENCES "${schemaName}"."offer_lists"(id) ON DELETE SET NULL`,
+      `ADD COLUMN IF NOT EXISTS line_discount NUMERIC(14,2) NOT NULL DEFAULT 0`,
+      `ADD COLUMN IF NOT EXISTS discount_source VARCHAR(50)`,
+    ];
+    for (const alter of saleItemColumns) {
+      await this.prisma.$executeRawUnsafe(
+        `ALTER TABLE "${schemaName}"."sale_items" ${alter}`,
+      );
+    }
+    await this.prisma.$executeRawUnsafe(
+      `CREATE INDEX IF NOT EXISTS idx_sale_items_price_group_id
+       ON "${schemaName}"."sale_items"(price_group_id)`,
+    );
+    await this.prisma.$executeRawUnsafe(
+      `CREATE INDEX IF NOT EXISTS idx_sale_items_offer_id
+       ON "${schemaName}"."sale_items"(offer_id)`,
+    );
+
+    await this.seedDefaultPriceGroups(schemaName);
+    await this.backfillRetailPriceGroupPrices(schemaName);
+    await this.ensurePricingOfferPermissions(schemaName);
+  }
+
+  private async seedDefaultPriceGroups(schemaName: string): Promise<void> {
+    await this.prisma.$executeRawUnsafe(
+      `INSERT INTO "${schemaName}"."price_groups" (code, name, is_default, active)
+       VALUES
+         ('RETAIL', 'Retail', TRUE, TRUE),
+         ('WHOLESALE', 'Wholesale', FALSE, TRUE),
+         ('VIP', 'VIP', FALSE, TRUE),
+         ('HOSPITAL', 'Hospital', FALSE, TRUE),
+         ('INSURANCE', 'Insurance', FALSE, TRUE)
+       ON CONFLICT (code) DO UPDATE
+         SET name = EXCLUDED.name,
+             active = TRUE,
+             is_default = CASE
+               WHEN EXCLUDED.code = 'RETAIL' THEN TRUE
+               ELSE price_groups.is_default
+             END,
+             updated_at = CURRENT_TIMESTAMP`,
+    );
+  }
+
+  private async backfillRetailPriceGroupPrices(schemaName: string): Promise<void> {
+    await this.prisma.$executeRawUnsafe(
+      `WITH retail AS (
+         SELECT id FROM "${schemaName}"."price_groups" WHERE code = 'RETAIL' LIMIT 1
+       ),
+       active_prices AS (
+         SELECT DISTINCT ON (pu.product_id, pu.uom_id)
+           pu.product_id,
+           pu.uom_id,
+           COALESCE(pp.selling_price, CASE
+             WHEN pu.is_base THEN p.list_price
+             ELSE p.list_price * pu.conversion_factor_to_base
+           END) AS selling_price
+         FROM "${schemaName}"."product_uoms" pu
+         JOIN "${schemaName}"."products" p ON p.id = pu.product_id
+         LEFT JOIN "${schemaName}"."product_uom_prices" pp
+           ON pp.product_id = pu.product_id
+          AND pp.uom_id = pu.uom_id
+          AND pp.active IS TRUE
+         WHERE pu.is_active IS TRUE
+       )
+       INSERT INTO "${schemaName}"."product_price_group_prices" (
+         product_id, uom_id, price_group_id, selling_price, active
+       )
+       SELECT product_id, uom_id, retail.id, GREATEST(COALESCE(selling_price, 0), 0), TRUE
+       FROM active_prices
+       CROSS JOIN retail
+       WHERE selling_price IS NOT NULL
+       ON CONFLICT DO NOTHING`,
+    );
+  }
+
+  private async ensureReturnVouchersTable(schemaName: string): Promise<void> {
+    if (await this.tenantTableExists(schemaName, 'return_vouchers')) {
+      return;
+    }
+
+    if (await this.tenantTableExists(schemaName, 'ReturnVoucher')) {
+      await this.prisma.$executeRawUnsafe(
+        `ALTER TABLE "${schemaName}"."ReturnVoucher" RENAME TO "return_vouchers"`,
+      );
+      return;
+    }
+
+    await this.prisma.$executeRawUnsafe(
+      `CREATE TABLE IF NOT EXISTS "${schemaName}"."return_vouchers" (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        branch_id UUID NOT NULL REFERENCES "${schemaName}"."branches"(id),
+        sale_id UUID NOT NULL REFERENCES "${schemaName}"."sales"(id) ON DELETE CASCADE,
+        sale_item_id UUID NOT NULL REFERENCES "${schemaName}"."sale_items"(id),
+        quantity INTEGER NOT NULL,
+        unit_price NUMERIC(10,2) NOT NULL,
+        token VARCHAR(80) NOT NULL,
+        status VARCHAR(20) NOT NULL DEFAULT 'pending',
+        reason TEXT,
+        sale_return_id UUID REFERENCES "${schemaName}"."sale_returns"(id) ON DELETE SET NULL,
+        expires_at TIMESTAMP,
+        used_at TIMESTAMP,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      )`,
+    );
+    await this.prisma.$executeRawUnsafe(
+      `CREATE UNIQUE INDEX IF NOT EXISTS return_vouchers_token_key
+       ON "${schemaName}"."return_vouchers"(token)`,
+    );
+    await this.prisma.$executeRawUnsafe(
+      `CREATE INDEX IF NOT EXISTS idx_return_vouchers_sale_id
+       ON "${schemaName}"."return_vouchers"(sale_id)`,
+    );
+    await this.prisma.$executeRawUnsafe(
+      `CREATE INDEX IF NOT EXISTS idx_return_vouchers_branch_id
+       ON "${schemaName}"."return_vouchers"(branch_id)`,
+    );
+    await this.prisma.$executeRawUnsafe(
+      `CREATE INDEX IF NOT EXISTS idx_return_vouchers_token
+       ON "${schemaName}"."return_vouchers"(token)`,
+    );
+  }
+
+  private async ensureUomDocumentColumns(schemaName: string): Promise<void> {
+    await this.ensureReturnVouchersTable(schemaName);
+
+    const purchaseItemColumns = [
+      `ADD COLUMN IF NOT EXISTS uom_id UUID REFERENCES "${schemaName}"."uoms"(id)`,
+      `ADD COLUMN IF NOT EXISTS conversion_factor_snapshot NUMERIC(18,6) NOT NULL DEFAULT 1`,
+      `ADD COLUMN IF NOT EXISTS base_quantity INTEGER NOT NULL DEFAULT 0`,
+      `ADD COLUMN IF NOT EXISTS base_unit_cost NUMERIC(14,4)`,
+      `ADD COLUMN IF NOT EXISTS update_selling_price BOOLEAN NOT NULL DEFAULT FALSE`,
+    ];
+    for (const alter of purchaseItemColumns) {
+      await this.prisma.$executeRawUnsafe(
+        `ALTER TABLE "${schemaName}"."purchase_items" ${alter}`,
+      );
+    }
+    await this.prisma.$executeRawUnsafe(
+      `CREATE INDEX IF NOT EXISTS idx_purchase_items_uom_id
+       ON "${schemaName}"."purchase_items"(uom_id)`,
+    );
+    await this.prisma.$executeRawUnsafe(
+      `CREATE INDEX IF NOT EXISTS idx_purchase_items_product_uom
+       ON "${schemaName}"."purchase_items"(product_id, uom_id)`,
+    );
+
+    const saleItemColumns = [
+      `ADD COLUMN IF NOT EXISTS uom_id UUID REFERENCES "${schemaName}"."uoms"(id)`,
+      `ADD COLUMN IF NOT EXISTS entered_quantity NUMERIC(14,4)`,
+      `ADD COLUMN IF NOT EXISTS conversion_factor_snapshot NUMERIC(18,6) NOT NULL DEFAULT 1`,
+      `ADD COLUMN IF NOT EXISTS base_quantity INTEGER NOT NULL DEFAULT 0`,
+    ];
+    for (const alter of saleItemColumns) {
+      await this.prisma.$executeRawUnsafe(
+        `ALTER TABLE "${schemaName}"."sale_items" ${alter}`,
+      );
+    }
+    await this.prisma.$executeRawUnsafe(
+      `CREATE INDEX IF NOT EXISTS idx_sale_items_uom_id
+       ON "${schemaName}"."sale_items"(uom_id)`,
+    );
+    await this.prisma.$executeRawUnsafe(
+      `CREATE INDEX IF NOT EXISTS idx_sale_items_product_uom
+       ON "${schemaName}"."sale_items"(product_id, uom_id)`,
+    );
+
+    if (await this.tenantTableExists(schemaName, 'return_vouchers')) {
+      const returnVoucherColumns = [
+        `ADD COLUMN IF NOT EXISTS uom_id UUID REFERENCES "${schemaName}"."uoms"(id)`,
+        `ADD COLUMN IF NOT EXISTS entered_quantity NUMERIC(14,4)`,
+        `ADD COLUMN IF NOT EXISTS conversion_factor_snapshot NUMERIC(18,6) NOT NULL DEFAULT 1`,
+        `ADD COLUMN IF NOT EXISTS base_quantity INTEGER NOT NULL DEFAULT 0`,
+      ];
+      for (const alter of returnVoucherColumns) {
+        await this.prisma.$executeRawUnsafe(
+          `ALTER TABLE "${schemaName}"."return_vouchers" ${alter}`,
+        );
+      }
+      await this.prisma.$executeRawUnsafe(
+        `CREATE INDEX IF NOT EXISTS idx_return_vouchers_uom_id
+         ON "${schemaName}"."return_vouchers"(uom_id)`,
+      );
+    }
+
+    const saleReturnItemColumns = [
+      `ADD COLUMN IF NOT EXISTS uom_id UUID REFERENCES "${schemaName}"."uoms"(id)`,
+      `ADD COLUMN IF NOT EXISTS entered_quantity NUMERIC(14,4)`,
+      `ADD COLUMN IF NOT EXISTS conversion_factor_snapshot NUMERIC(18,6) NOT NULL DEFAULT 1`,
+      `ADD COLUMN IF NOT EXISTS base_quantity INTEGER NOT NULL DEFAULT 0`,
+    ];
+    for (const alter of saleReturnItemColumns) {
+      await this.prisma.$executeRawUnsafe(
+        `ALTER TABLE "${schemaName}"."sale_return_items" ${alter}`,
+      );
+    }
+    await this.prisma.$executeRawUnsafe(
+      `CREATE INDEX IF NOT EXISTS idx_sale_return_items_uom_id
+       ON "${schemaName}"."sale_return_items"(uom_id)`,
+    );
+  }
+
+  private async seedDefaultUoms(schemaName: string): Promise<void> {
+    await this.prisma.$executeRawUnsafe(
+      `INSERT INTO "${schemaName}"."uoms" (code, name, symbol)
+       VALUES
+         ('PCS', 'Piece', 'PCS'),
+         ('TAB', 'Tablet', 'TAB'),
+         ('STRIP', 'Strip', 'Strip'),
+         ('BOX', 'Box', 'Box'),
+         ('CTN', 'Carton', 'Ctn'),
+         ('BTL', 'Bottle', 'Btl')
+       ON CONFLICT (code) DO UPDATE
+         SET name = EXCLUDED.name,
+             symbol = EXCLUDED.symbol,
+             active = TRUE,
+             updated_at = CURRENT_TIMESTAMP`,
+    );
+  }
+
+  private async backfillProductBaseUoms(schemaName: string): Promise<void> {
+    await this.prisma.$executeRawUnsafe(
+      `WITH normalized AS (
+         SELECT DISTINCT
+           CASE
+             WHEN p.unit IS NULL OR btrim(p.unit) = '' THEN 'PCS'
+             WHEN upper(btrim(p.unit)) IN ('PC', 'PCS', 'PIECE', 'PIECES', 'EA', 'EACH') THEN 'PCS'
+             WHEN upper(btrim(p.unit)) IN ('TAB', 'TABS', 'TABLET', 'TABLETS') THEN 'TAB'
+             WHEN upper(btrim(p.unit)) IN ('STRIP', 'STRIPS') THEN 'STRIP'
+             WHEN upper(btrim(p.unit)) IN ('BOX', 'BOXES') THEN 'BOX'
+             WHEN upper(btrim(p.unit)) IN ('CTN', 'CARTON', 'CARTONS') THEN 'CTN'
+             WHEN upper(btrim(p.unit)) IN ('BTL', 'BOTTLE', 'BOTTLES') THEN 'BTL'
+             ELSE upper(regexp_replace(btrim(p.unit), '[^A-Za-z0-9]+', '_', 'g'))
+           END AS code,
+           COALESCE(NULLIF(btrim(p.unit), ''), 'Piece') AS raw_name
+         FROM "${schemaName}"."products" p
+       )
+       INSERT INTO "${schemaName}"."uoms" (code, name, symbol)
+       SELECT code, initcap(replace(raw_name, '_', ' ')), code
+       FROM normalized
+       WHERE code <> ''
+       ON CONFLICT (code) DO NOTHING`,
+    );
+
+    await this.prisma.$executeRawUnsafe(
+      `WITH product_base AS (
+         SELECT
+           p.id AS product_id,
+           u.id AS uom_id
+         FROM "${schemaName}"."products" p
+         JOIN "${schemaName}"."uoms" u ON u.code = CASE
+           WHEN p.unit IS NULL OR btrim(p.unit) = '' THEN 'PCS'
+           WHEN upper(btrim(p.unit)) IN ('PC', 'PCS', 'PIECE', 'PIECES', 'EA', 'EACH') THEN 'PCS'
+           WHEN upper(btrim(p.unit)) IN ('TAB', 'TABS', 'TABLET', 'TABLETS') THEN 'TAB'
+           WHEN upper(btrim(p.unit)) IN ('STRIP', 'STRIPS') THEN 'STRIP'
+           WHEN upper(btrim(p.unit)) IN ('BOX', 'BOXES') THEN 'BOX'
+           WHEN upper(btrim(p.unit)) IN ('CTN', 'CARTON', 'CARTONS') THEN 'CTN'
+           WHEN upper(btrim(p.unit)) IN ('BTL', 'BOTTLE', 'BOTTLES') THEN 'BTL'
+           ELSE upper(regexp_replace(btrim(p.unit), '[^A-Za-z0-9]+', '_', 'g'))
+         END
+       )
+       INSERT INTO "${schemaName}"."product_uoms" (
+         product_id, uom_id, conversion_factor_to_base,
+         is_base, is_purchase_default, is_sales_default, is_pos_default, is_active
+       )
+       SELECT product_id, uom_id, 1, TRUE, TRUE, TRUE, TRUE, TRUE
+       FROM product_base pb
+       WHERE NOT EXISTS (
+         SELECT 1
+         FROM "${schemaName}"."product_uoms" existing
+         WHERE existing.product_id = pb.product_id
+           AND existing.is_base IS TRUE
+           AND existing.is_active IS TRUE
+       )
+       ON CONFLICT (product_id, uom_id) DO UPDATE
+         SET conversion_factor_to_base = 1,
+             is_base = TRUE,
+             is_purchase_default = TRUE,
+             is_sales_default = TRUE,
+             is_pos_default = TRUE,
+             is_active = TRUE,
+             updated_at = CURRENT_TIMESTAMP`,
+    );
+
+    await this.prisma.$executeRawUnsafe(
+      `INSERT INTO "${schemaName}"."product_uom_barcodes" (product_id, uom_id, barcode)
+       SELECT p.id, pu.uom_id, btrim(p.barcode)
+       FROM "${schemaName}"."products" p
+       JOIN "${schemaName}"."product_uoms" pu
+         ON pu.product_id = p.id
+        AND pu.is_base IS TRUE
+        AND pu.is_active IS TRUE
+       WHERE p.barcode IS NOT NULL
+         AND btrim(p.barcode) <> ''
+       ON CONFLICT DO NOTHING`,
+    );
+
+    await this.prisma.$executeRawUnsafe(
+      `INSERT INTO "${schemaName}"."product_uom_prices" (product_id, uom_id, selling_price)
+       SELECT p.id, pu.uom_id, p.list_price
+       FROM "${schemaName}"."products" p
+       JOIN "${schemaName}"."product_uoms" pu
+         ON pu.product_id = p.id
+        AND pu.is_base IS TRUE
+        AND pu.is_active IS TRUE
+       WHERE p.list_price IS NOT NULL
+       ON CONFLICT DO NOTHING`,
+    );
+  }
+
+  private async backfillUomDocumentQuantities(
+    schemaName: string,
+  ): Promise<void> {
+    await this.prisma.$executeRawUnsafe(
+      `UPDATE "${schemaName}"."purchase_items"
+       SET base_quantity = COALESCE(quantity, 0)
+       WHERE COALESCE(base_quantity, 0) = 0`,
+    );
+    await this.prisma.$executeRawUnsafe(
+      `UPDATE "${schemaName}"."purchase_items" pi
+       SET uom_id = pu.uom_id
+       FROM "${schemaName}"."product_uoms" pu
+       WHERE pi.uom_id IS NULL
+         AND pi.product_id = pu.product_id
+         AND pu.is_base IS TRUE
+         AND pu.is_active IS TRUE`,
+    );
+    await this.prisma.$executeRawUnsafe(
+      `UPDATE "${schemaName}"."purchase_items"
+       SET base_unit_cost = cost_price
+       WHERE base_unit_cost IS NULL
+         AND cost_price IS NOT NULL
+         AND COALESCE(conversion_factor_snapshot, 1) = 1`,
+    );
+
+    await this.prisma.$executeRawUnsafe(
+      `UPDATE "${schemaName}"."sale_items"
+       SET base_quantity = COALESCE(quantity, 0),
+           entered_quantity = COALESCE(entered_quantity, COALESCE(quantity, 0))
+       WHERE COALESCE(base_quantity, 0) = 0`,
+    );
+    await this.prisma.$executeRawUnsafe(
+      `UPDATE "${schemaName}"."sale_items" si
+       SET uom_id = pu.uom_id
+       FROM "${schemaName}"."product_uoms" pu
+       WHERE si.uom_id IS NULL
+         AND si.product_id = pu.product_id
+         AND pu.is_base IS TRUE
+         AND pu.is_active IS TRUE`,
+    );
+    if (await this.tenantTableExists(schemaName, 'return_vouchers')) {
+      await this.prisma.$executeRawUnsafe(
+        `UPDATE "${schemaName}"."return_vouchers" rv
+         SET uom_id = COALESCE(rv.uom_id, si.uom_id),
+             entered_quantity = COALESCE(rv.entered_quantity, rv.quantity),
+             conversion_factor_snapshot = COALESCE(NULLIF(rv.conversion_factor_snapshot, 0), si.conversion_factor_snapshot, 1),
+             base_quantity = COALESCE(NULLIF(rv.base_quantity, 0), rv.quantity)
+         FROM "${schemaName}"."sale_items" si
+         WHERE si.id = rv.sale_item_id`,
+      );
+    }
+    await this.prisma.$executeRawUnsafe(
+      `UPDATE "${schemaName}"."sale_return_items" sri
+       SET uom_id = COALESCE(sri.uom_id, si.uom_id),
+           entered_quantity = COALESCE(sri.entered_quantity, sri.quantity),
+           conversion_factor_snapshot = COALESCE(NULLIF(sri.conversion_factor_snapshot, 0), si.conversion_factor_snapshot, 1),
+           base_quantity = COALESCE(NULLIF(sri.base_quantity, 0), sri.quantity)
+       FROM "${schemaName}"."sale_items" si
+       WHERE si.id = sri.sale_item_id`,
+    );
+  }
+
+  /** Purchase workflow columns (draft/receive/invoice) and line receive tracking. */
+  private async ensurePurchaseWorkflowExtensions(
+    schemaName: string,
+  ): Promise<void> {
+    const purchaseCols: Array<{ column: string; alterSql: string }> = [
+      {
+        column: 'status',
+        alterSql: `ALTER TABLE "${schemaName}"."purchases"
+          ADD COLUMN status VARCHAR(32) NOT NULL DEFAULT 'closed'`,
+      },
+      {
+        column: 'purchase_order_no',
+        alterSql: `ALTER TABLE "${schemaName}"."purchases"
+          ADD COLUMN purchase_order_no VARCHAR(100)`,
+      },
+      {
+        column: 'supplier_invoice_no',
+        alterSql: `ALTER TABLE "${schemaName}"."purchases"
+          ADD COLUMN supplier_invoice_no VARCHAR(100)`,
+      },
+      {
+        column: 'order_date',
+        alterSql: `ALTER TABLE "${schemaName}"."purchases"
+          ADD COLUMN order_date DATE`,
+      },
+      {
+        column: 'posting_date',
+        alterSql: `ALTER TABLE "${schemaName}"."purchases"
+          ADD COLUMN posting_date DATE`,
+      },
+      {
+        column: 'due_date',
+        alterSql: `ALTER TABLE "${schemaName}"."purchases"
+          ADD COLUMN due_date DATE`,
+      },
+      {
+        column: 'notes',
+        alterSql: `ALTER TABLE "${schemaName}"."purchases"
+          ADD COLUMN notes TEXT`,
+      },
+      {
+        column: 'released_at',
+        alterSql: `ALTER TABLE "${schemaName}"."purchases"
+          ADD COLUMN released_at TIMESTAMP`,
+      },
+      {
+        column: 'received_at',
+        alterSql: `ALTER TABLE "${schemaName}"."purchases"
+          ADD COLUMN received_at TIMESTAMP`,
+      },
+      {
+        column: 'invoiced_at',
+        alterSql: `ALTER TABLE "${schemaName}"."purchases"
+          ADD COLUMN invoiced_at TIMESTAMP`,
+      },
+    ];
+
+    for (const { column, alterSql } of purchaseCols) {
+      if (!(await this.tenantColumnExists(schemaName, 'purchases', column))) {
+        await this.prisma.$executeRawUnsafe(alterSql);
+      }
+    }
+
+    await this.prisma.$executeRawUnsafe(
+      `UPDATE "${schemaName}"."purchases"
+       SET supplier_invoice_no = invoice_number
+       WHERE supplier_invoice_no IS NULL AND invoice_number IS NOT NULL`,
+    );
+    await this.prisma.$executeRawUnsafe(
+      `UPDATE "${schemaName}"."purchases"
+       SET status = 'closed'
+       WHERE status IS NULL OR status = ''`,
+    );
+
+    const itemCols: Array<{ column: string; alterSql: string }> = [
+      {
+        column: 'quantity_received',
+        alterSql: `ALTER TABLE "${schemaName}"."purchase_items"
+          ADD COLUMN quantity_received INTEGER NOT NULL DEFAULT 0`,
+      },
+      {
+        column: 'line_discount',
+        alterSql: `ALTER TABLE "${schemaName}"."purchase_items"
+          ADD COLUMN line_discount NUMERIC(12,2) DEFAULT 0`,
+      },
+      {
+        column: 'tax_amount',
+        alterSql: `ALTER TABLE "${schemaName}"."purchase_items"
+          ADD COLUMN tax_amount NUMERIC(12,2) DEFAULT 0`,
+      },
+      {
+        column: 'line_notes',
+        alterSql: `ALTER TABLE "${schemaName}"."purchase_items"
+          ADD COLUMN line_notes TEXT`,
+      },
+      {
+        column: 'planned_batch_number',
+        alterSql: `ALTER TABLE "${schemaName}"."purchase_items"
+          ADD COLUMN planned_batch_number VARCHAR(100)`,
+      },
+      {
+        column: 'planned_expiry_date',
+        alterSql: `ALTER TABLE "${schemaName}"."purchase_items"
+          ADD COLUMN planned_expiry_date DATE`,
+      },
+    ];
+
+    for (const { column, alterSql } of itemCols) {
+      if (!(await this.tenantColumnExists(schemaName, 'purchase_items', column))) {
+        await this.prisma.$executeRawUnsafe(alterSql);
+      }
+    }
+
+    await this.prisma.$executeRawUnsafe(
+      `UPDATE "${schemaName}"."purchase_items"
+       SET quantity_received = COALESCE(quantity, 0)
+       WHERE quantity_received = 0 AND batch_id IS NOT NULL`,
+    );
+
+    if (
+      !(await this.tenantColumnExists(
+        schemaName,
+        'tenant_settings',
+        'invoice_before_receive',
+      ))
+    ) {
+      await this.prisma.$executeRawUnsafe(
+        `ALTER TABLE "${schemaName}"."tenant_settings"
+          ADD COLUMN invoice_before_receive BOOLEAN NOT NULL DEFAULT FALSE`,
+      );
+    }
+
+    await this.prisma.$executeRawUnsafe(
+      `CREATE INDEX IF NOT EXISTS idx_purchases_status ON "${schemaName}"."purchases"(status)`,
+    );
+    await this.prisma.$executeRawUnsafe(
+      `CREATE INDEX IF NOT EXISTS idx_purchases_purchase_order_no ON "${schemaName}"."purchases"(purchase_order_no)`,
+    );
+    await this.prisma.$executeRawUnsafe(
+      `CREATE INDEX IF NOT EXISTS idx_purchases_supplier_invoice_no ON "${schemaName}"."purchases"(supplier_invoice_no)`,
+    );
+  }
+
+  /** Generic import job framework tables. */
+  private async ensureImportJobsTables(schemaName: string): Promise<void> {
+    await this.prisma.$executeRawUnsafe(
+      `CREATE TABLE IF NOT EXISTS "${schemaName}"."import_jobs" (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        import_type VARCHAR(32) NOT NULL,
+        status VARCHAR(16) NOT NULL DEFAULT 'draft',
+        file_name TEXT,
+        file_storage_path TEXT,
+        file_sha256 CHAR(64),
+        policy_snapshot JSONB NOT NULL DEFAULT '{}'::jsonb,
+        summary JSONB,
+        total_rows INTEGER NOT NULL DEFAULT 0,
+        processed_rows INTEGER NOT NULL DEFAULT 0,
+        error_message TEXT,
+        retry_count INTEGER NOT NULL DEFAULT 0,
+        max_retries INTEGER NOT NULL DEFAULT 3,
+        created_by UUID REFERENCES "${schemaName}"."users"(id),
+        confirmed_by UUID REFERENCES "${schemaName}"."users"(id),
+        confirmed_at TIMESTAMP,
+        committed_at TIMESTAMP,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      )`,
+    );
+    await this.ensureImportJobsColumns(schemaName);
+    await this.prisma.$executeRawUnsafe(
+      `CREATE INDEX IF NOT EXISTS idx_import_jobs_type_status
+       ON "${schemaName}"."import_jobs"(import_type, status, created_at DESC)`,
+    );
+    await this.prisma.$executeRawUnsafe(
+      `CREATE TABLE IF NOT EXISTS "${schemaName}"."import_job_rows" (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        job_id UUID NOT NULL REFERENCES "${schemaName}"."import_jobs"(id) ON DELETE CASCADE,
+        row_number INTEGER NOT NULL,
+        raw_data JSONB NOT NULL,
+        parsed_data JSONB,
+        validation_result JSONB,
+        commit_status VARCHAR(16) DEFAULT 'pending',
+        commit_error TEXT,
+        resolved_product_id UUID,
+        resolved_batch_id UUID,
+        opening_stock_record_id UUID,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      )`,
+    );
+    await this.ensureImportJobRowsColumns(schemaName);
+    await this.prisma.$executeRawUnsafe(
+      `CREATE INDEX IF NOT EXISTS idx_import_job_rows_job
+       ON "${schemaName}"."import_job_rows"(job_id, row_number)`,
+    );
+    await this.prisma.$executeRawUnsafe(
+      `CREATE INDEX IF NOT EXISTS idx_import_job_rows_commit
+       ON "${schemaName}"."import_job_rows"(job_id, commit_status)`,
+    );
+  }
+
+  private async ensureImportJobsColumns(schemaName: string): Promise<void> {
+    if (!(await this.tenantTableExists(schemaName, 'import_jobs'))) return;
+    const alters = [
+      `ADD COLUMN IF NOT EXISTS import_type VARCHAR(32) NOT NULL DEFAULT 'product'`,
+      `ADD COLUMN IF NOT EXISTS status VARCHAR(16) NOT NULL DEFAULT 'draft'`,
+      `ADD COLUMN IF NOT EXISTS file_name TEXT`,
+      `ADD COLUMN IF NOT EXISTS file_storage_path TEXT`,
+      `ADD COLUMN IF NOT EXISTS file_sha256 CHAR(64)`,
+      `ADD COLUMN IF NOT EXISTS policy_snapshot JSONB NOT NULL DEFAULT '{}'::jsonb`,
+      `ADD COLUMN IF NOT EXISTS summary JSONB`,
+      `ADD COLUMN IF NOT EXISTS total_rows INTEGER NOT NULL DEFAULT 0`,
+      `ADD COLUMN IF NOT EXISTS processed_rows INTEGER NOT NULL DEFAULT 0`,
+      `ADD COLUMN IF NOT EXISTS error_message TEXT`,
+      `ADD COLUMN IF NOT EXISTS retry_count INTEGER NOT NULL DEFAULT 0`,
+      `ADD COLUMN IF NOT EXISTS max_retries INTEGER NOT NULL DEFAULT 3`,
+      `ADD COLUMN IF NOT EXISTS created_by UUID REFERENCES "${schemaName}"."users"(id)`,
+      `ADD COLUMN IF NOT EXISTS confirmed_by UUID REFERENCES "${schemaName}"."users"(id)`,
+      `ADD COLUMN IF NOT EXISTS confirmed_at TIMESTAMP`,
+      `ADD COLUMN IF NOT EXISTS committed_at TIMESTAMP`,
+      `ADD COLUMN IF NOT EXISTS created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP`,
+      `ADD COLUMN IF NOT EXISTS updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP`,
+    ];
+    for (const alter of alters) {
+      await this.prisma.$executeRawUnsafe(
+        `ALTER TABLE "${schemaName}"."import_jobs" ${alter}`,
+      );
+    }
+  }
+
+  private async ensureImportJobRowsColumns(schemaName: string): Promise<void> {
+    if (!(await this.tenantTableExists(schemaName, 'import_job_rows'))) return;
+    const alters = [
+      `ADD COLUMN IF NOT EXISTS job_id UUID REFERENCES "${schemaName}"."import_jobs"(id) ON DELETE CASCADE`,
+      `ADD COLUMN IF NOT EXISTS row_number INTEGER NOT NULL DEFAULT 0`,
+      `ADD COLUMN IF NOT EXISTS raw_data JSONB NOT NULL DEFAULT '{}'::jsonb`,
+      `ADD COLUMN IF NOT EXISTS parsed_data JSONB`,
+      `ADD COLUMN IF NOT EXISTS validation_result JSONB`,
+      `ADD COLUMN IF NOT EXISTS commit_status VARCHAR(16) DEFAULT 'pending'`,
+      `ADD COLUMN IF NOT EXISTS commit_error TEXT`,
+      `ADD COLUMN IF NOT EXISTS resolved_product_id UUID`,
+      `ADD COLUMN IF NOT EXISTS resolved_batch_id UUID`,
+      `ADD COLUMN IF NOT EXISTS opening_stock_record_id UUID`,
+      `ADD COLUMN IF NOT EXISTS resolved_purchase_id UUID`,
+      `ADD COLUMN IF NOT EXISTS created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP`,
+    ];
+    for (const alter of alters) {
+      await this.prisma.$executeRawUnsafe(
+        `ALTER TABLE "${schemaName}"."import_job_rows" ${alter}`,
+      );
+    }
+  }
+
+  /** Opening stock traceability from product imports. */
+  private async ensureOpeningStockEntriesTable(
+    schemaName: string,
+  ): Promise<void> {
+    await this.prisma.$executeRawUnsafe(
+      `CREATE TABLE IF NOT EXISTS "${schemaName}"."opening_stock_entries" (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        branch_id UUID NOT NULL REFERENCES "${schemaName}"."branches"(id),
+        product_id UUID NOT NULL REFERENCES "${schemaName}"."products"(id),
+        batch_id UUID REFERENCES "${schemaName}"."batches"(id),
+        import_job_id UUID REFERENCES "${schemaName}"."import_jobs"(id),
+        import_job_row_id UUID REFERENCES "${schemaName}"."import_job_rows"(id),
+        quantity INTEGER NOT NULL,
+        cost_price NUMERIC(10,2),
+        entry_date DATE NOT NULL,
+        external_ref TEXT,
+        journal_entry_id UUID REFERENCES "${schemaName}"."journal_entries"(id),
+        created_by UUID REFERENCES "${schemaName}"."users"(id),
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      )`,
+    );
+    await this.ensureOpeningStockEntryColumns(schemaName);
+    await this.prisma.$executeRawUnsafe(
+      `CREATE UNIQUE INDEX IF NOT EXISTS opening_stock_import_row_unique
+       ON "${schemaName}"."opening_stock_entries"(import_job_row_id)
+       WHERE import_job_row_id IS NOT NULL`,
+    );
+  }
+
+  private async ensureOpeningStockEntryColumns(
+    schemaName: string,
+  ): Promise<void> {
+    if (!(await this.tenantTableExists(schemaName, 'opening_stock_entries'))) {
+      return;
+    }
+    const alters = [
+      `ADD COLUMN IF NOT EXISTS branch_id UUID REFERENCES "${schemaName}"."branches"(id)`,
+      `ADD COLUMN IF NOT EXISTS product_id UUID REFERENCES "${schemaName}"."products"(id)`,
+      `ADD COLUMN IF NOT EXISTS batch_id UUID REFERENCES "${schemaName}"."batches"(id)`,
+      `ADD COLUMN IF NOT EXISTS import_job_id UUID REFERENCES "${schemaName}"."import_jobs"(id)`,
+      `ADD COLUMN IF NOT EXISTS import_job_row_id UUID REFERENCES "${schemaName}"."import_job_rows"(id)`,
+      `ADD COLUMN IF NOT EXISTS quantity INTEGER NOT NULL DEFAULT 0`,
+      `ADD COLUMN IF NOT EXISTS cost_price NUMERIC(10,2)`,
+      `ADD COLUMN IF NOT EXISTS entry_date DATE NOT NULL DEFAULT CURRENT_DATE`,
+      `ADD COLUMN IF NOT EXISTS external_ref TEXT`,
+      `ADD COLUMN IF NOT EXISTS journal_entry_id UUID REFERENCES "${schemaName}"."journal_entries"(id)`,
+      `ADD COLUMN IF NOT EXISTS created_by UUID REFERENCES "${schemaName}"."users"(id)`,
+      `ADD COLUMN IF NOT EXISTS created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP`,
+    ];
+    for (const alter of alters) {
+      await this.prisma.$executeRawUnsafe(
+        `ALTER TABLE "${schemaName}"."opening_stock_entries" ${alter}`,
+      );
+    }
+  }
+
+  private async ensureOpeningStockReversalColumns(
+    schemaName: string,
+  ): Promise<void> {
+    if (!(await this.tenantTableExists(schemaName, 'opening_stock_entries'))) {
+      return;
+    }
+    await this.prisma.$executeRawUnsafe(
+      `ALTER TABLE "${schemaName}"."opening_stock_entries"
+       ADD COLUMN IF NOT EXISTS reversed_at TIMESTAMP`,
+    );
+    await this.prisma.$executeRawUnsafe(
+      `ALTER TABLE "${schemaName}"."opening_stock_entries"
+       ADD COLUMN IF NOT EXISTS reversal_journal_entry_id UUID REFERENCES "${schemaName}"."journal_entries"(id)`,
+    );
+  }
+
+  private async ensureImportJobsReversalColumns(
+    schemaName: string,
+  ): Promise<void> {
+    if (!(await this.tenantTableExists(schemaName, 'import_jobs'))) {
+      return;
+    }
+    await this.prisma.$executeRawUnsafe(
+      `ALTER TABLE "${schemaName}"."import_jobs"
+       ADD COLUMN IF NOT EXISTS reversed_at TIMESTAMP`,
+    );
+    await this.prisma.$executeRawUnsafe(
+      `ALTER TABLE "${schemaName}"."import_jobs"
+       ADD COLUMN IF NOT EXISTS reversed_by UUID REFERENCES "${schemaName}"."users"(id)`,
+    );
+  }
+
+  /** Customer credit fields, POS policies, and credit permissions for existing tenants. */
+  private async ensureCustomerCreditV1(schemaName: string): Promise<void> {
+    const customerCols: Array<{ column: string; alterSql: string }> = [
+      {
+        column: 'customer_no',
+        alterSql: `ALTER TABLE "${schemaName}"."customers"
+          ADD COLUMN customer_no VARCHAR(32)`,
+      },
+      {
+        column: 'credit_limit',
+        alterSql: `ALTER TABLE "${schemaName}"."customers"
+          ADD COLUMN credit_limit NUMERIC(12, 2)`,
+      },
+      {
+        column: 'credit_status',
+        alterSql: `ALTER TABLE "${schemaName}"."customers"
+          ADD COLUMN credit_status VARCHAR(20) NOT NULL DEFAULT 'active'`,
+      },
+      {
+        column: 'is_active',
+        alterSql: `ALTER TABLE "${schemaName}"."customers"
+          ADD COLUMN is_active BOOLEAN NOT NULL DEFAULT TRUE`,
+      },
+      {
+        column: 'member_card_no',
+        alterSql: `ALTER TABLE "${schemaName}"."customers"
+          ADD COLUMN member_card_no VARCHAR(64)`,
+      },
+    ];
+    for (const { column, alterSql } of customerCols) {
+      if (
+        !(await this.tenantColumnExists(schemaName, 'customers', column))
+      ) {
+        await this.prisma.$executeRawUnsafe(alterSql);
+      }
+    }
+    await this.prisma.$executeRawUnsafe(
+      `CREATE INDEX IF NOT EXISTS idx_customers_customer_no
+       ON "${schemaName}"."customers"(customer_no)`,
+    );
+    await this.prisma.$executeRawUnsafe(
+      `CREATE INDEX IF NOT EXISTS idx_customers_member_card_no
+       ON "${schemaName}"."customers"(member_card_no)`,
+    );
+
+    if (
+      !(await this.tenantColumnExists(schemaName, 'tenant_settings', 'pos_policies'))
+    ) {
+      await this.prisma.$executeRawUnsafe(
+        `ALTER TABLE "${schemaName}"."tenant_settings"
+          ADD COLUMN pos_policies JSONB NOT NULL DEFAULT '{"allow_cashier_credit_sale":true,"allow_credit_limit_override":false}'::jsonb`,
+      );
+    }
+
+    await this.prisma.$executeRawUnsafe(
+      `INSERT INTO "${schemaName}"."permissions" (name)
+       VALUES ('view_customer_credit'),
+              ('create_customer_credit_sale'),
+              ('record_customer_repayment'),
+              ('override_credit_limit')
+       ON CONFLICT (name) DO NOTHING`,
+    );
+    await this.prisma.$executeRawUnsafe(
+      `INSERT INTO "${schemaName}"."role_permissions" (role_id, permission_id)
+       SELECT r.id, p.id
+       FROM "${schemaName}"."roles" r
+       CROSS JOIN "${schemaName}"."permissions" p
+       WHERE r.name IN ('admin', 'manager')
+         AND p.name IN (
+           'view_customer_credit',
+           'create_customer_credit_sale',
+           'record_customer_repayment',
+           'override_credit_limit'
+         )
+       ON CONFLICT (role_id, permission_id) DO NOTHING`,
+    );
+    await this.prisma.$executeRawUnsafe(
+      `INSERT INTO "${schemaName}"."role_permissions" (role_id, permission_id)
+       SELECT r.id, p.id
+       FROM "${schemaName}"."roles" r
+       INNER JOIN "${schemaName}"."permissions" p ON p.name = 'create_customer_credit_sale'
+       WHERE r.name = 'cashier'
+       ON CONFLICT (role_id, permission_id) DO NOTHING`,
+    );
+  }
+
+  /** Import permissions for existing tenants. */
+  private async ensureImportProductsPermission(
+    schemaName: string,
+  ): Promise<void> {
+    await this.prisma.$executeRawUnsafe(
+      `INSERT INTO "${schemaName}"."permissions" (name)
+       VALUES ('import_products'),
+              ('import_opening_stock'),
+              ('cleanup_import_products'),
+              ('view_import_center')
+       ON CONFLICT (name) DO NOTHING`,
+    );
+    await this.prisma.$executeRawUnsafe(
+      `INSERT INTO "${schemaName}"."role_permissions" (role_id, permission_id)
+       SELECT r.id, p.id
+       FROM "${schemaName}"."roles" r
+       INNER JOIN "${schemaName}"."permissions" p ON p.name = 'view_import_center'
+       WHERE r.name IN ('admin', 'manager')
+       ON CONFLICT (role_id, permission_id) DO NOTHING`,
+    );
+    await this.prisma.$executeRawUnsafe(
+      `INSERT INTO "${schemaName}"."role_permissions" (role_id, permission_id)
+       SELECT r.id, p.id
+       FROM "${schemaName}"."roles" r
+       INNER JOIN "${schemaName}"."permissions" p ON p.name = 'import_products'
+       WHERE r.name IN ('admin', 'manager')
+       ON CONFLICT (role_id, permission_id) DO NOTHING`,
+    );
+    await this.prisma.$executeRawUnsafe(
+      `INSERT INTO "${schemaName}"."role_permissions" (role_id, permission_id)
+       SELECT r.id, p.id
+       FROM "${schemaName}"."roles" r
+       INNER JOIN "${schemaName}"."permissions" p ON p.name = 'import_opening_stock'
+       WHERE r.name = 'admin'
+       ON CONFLICT (role_id, permission_id) DO NOTHING`,
+    );
+    await this.prisma.$executeRawUnsafe(
+      `INSERT INTO "${schemaName}"."role_permissions" (role_id, permission_id)
+       SELECT r.id, p.id
+       FROM "${schemaName}"."roles" r
+       INNER JOIN "${schemaName}"."permissions" p ON p.name = 'cleanup_import_products'
+       WHERE r.name = 'admin'
+       ON CONFLICT (role_id, permission_id) DO NOTHING`,
+    );
+  }
+
+  private async ensurePricingOfferPermissions(schemaName: string): Promise<void> {
+    await this.prisma.$executeRawUnsafe(
+      `INSERT INTO "${schemaName}"."permissions" (name)
+       VALUES ('manage_pricing'),
+              ('manage_price_groups'),
+              ('manage_offers')
+       ON CONFLICT (name) DO NOTHING`,
+    );
+    await this.prisma.$executeRawUnsafe(
+      `INSERT INTO "${schemaName}"."role_permissions" (role_id, permission_id)
+       SELECT r.id, p.id
+       FROM "${schemaName}"."roles" r
+       INNER JOIN "${schemaName}"."permissions" p
+         ON p.name IN ('manage_pricing', 'manage_price_groups', 'manage_offers')
+       WHERE r.name IN ('admin', 'manager')
+       ON CONFLICT (role_id, permission_id) DO NOTHING`,
+    );
+  }
+
+  /**
+   * Consolidate per-UOM product costs onto the base UOM row only.
+   * Non-base active price rows keep selling prices but drop stored cost fields.
+   */
+  private async ensureBaseUomCostConsolidation(schemaName: string): Promise<void> {
+    if (!(await this.tenantTableExists(schemaName, 'product_uom_prices'))) {
+      return;
+    }
+    await this.deduplicateActiveProductUomPrices(schemaName);
+
+    const [needsMigration] = await this.prisma.$queryRawUnsafe<Array<{ ok: boolean }>>(
+      `SELECT EXISTS (
+         SELECT 1
+         FROM "${schemaName}"."product_uom_prices" pup
+         JOIN "${schemaName}"."product_uoms" pu
+           ON pu.product_id = pup.product_id
+          AND pu.uom_id = pup.uom_id
+         WHERE pup.active IS TRUE
+           AND pup.cost_price IS NOT NULL
+           AND pu.is_base IS NOT TRUE
+       ) AS ok`,
+    );
+    if (!needsMigration?.ok) return;
+
+    const canonicalCte = `canonical AS (
+         SELECT
+           base_pu.product_id,
+           base_pu.uom_id AS base_uom_id,
+           COALESCE(
+             base_price.cost_price,
+             (
+               SELECT MIN(nb.cost_price / NULLIF(nb_pu.conversion_factor_to_base, 0))
+               FROM "${schemaName}"."product_uom_prices" nb
+               JOIN "${schemaName}"."product_uoms" nb_pu
+                 ON nb_pu.product_id = nb.product_id
+                AND nb_pu.uom_id = nb.uom_id
+               WHERE nb.product_id = base_pu.product_id
+                 AND nb.active IS TRUE
+                 AND nb.cost_price IS NOT NULL
+                 AND nb_pu.is_active IS TRUE
+                 AND nb_pu.is_base IS NOT TRUE
+             )
+           ) AS base_cost,
+           base_price.selling_price,
+           base_price.initial_cost_price,
+           base_price.last_purchase_cost,
+           base_price.last_purchase_at,
+           base_price.last_purchase_id,
+           base_price.last_purchase_item_id
+         FROM "${schemaName}"."product_uoms" base_pu
+         LEFT JOIN LATERAL (
+           SELECT cost_price, selling_price, initial_cost_price,
+                  last_purchase_cost, last_purchase_at,
+                  last_purchase_id, last_purchase_item_id
+           FROM "${schemaName}"."product_uom_prices" bpp
+           WHERE bpp.product_id = base_pu.product_id
+             AND bpp.uom_id = base_pu.uom_id
+             AND bpp.active IS TRUE
+           ORDER BY bpp.updated_at DESC NULLS LAST, bpp.created_at DESC
+           LIMIT 1
+         ) base_price ON TRUE
+         WHERE base_pu.is_base IS TRUE
+           AND base_pu.is_active IS TRUE
+       )`;
+
+    await this.prisma.$executeRawUnsafe(
+      `WITH ${canonicalCte}
+       UPDATE "${schemaName}"."product_uom_prices" target
+       SET active = FALSE, updated_at = CURRENT_TIMESTAMP
+       FROM canonical c
+       WHERE target.product_id = c.product_id
+         AND target.uom_id = c.base_uom_id
+         AND target.active IS TRUE
+         AND c.base_cost IS NOT NULL`,
+    );
+
+    await this.prisma.$executeRawUnsafe(
+      `WITH ${canonicalCte}
+       INSERT INTO "${schemaName}"."product_uom_prices" (
+         product_id, uom_id, selling_price, cost_price,
+         initial_cost_price, last_purchase_cost, last_purchase_at,
+         last_purchase_id, last_purchase_item_id, active
+       )
+       SELECT product_id,
+              base_uom_id,
+              selling_price,
+              base_cost,
+              COALESCE(initial_cost_price, base_cost),
+              last_purchase_cost,
+              last_purchase_at,
+              last_purchase_id,
+              last_purchase_item_id,
+              TRUE
+       FROM canonical
+       WHERE base_cost IS NOT NULL`,
+    );
+
+    await this.prisma.$executeRawUnsafe(
+      `CREATE TEMP TABLE _non_base_price_fix ON COMMIT DROP AS
+       SELECT pup.id,
+              pup.product_id,
+              pup.uom_id,
+              pup.selling_price,
+              pup.last_purchase_at,
+              pup.last_purchase_id,
+              pup.last_purchase_item_id
+       FROM "${schemaName}"."product_uom_prices" pup
+       JOIN "${schemaName}"."product_uoms" pu
+         ON pu.product_id = pup.product_id
+        AND pu.uom_id = pup.uom_id
+       WHERE pup.active IS TRUE
+         AND pu.is_base IS NOT TRUE
+         AND (
+           pup.cost_price IS NOT NULL
+           OR pup.initial_cost_price IS NOT NULL
+           OR pup.last_purchase_cost IS NOT NULL
+         );
+
+       UPDATE "${schemaName}"."product_uom_prices" target
+       SET active = FALSE, updated_at = CURRENT_TIMESTAMP
+       FROM _non_base_price_fix src
+       WHERE target.id = src.id;
+
+       INSERT INTO "${schemaName}"."product_uom_prices" (
+         product_id, uom_id, selling_price, cost_price,
+         initial_cost_price, last_purchase_cost, last_purchase_at,
+         last_purchase_id, last_purchase_item_id, active
+       )
+       SELECT product_id,
+              uom_id,
+              selling_price,
+              NULL,
+              NULL,
+              NULL,
+              last_purchase_at,
+              last_purchase_id,
+              last_purchase_item_id,
+              TRUE
+       FROM _non_base_price_fix`,
+    );
+
+    await this.deduplicateActiveProductUomPrices(schemaName);
+  }
+
+  /** FIFO cost snapshots on sale lines for transaction register / COGS reporting. */
+  private async ensureSaleItemsCostSnapshotColumns(
+    schemaName: string,
+  ): Promise<void> {
+    await this.prisma.$executeRawUnsafe(
+      `ALTER TABLE "${schemaName}"."sale_items"
+       ADD COLUMN IF NOT EXISTS unit_cost_snapshot NUMERIC(14,4)`,
+    );
+    await this.prisma.$executeRawUnsafe(
+      `ALTER TABLE "${schemaName}"."sale_items"
+       ADD COLUMN IF NOT EXISTS line_cost_snapshot NUMERIC(14,4)`,
+    );
+  }
+
+  /** Indexes supporting POS transaction register filters and sorts. */
+  private async ensureTransactionRegisterIndexes(
+    schemaName: string,
+  ): Promise<void> {
+    const esc = schemaName.replace(/"/g, '""');
+    await this.prisma.$executeRawUnsafe(
+      `CREATE INDEX IF NOT EXISTS idx_sale_returns_branch_return_date
+       ON "${esc}"."sale_returns"(branch_id, return_date DESC)`,
+    );
+    await this.prisma.$executeRawUnsafe(
+      `CREATE INDEX IF NOT EXISTS idx_sale_returns_sale_id
+       ON "${esc}"."sale_returns"(sale_id)`,
+    );
+    await this.prisma.$executeRawUnsafe(
+      `CREATE INDEX IF NOT EXISTS idx_pos_sessions_staff_user_id
+       ON "${esc}"."pos_sessions"(staff_user_id)`,
+    );
+    await this.prisma.$executeRawUnsafe(
+      `CREATE INDEX IF NOT EXISTS idx_pos_sessions_device_id
+       ON "${esc}"."pos_sessions"(device_id)`,
+    );
+    await this.prisma.$executeRawUnsafe(
+      `CREATE INDEX IF NOT EXISTS idx_pos_statements_session_status
+       ON "${esc}"."pos_statements"(session_id, status)`,
+    );
+    await this.prisma.$executeRawUnsafe(
+      `CREATE INDEX IF NOT EXISTS idx_journal_entries_source_lookup
+       ON "${esc}"."journal_entries"(source_type, source_id)
+       WHERE source_id IS NOT NULL`,
+    );
+    await this.prisma.$executeRawUnsafe(
+      `CREATE INDEX IF NOT EXISTS idx_sales_receipt_number
+       ON "${esc}"."sales"(receipt_number)
+       WHERE receipt_number IS NOT NULL`,
+    );
+  }
+
+  /** RBAC Phase 1: delete + accounting dangerous-action permissions. */
+  private async ensureRbacPhase1Permissions(schemaName: string): Promise<void> {
+    const phase1Permissions = [
+      'delete_supplier',
+      'delete_customer',
+      'delete_purchase',
+      'post_journal',
+      'reverse_journal',
+      'close_period',
+      'reopen_period',
+      'change_lock_date',
+    ];
+    for (const name of phase1Permissions) {
+      await this.prisma.$executeRawUnsafe(
+        `INSERT INTO "${schemaName}"."permissions" (name)
+         VALUES ($1)
+         ON CONFLICT (name) DO NOTHING`,
+        name,
+      );
+    }
+    await this.prisma.$executeRawUnsafe(
+      `INSERT INTO "${schemaName}"."role_permissions" (role_id, permission_id)
+       SELECT r.id, p.id
+       FROM "${schemaName}"."roles" r
+       INNER JOIN "${schemaName}"."permissions" p
+         ON p.name = ANY($1::text[])
+       WHERE r.name = 'admin'
+       ON CONFLICT (role_id, permission_id) DO NOTHING`,
+      phase1Permissions,
+    );
+  }
+
+  /** RBAC Phase 2: granular CRUD permissions + default role grants. */
+  private async ensureRbacPhase2Permissions(schemaName: string): Promise<void> {
+    const phase2Permissions = [
+      'view_products',
+      'view_suppliers',
+      'create_supplier',
+      'edit_supplier',
+      'view_customers',
+      'create_customer',
+      'edit_customer',
+      'view_purchases',
+      'create_purchase',
+      'edit_purchase',
+      'receive_purchase',
+      'post_purchase_invoice',
+      'view_sales',
+      'create_sale',
+      'refund_sale',
+      'void_sale',
+      'view_staff',
+      'create_staff',
+      'edit_staff',
+      'delete_staff',
+      'view_roles',
+      'create_role',
+      'edit_role',
+      'delete_role',
+      'assign_role',
+      'adjust_inventory',
+      'transfer_inventory',
+      'approve_transfer',
+      'edit_branch',
+      'view_expenses',
+      'create_expense',
+      'edit_expense',
+      'delete_expense',
+    ];
+    for (const name of phase2Permissions) {
+      await this.prisma.$executeRawUnsafe(
+        `INSERT INTO "${schemaName}"."permissions" (name)
+         VALUES ($1)
+         ON CONFLICT (name) DO NOTHING`,
+        name,
+      );
+    }
+    await this.prisma.$executeRawUnsafe(
+      `INSERT INTO "${schemaName}"."role_permissions" (role_id, permission_id)
+       SELECT r.id, p.id
+       FROM "${schemaName}"."roles" r
+       CROSS JOIN "${schemaName}"."permissions" p
+       WHERE r.name = 'admin'
+       ON CONFLICT (role_id, permission_id) DO NOTHING`,
+    );
+    const managerPerms = [
+      'view_products',
+      'create_product',
+      'edit_product',
+      'view_suppliers',
+      'create_supplier',
+      'edit_supplier',
+      'view_customers',
+      'create_customer',
+      'edit_customer',
+      'view_purchases',
+      'create_purchase',
+      'edit_purchase',
+      'receive_purchase',
+      'post_purchase_invoice',
+      'view_sales',
+      'adjust_inventory',
+      'transfer_inventory',
+      'approve_transfer',
+      'view_staff',
+      'view_roles',
+    ];
+    await this.prisma.$executeRawUnsafe(
+      `INSERT INTO "${schemaName}"."role_permissions" (role_id, permission_id)
+       SELECT r.id, p.id
+       FROM "${schemaName}"."roles" r
+       INNER JOIN "${schemaName}"."permissions" p
+         ON p.name = ANY($1::text[])
+       WHERE r.name = 'manager'
+       ON CONFLICT (role_id, permission_id) DO NOTHING`,
+      managerPerms,
+    );
+    const cashierPerms = [
+      'view_products',
+      'view_sales',
+      'create_sale',
+      'refund_sale',
+      'view_customers',
+    ];
+    await this.prisma.$executeRawUnsafe(
+      `INSERT INTO "${schemaName}"."role_permissions" (role_id, permission_id)
+       SELECT r.id, p.id
+       FROM "${schemaName}"."roles" r
+       INNER JOIN "${schemaName}"."permissions" p
+         ON p.name = ANY($1::text[])
+       WHERE r.name = 'cashier'
+       ON CONFLICT (role_id, permission_id) DO NOTHING`,
+      cashierPerms,
+    );
+    const pharmacistPerms = ['view_products', 'view_sales', 'create_sale'];
+    await this.prisma.$executeRawUnsafe(
+      `INSERT INTO "${schemaName}"."role_permissions" (role_id, permission_id)
+       SELECT r.id, p.id
+       FROM "${schemaName}"."roles" r
+       INNER JOIN "${schemaName}"."permissions" p
+         ON p.name = ANY($1::text[])
+       WHERE r.name = 'pharmacist'
+       ON CONFLICT (role_id, permission_id) DO NOTHING`,
+      pharmacistPerms,
+    );
+  }
+
+  /** RBAC Phase 2: role metadata columns + system role flags. */
+  private async ensureRolesV2Columns(schemaName: string): Promise<void> {
+    await this.prisma.$executeRawUnsafe(
+      `ALTER TABLE "${schemaName}"."roles"
+       ADD COLUMN IF NOT EXISTS description TEXT`,
+    );
+    await this.prisma.$executeRawUnsafe(
+      `ALTER TABLE "${schemaName}"."roles"
+       ADD COLUMN IF NOT EXISTS active BOOLEAN DEFAULT true`,
+    );
+    await this.prisma.$executeRawUnsafe(
+      `ALTER TABLE "${schemaName}"."roles"
+       ADD COLUMN IF NOT EXISTS is_system_role BOOLEAN DEFAULT false`,
+    );
+    await this.prisma.$executeRawUnsafe(
+      `UPDATE "${schemaName}"."roles"
+       SET is_system_role = true,
+           active = COALESCE(active, true)
+       WHERE name = ANY($1::text[])`,
+      [
+        'admin',
+        'manager',
+        'cashier',
+        'pharmacist',
+        'auditor',
+        'accountant',
+        'finance_manager',
+      ],
+    );
+  }
+
+  /** POS transaction register read permission. */
+  private async ensureTransactionRegisterPermission(
+    schemaName: string,
+  ): Promise<void> {
+    await this.prisma.$executeRawUnsafe(
+      `INSERT INTO "${schemaName}"."permissions" (name)
+       VALUES ('view_transaction_register')
+       ON CONFLICT (name) DO NOTHING`,
+    );
+    await this.prisma.$executeRawUnsafe(
+      `INSERT INTO "${schemaName}"."role_permissions" (role_id, permission_id)
+       SELECT r.id, p.id
+       FROM "${schemaName}"."roles" r
+       INNER JOIN "${schemaName}"."permissions" p
+         ON p.name = 'view_transaction_register'
+       WHERE r.name IN ('admin', 'manager')
+       ON CONFLICT (role_id, permission_id) DO NOTHING`,
+    );
+    await this.prisma.$executeRawUnsafe(
+      `INSERT INTO "${schemaName}"."role_permissions" (role_id, permission_id)
+       SELECT r.id, p.id
+       FROM "${schemaName}"."roles" r
+       INNER JOIN "${schemaName}"."permissions" p
+         ON p.name = 'view_transaction_register'
+       WHERE r.name = 'auditor'
+       ON CONFLICT (role_id, permission_id) DO NOTHING`,
     );
   }
 

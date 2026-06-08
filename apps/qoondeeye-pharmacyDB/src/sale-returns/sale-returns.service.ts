@@ -40,9 +40,13 @@ export interface SaleItemForReturnRow {
   product_id: string | null;
   batch_id: string | null;
   quantity: number | string;
+  uom_id?: string | null;
+  entered_quantity?: number | string | null;
+  conversion_factor_snapshot?: number | string | null;
+  base_quantity?: number | string | null;
 }
 
-export interface SaleItemPriceRow {
+export interface SaleItemPriceRow extends SaleItemForReturnRow {
   price: number | string | null;
 }
 
@@ -75,6 +79,12 @@ export interface SaleReturnItemStockRow {
 export interface BatchQtyLockRow {
   quantity: number | string;
 }
+
+type ResolvedReturnQuantity = {
+  baseQuantity: number;
+  enteredQuantity: number;
+  conversionFactor: number;
+};
 
 @Injectable()
 export class SaleReturnsService {
@@ -153,6 +163,44 @@ export class SaleReturnsService {
     return Number(r?.q ?? 0);
   }
 
+  resolveReturnQuantity(
+    requestedQuantity: number,
+    saleItem: SaleItemForReturnRow,
+    alreadyReturnedBaseQuantity: number,
+  ): ResolvedReturnQuantity {
+    const factor = Number(saleItem.conversion_factor_snapshot ?? 1) || 1;
+    const soldBaseQuantity = Number(
+      saleItem.base_quantity ?? saleItem.quantity ?? 0,
+    );
+    const remainingBaseQuantity =
+      soldBaseQuantity - Number(alreadyReturnedBaseQuantity ?? 0);
+    const remainingEnteredQuantity = remainingBaseQuantity / factor;
+    const requested = Number(requestedQuantity);
+    if (!Number.isFinite(requested) || requested <= 0) {
+      throw new BadRequestException(
+        'Return quantity exceeds remaining quantity for this line',
+      );
+    }
+
+    let baseQuantity: number;
+    let enteredQuantity: number;
+    if (factor !== 1 && requested <= remainingEnteredQuantity + 1e-9) {
+      baseQuantity = Math.round(requested * factor);
+      enteredQuantity = requested;
+    } else {
+      baseQuantity = Math.round(requested);
+      enteredQuantity = baseQuantity / factor;
+    }
+
+    if (baseQuantity <= 0 || baseQuantity > remainingBaseQuantity) {
+      throw new BadRequestException(
+        'Return quantity exceeds remaining quantity for this line',
+      );
+    }
+
+    return { baseQuantity, enteredQuantity, conversionFactor: factor };
+  }
+
   /**
    * Inserts sale_return_items and restores batch + inventory.
    * Caller must insert the sale_returns row first.
@@ -203,7 +251,8 @@ export class SaleReturnsService {
   ): Promise<void> {
     for (const item of params.items) {
       const [saleItem] = await tx.$queryRawUnsafe<SaleItemForReturnRow[]>(
-        `SELECT id, product_id, batch_id, quantity
+        `SELECT id, product_id, batch_id, quantity,
+                uom_id, entered_quantity, conversion_factor_snapshot, base_quantity
          FROM sale_items
          WHERE id = $1 AND sale_id = $2
          FOR UPDATE`,
@@ -214,26 +263,30 @@ export class SaleReturnsService {
         throw new BadRequestException('Invalid sale item in return request');
       }
 
-      const soldQty = Number(saleItem.quantity ?? 0);
       const alreadyReturned = await this.sumReturnedQtyForSaleItem(
         tx,
         saleItem.id,
       );
-      const remaining = soldQty - alreadyReturned;
-      if (item.quantity <= 0 || item.quantity > remaining) {
-        throw new BadRequestException(
-          'Return quantity exceeds remaining quantity for this line',
-        );
-      }
+      const resolvedQuantity = this.resolveReturnQuantity(
+        item.quantity,
+        saleItem,
+        alreadyReturned,
+      );
 
       await tx.$queryRawUnsafe(
-        `INSERT INTO sale_return_items (sale_return_id, sale_item_id, product_id, batch_id, quantity)
-         VALUES ($1, $2, $3, $4, $5)`,
+        `INSERT INTO sale_return_items (
+           sale_return_id, sale_item_id, product_id, batch_id,
+           quantity, uom_id, entered_quantity, conversion_factor_snapshot, base_quantity
+         )
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $5)`,
         params.saleReturnId,
         saleItem.id,
         saleItem.product_id ?? null,
         saleItem.batch_id ?? null,
-        item.quantity,
+        resolvedQuantity.baseQuantity,
+        saleItem.uom_id ?? null,
+        resolvedQuantity.enteredQuantity,
+        resolvedQuantity.conversionFactor,
       );
 
       if (!saleItem.product_id) {
@@ -246,14 +299,14 @@ export class SaleReturnsService {
            SET quantity = COALESCE(quantity, 0) + $2
            WHERE id = $1`,
           saleItem.batch_id,
-          item.quantity,
+          resolvedQuantity.baseQuantity,
         );
       }
 
       await this.inventoryService.increaseStock(tx, {
         branchId: params.branchId,
         productId: saleItem.product_id,
-        quantity: item.quantity,
+        quantity: resolvedQuantity.baseQuantity,
       });
     }
   }
@@ -299,12 +352,24 @@ export class SaleReturnsService {
       } else {
         for (const it of dto.items) {
           const [si] = await tx.$queryRawUnsafe<SaleItemPriceRow[]>(
-            `SELECT price FROM sale_items WHERE id = $1::uuid AND sale_id = $2::uuid`,
+            `SELECT id, product_id, batch_id, quantity,
+                    uom_id, entered_quantity, conversion_factor_snapshot,
+                    base_quantity, price
+             FROM sale_items WHERE id = $1::uuid AND sale_id = $2::uuid`,
             it.saleItemId,
             dto.saleId,
           );
           const unit = Number(si?.price ?? 0);
-          refundTotal += unit * it.quantity;
+          if (si) {
+            const alreadyReturned =
+              await this.sumReturnedQtyForSaleItem(tx, si.id);
+            const resolvedQuantity = this.resolveReturnQuantity(
+              it.quantity,
+              si,
+              alreadyReturned,
+            );
+            refundTotal += unit * resolvedQuantity.enteredQuantity;
+          }
         }
       }
 

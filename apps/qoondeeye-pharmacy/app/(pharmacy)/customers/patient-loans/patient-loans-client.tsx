@@ -525,8 +525,8 @@ export default function PatientLoansPage() {
               Patient loans
             </h1>
             <p className="mt-1 text-sm text-muted-foreground">
-              Manage and track patient loan applications, repayments, and
-              outstanding balances.
+              Manual loan tracking. POS on-account credit sales are listed on
+              each customer&apos;s detail page under Loan history.
             </p>
           </div>
           <div className="flex w-full items-center gap-2 md:w-auto md:justify-end">

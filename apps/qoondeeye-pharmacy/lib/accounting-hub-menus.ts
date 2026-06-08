@@ -14,23 +14,6 @@ export type HubMenu = {
 
 export const ACCOUNTING_HUB_MENUS: HubMenu[] = [
   {
-    id: "vendors",
-    label: "Vendors",
-    sections: [
-      {
-        heading: "Purchases",
-        items: [
-          { label: "Bills", href: "/vendors/bills" },
-          { label: "Refunds", href: "/vendors/bills" },
-          { label: "Payments", href: "/accounting/supplier-payments" },
-          { label: "Employee Expenses", href: "/vendors/expenses" },
-          { label: "Products", href: "/inventory/products" },
-          { label: "Vendors", href: "/vendors/suppliers" },
-        ],
-      },
-    ],
-  },
-  {
     id: "accounting",
     label: "Accounting",
     sections: [

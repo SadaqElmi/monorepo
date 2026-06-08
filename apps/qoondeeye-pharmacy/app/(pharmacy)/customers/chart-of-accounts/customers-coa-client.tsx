@@ -129,7 +129,7 @@ export default function AccountingChartOfAccountsPage({
                             </TableCell>
                             <TableCell>{r.account_type}</TableCell>
                             <TableCell className="font-mono text-xs">
-                              {r.account_key}
+                              {r.account_key ?? "-"}
                             </TableCell>
                           </TableRow>
                         ))}

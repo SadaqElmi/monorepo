@@ -1583,7 +1583,7 @@ export class ConsolidationEngineService {
                 SUM(
                   CASE
                     WHEN coa.account_type = 'income' THEN jl.debit - jl.credit
-                    WHEN coa.account_type = 'expense' THEN jl.credit - jl.debit
+                    WHEN coa.account_type IN ('expense', 'cost_of_goods_sold') THEN jl.credit - jl.debit
                     ELSE 0
                   END
                 )::numeric(14,2)::text AS amount

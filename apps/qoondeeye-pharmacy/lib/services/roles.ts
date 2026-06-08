@@ -4,7 +4,11 @@ import { type JsonHeaders, jsonFetch } from "./http";
 export type Role = {
   id: string;
   name: string;
+  description?: string | null;
+  active?: boolean;
+  isSystemRole?: boolean;
   permissions: string[];
+  userCount?: number;
   createdAt?: string;
 };
 
@@ -17,9 +21,29 @@ export async function getRoles(tenantSlug: string): Promise<Role[]> {
 
 export async function createRole(
   tenantSlug: string,
-  input: { name: string; permissions: string[] },
+  input: {
+    name: string;
+    description?: string | null;
+    active?: boolean;
+    permissions: string[];
+  },
 ) {
   return jsonFetch<Role>(ROLES_PREFIX, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      "X-Tenant": tenantSlug,
+    } as JsonHeaders,
+    body: JSON.stringify(input),
+  });
+}
+
+export async function cloneRole(
+  tenantSlug: string,
+  id: string,
+  input: { name: string; description?: string | null },
+) {
+  return jsonFetch<Role>(`${ROLES_PREFIX}/${id}/clone`, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
@@ -32,7 +56,12 @@ export async function createRole(
 export async function updateRole(
   tenantSlug: string,
   id: string,
-  input: { name?: string; permissions?: string[] },
+  input: {
+    name?: string;
+    description?: string | null;
+    active?: boolean;
+    permissions?: string[];
+  },
 ) {
   return jsonFetch<Role>(`${ROLES_PREFIX}/${id}`, {
     method: "PATCH",
@@ -50,4 +79,3 @@ export async function deleteRole(tenantSlug: string, id: string) {
     headers: { "X-Tenant": tenantSlug } as JsonHeaders,
   });
 }
-

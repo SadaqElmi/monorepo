@@ -160,6 +160,113 @@ export class AccountingPostingService {
     });
   }
 
+  /** Opening stock from product import: Dr Inventory, Cr Opening Balance Equity. */
+  async postOpeningStockJournal(
+    tx: Prisma.TransactionClient,
+    params: {
+      branchId: string;
+      openingStockEntryId: string;
+      inventoryTotal: number;
+      entryDate: Date | string;
+      sourceType?:
+        | 'product_import_opening_stock'
+        | 'opening_stock_import';
+    },
+  ): Promise<void> {
+    const {
+      branchId,
+      openingStockEntryId,
+      inventoryTotal,
+      entryDate,
+      sourceType = 'opening_stock_import',
+    } = params;
+    const amt = round2(inventoryTotal);
+    if (amt <= 0) return;
+
+    const accounts = await this.seed.ensureAccountsForBranch(tx, branchId);
+    await this.journal.createBalancedEntry(tx, {
+      branchId,
+      entryDate,
+      description: `Opening stock import ${openingStockEntryId}`,
+      sourceType,
+      sourceId: openingStockEntryId,
+      lines: [
+        {
+          accountId: accounts.inventory,
+          debit: amt,
+          credit: 0,
+          partnerKind: null,
+          partnerId: null,
+        },
+        {
+          accountId: accounts.opening_balance_equity,
+          debit: 0,
+          credit: amt,
+          partnerKind: null,
+          partnerId: null,
+        },
+      ],
+    });
+  }
+
+  /** Reverse opening stock import: Cr Inventory, Dr Opening Balance Equity. */
+  async reverseOpeningStockJournal(
+    tx: Prisma.TransactionClient,
+    params: {
+      branchId: string;
+      openingStockEntryId: string;
+      inventoryTotal: number;
+      entryDate: Date | string;
+      sourceType?:
+        | 'product_import_opening_stock_reversal'
+        | 'opening_stock_import_reversal';
+      originalSourceType?:
+        | 'product_import_opening_stock'
+        | 'opening_stock_import';
+    },
+  ): Promise<void> {
+    const {
+      branchId,
+      openingStockEntryId,
+      inventoryTotal,
+      entryDate,
+      sourceType,
+      originalSourceType = 'opening_stock_import',
+    } = params;
+    const reversalSource =
+      sourceType ??
+      (originalSourceType === 'product_import_opening_stock'
+        ? 'product_import_opening_stock_reversal'
+        : 'opening_stock_import_reversal');
+    const amt = round2(inventoryTotal);
+    if (amt <= 0) return;
+
+    const accounts = await this.seed.ensureAccountsForBranch(tx, branchId);
+    await this.journal.createBalancedEntry(tx, {
+      branchId,
+      entryDate,
+      description: `Opening stock import reversal ${openingStockEntryId}`,
+      sourceType: reversalSource,
+      sourceId: openingStockEntryId,
+      lines: [
+        {
+          accountId: accounts.inventory,
+          debit: 0,
+          credit: amt,
+          partnerKind: null,
+          partnerId: null,
+        },
+        {
+          accountId: accounts.opening_balance_equity,
+          debit: amt,
+          credit: 0,
+          partnerKind: null,
+          partnerId: null,
+        },
+      ],
+    });
+  }
+
   /** Undo inventory/AP or cash effect when a purchase is voided. */
   async reversePurchaseJournal(
     tx: Prisma.TransactionClient,

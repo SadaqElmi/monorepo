@@ -1,4 +1,12 @@
-import type { ChartOfAccountRow } from "@/lib/services/accounting";
+import type {
+  ChartAccountRow,
+  ChartOfAccountRow,
+} from "@/lib/services/accounting";
+
+type CoaTreeSource = Pick<
+  ChartOfAccountRow | ChartAccountRow,
+  "id" | "code" | "name" | "account_type" | "account_key" | "parent_id"
+>;
 
 export function money(n: number) {
   return `$${n.toLocaleString(undefined, {
@@ -9,9 +17,9 @@ export function money(n: number) {
 
 /** Order COA rows as a tree (parent before children) for display. */
 export function sortCoaTree(
-  rows: ChartOfAccountRow[],
-): Array<ChartOfAccountRow & { depth: number }> {
-  const children = new Map<string | null, ChartOfAccountRow[]>();
+  rows: CoaTreeSource[],
+): Array<CoaTreeSource & { depth: number }> {
+  const children = new Map<string | null, CoaTreeSource[]>();
   for (const r of rows) {
     const p = r.parent_id ?? null;
     const list = children.get(p) ?? [];
@@ -25,7 +33,7 @@ export function sortCoaTree(
       }),
     );
   }
-  const out: Array<ChartOfAccountRow & { depth: number }> = [];
+  const out: Array<CoaTreeSource & { depth: number }> = [];
   function walk(parentId: string | null, depth: number) {
     for (const r of children.get(parentId) ?? []) {
       out.push({ ...r, depth });
@@ -38,18 +46,18 @@ export function sortCoaTree(
 
 /** Split flat COA tree rows into accordion groups (one top-level row + descendants). */
 export function groupCoaByRoot(
-  rows: Array<ChartOfAccountRow & { depth: number }>,
+  rows: Array<CoaTreeSource & { depth: number }>,
 ): {
   id: string;
   title: string;
-  rows: Array<ChartOfAccountRow & { depth: number }>;
+  rows: Array<CoaTreeSource & { depth: number }>;
 }[] {
   const groups: {
     id: string;
     title: string;
-    rows: Array<ChartOfAccountRow & { depth: number }>;
+    rows: Array<CoaTreeSource & { depth: number }>;
   }[] = [];
-  let current: Array<ChartOfAccountRow & { depth: number }> = [];
+  let current: Array<CoaTreeSource & { depth: number }> = [];
   let title = "Accounts";
   let id = "root";
   for (const r of rows) {

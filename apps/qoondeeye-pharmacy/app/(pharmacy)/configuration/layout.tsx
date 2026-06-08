@@ -1,5 +1,3 @@
-"use client";
-
 import type { ReactNode } from "react";
 
 export default function ConfigurationModuleLayout({
@@ -7,5 +5,9 @@ export default function ConfigurationModuleLayout({
 }: {
   children: ReactNode;
 }) {
-  return <>{children}</>;
+  return (
+    <div className="min-h-full bg-gradient-to-b from-muted/20 via-background to-background">
+      {children}
+    </div>
+  );
 }

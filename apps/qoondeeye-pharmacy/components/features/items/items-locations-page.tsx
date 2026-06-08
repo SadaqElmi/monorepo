@@ -455,7 +455,7 @@ export default function ItemsLocationsPage() {
                         className="group border-b border-border/50 transition-colors hover:bg-teal-50/50 odd:bg-muted/20 dark:hover:bg-teal-950/25 dark:odd:bg-muted/10"
                       >
                         <TableCell className="font-mono text-xs text-muted-foreground">
-                          {r.itemNo}
+                          {r.itemNo.replace(/^0+/, "")}
                         </TableCell>
                         <TableCell className="max-w-[220px] text-sm font-semibold text-foreground">
                           <div className="flex flex-col gap-0.5">

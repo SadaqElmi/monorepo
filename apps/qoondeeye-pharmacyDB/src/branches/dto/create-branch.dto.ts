@@ -7,6 +7,10 @@ export class CreateBranchDto {
 
   @IsOptional()
   @IsString()
+  code?: string;
+
+  @IsOptional()
+  @IsString()
   phone?: string;
 
   @IsOptional()

@@ -19,6 +19,7 @@ import {
   formatApiErrorForUser,
 } from "@/lib/services/http";
 import { loginSchema, validateForSubmit } from "@/lib/validation";
+import { getAdminDashboardUrl } from "@/lib/admin-dashboard-url";
 import { prefetchErpCoreAfterLogin } from "@/lib/erp-query-prefetch";
 import { useRateLimitCooldown } from "@/hooks/use-rate-limit-cooldown";
 
@@ -90,10 +91,10 @@ export default function LoginPage() {
         void prefetchErpCoreAfterLogin(queryClient, slug);
       }
       if (res.userType === "system") {
-        router.push("/admin");
-      } else {
-        router.push("/dashboard");
+        window.location.href = getAdminDashboardUrl("/login");
+        return;
       }
+      router.push("/dashboard");
     } catch (err) {
       if (applyRateLimit(err) && err instanceof ApiError) {
         const wait = err.retryAfterSeconds ?? 30;

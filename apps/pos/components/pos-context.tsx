@@ -9,7 +9,14 @@ import React, {
 } from "react";
 import { usePathname } from "next/navigation";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import type { PosTransaction, PosCartLine, PosHeldOrder } from "@repo/types";
+import type {
+  PosTransaction,
+  PosCartLine,
+  PosHeldOrder,
+  CustomerSummary,
+  CustomerCreditSummary,
+} from "@repo/types";
+import { getCustomerCreditSummary } from "@/lib/services/customers";
 import { getResolvedStoredUser, type StoredUser } from "@/lib/auth-client";
 import {
   loadPosTransactions,
@@ -30,7 +37,12 @@ import { getEffectiveClientBranchId } from "@/lib/branch-access";
 import {
   billableCartLines,
   cartTotals,
+  roundMoney,
 } from "@/features/register/model/totals";
+import {
+  CUSTOMER_CREDIT_PAYMENT_METHOD_ID,
+  isCashPaymentMethod,
+} from "@/features/register/model/constants";
 import {
   isManagerTierRole,
   maxDiscountPercentForRole,
@@ -94,12 +106,22 @@ type PosContextType = {
   applyTotalDiscountPct: (pct: number) => void;
   /** Attach / replace a free-form comment on the selected line. */
   setLineComment: (text: string) => void;
+  selectedCustomer: CustomerSummary | null;
+  customerCreditSummary: CustomerCreditSummary | null;
+  customerCreditLoading: boolean;
+  selectCustomer: (customer: CustomerSummary) => Promise<void>;
+  clearCustomer: () => void;
+  refreshCustomerCredit: () => Promise<void>;
   /** Persist the sale (server when online, local otherwise) and reset state. */
   completePayment: (
     paymentLabel: string,
     paymentMethodCode?: string,
     amountTendered?: number,
-  ) => Promise<void>;
+    options?: {
+      onAccount?: boolean;
+      creditOverride?: { managerUserId: string; reason: string };
+    },
+  ) => Promise<{ creditLimitExceeded?: boolean } | void>;
   /** Open shift session id for the current branch, or null. */
   posSessionId: string | null;
   posSessionLoading: boolean;
@@ -122,13 +144,8 @@ export function PosProvider({ children }: { children: React.ReactNode }) {
 
   const salePostingRef = React.useRef(false);
 
-  const createSaleMutation = useMutation<
-    Sale,
-    Error,
-    CreateSaleMutatePayload
-  >({
-    mutationFn: async (payload) =>
-      createSale(payload.tenantSlug, payload.body),
+  const createSaleMutation = useMutation<Sale, Error, CreateSaleMutatePayload>({
+    mutationFn: async (payload) => createSale(payload.tenantSlug, payload.body),
     onSuccess: (_data, variables) => {
       if (!variables?.tenantSlug) return;
       invalidatePosAfterSale(queryClient, variables.tenantSlug);
@@ -156,6 +173,11 @@ export function PosProvider({ children }: { children: React.ReactNode }) {
     useState(false);
   const [posSessionId, setPosSessionId] = useState<string | null>(null);
   const [posSessionLoading, setPosSessionLoading] = useState(false);
+  const [selectedCustomer, setSelectedCustomer] =
+    useState<CustomerSummary | null>(null);
+  const [customerCreditSummary, setCustomerCreditSummary] =
+    useState<CustomerCreditSummary | null>(null);
+  const [customerCreditLoading, setCustomerCreditLoading] = useState(false);
 
   const managerTierActiveForUi =
     isManagerTierRole(currentUser?.role) && !managerPrivilegesSuspended;
@@ -283,12 +305,58 @@ export function PosProvider({ children }: { children: React.ReactNode }) {
     if (checkoutStep === "payment" || cart.length > 0) setSupervisorMode(false);
   }, [supervisorMode, checkoutStep, cart.length]);
 
+  const refreshCustomerCredit = useCallback(async () => {
+    const slug = currentUser?.tenantSlug?.trim();
+    const customerId = selectedCustomer?.id;
+    if (!slug || !customerId) {
+      setCustomerCreditSummary(null);
+      return;
+    }
+    setCustomerCreditLoading(true);
+    try {
+      const summary = await getCustomerCreditSummary(slug, customerId);
+      setCustomerCreditSummary(summary);
+    } catch {
+      setCustomerCreditSummary(null);
+    } finally {
+      setCustomerCreditLoading(false);
+    }
+  }, [currentUser?.tenantSlug, selectedCustomer?.id]);
+
+  const selectCustomer = useCallback(
+    async (customer: CustomerSummary) => {
+      setSelectedCustomer(customer);
+      const slug = currentUser?.tenantSlug?.trim();
+      if (!slug) {
+        setCustomerCreditSummary(null);
+        return;
+      }
+      setCustomerCreditLoading(true);
+      try {
+        const summary = await getCustomerCreditSummary(slug, customer.id);
+        setCustomerCreditSummary(summary);
+      } catch {
+        setCustomerCreditSummary(null);
+      } finally {
+        setCustomerCreditLoading(false);
+      }
+    },
+    [currentUser?.tenantSlug],
+  );
+
+  const clearCustomer = useCallback(() => {
+    setSelectedCustomer(null);
+    setCustomerCreditSummary(null);
+  }, []);
+
   const clearCart = useCallback(() => {
     setCart([]);
     setCheckoutStep("cart");
     setSelectedLineId(null);
     setShowVatLine(false);
     setSupervisorMode(false);
+    setSelectedCustomer(null);
+    setCustomerCreditSummary(null);
   }, []);
 
   const cancelEntry = useCallback(() => {
@@ -407,8 +475,11 @@ export function PosProvider({ children }: { children: React.ReactNode }) {
         return;
       }
       const clamped = Math.max(0, Math.min(100, pct));
-      const subtotal = cart.reduce((s, l) => s + l.unitPrice * l.qty, 0);
-      setDiscount(Number(((subtotal * clamped) / 100).toFixed(2)));
+      const subtotal = billableCartLines(cart).reduce(
+        (s, l) => s + l.unitPrice * l.qty,
+        0,
+      );
+      setDiscount(roundMoney((subtotal * clamped) / 100));
     },
     [cart, roleForDiscountPolicy],
   );
@@ -432,6 +503,10 @@ export function PosProvider({ children }: { children: React.ReactNode }) {
       paymentLabel: string,
       paymentMethodCode?: string,
       amountTendered?: number,
+      options?: {
+        onAccount?: boolean;
+        creditOverride?: { managerUserId: string; reason: string };
+      },
     ) => {
       if (cart.length === 0) return;
       const tenantSlug = currentUser?.tenantSlug ?? null;
@@ -458,14 +533,39 @@ export function PosProvider({ children }: { children: React.ReactNode }) {
         return;
       }
 
+      const onAccount = Boolean(options?.onAccount);
+      const paymentCode = paymentMethodCode ?? paymentLabel;
+
+      if (onAccount && !selectedCustomer?.id) {
+        posToast.warning(
+          "Customer required",
+          "Select a customer before charging to account.",
+        );
+        return;
+      }
+
+      const totRounded = roundMoney(tot);
       const tendered =
-        amountTendered != null && Number.isFinite(amountTendered)
-          ? amountTendered
-          : tot;
-      if (tendered + 1e-6 < tot) {
+        onAccount
+          ? totRounded
+          : amountTendered != null && Number.isFinite(amountTendered)
+            ? roundMoney(amountTendered)
+            : totRounded;
+      if (!onAccount && tendered + 0.001 < totRounded) {
         posToast.error(
           "Insufficient tender",
-          "The amount entered is less than the balance due. Enter the full payment amount.",
+          `The amount entered (${tendered.toFixed(2)}) is less than the balance due (${totRounded.toFixed(2)}). Enter the full payment amount.`,
+        );
+        return;
+      }
+      if (
+        !onAccount &&
+        !isCashPaymentMethod(paymentCode) &&
+        Math.abs(tendered - totRounded) > 0.009
+      ) {
+        posToast.error(
+          "Exact amount required",
+          `${paymentLabel} must match the balance due (${totRounded.toFixed(2)}). Use Cash for change.`,
         );
         return;
       }
@@ -495,8 +595,7 @@ export function PosProvider({ children }: { children: React.ReactNode }) {
           );
           return;
         }
-        const changeRounded =
-          Math.round(Math.max(0, tendered - tot) * 100) / 100;
+        const changeRounded = roundMoney(Math.max(0, tendered - totRounded));
         salePostingRef.current = true;
         try {
           const sale = await createSaleMutation.mutateAsync({
@@ -504,10 +603,15 @@ export function PosProvider({ children }: { children: React.ReactNode }) {
             optimisticSaleId: `pending-${Date.now()}`,
             optimisticReceiptId: newReceiptId(),
             body: {
-              totalAmount: tot,
+              totalAmount: totRounded,
               discount,
               tax: t,
-              paymentMethod: paymentMethodCode ?? paymentLabel,
+              paymentMethod: onAccount
+                ? CUSTOMER_CREDIT_PAYMENT_METHOD_ID
+                : paymentMethodCode ?? paymentLabel,
+              onAccount: onAccount || undefined,
+              customerId: selectedCustomer?.id,
+              creditOverride: options?.creditOverride,
               posSessionId,
               items: billable.map((l) =>
                 l.miscChargeKind === "delivery" || l.miscChargeKind === "tailor"
@@ -515,11 +619,35 @@ export function PosProvider({ children }: { children: React.ReactNode }) {
                       miscChargeKind: l.miscChargeKind,
                       quantity: l.qty,
                       price: l.unitPrice,
+                      priceGroupId: l.priceGroupId,
+                      offerId: l.offerId,
+                      lineDiscount: l.lineDiscount ?? 0,
+                      discountSource: l.discountSource,
                     }
                   : {
                       productId: l.productId,
+                      uomId: l.uomId,
                       quantity: l.qty,
                       price: l.unitPrice,
+                      priceGroupId: l.priceGroupId,
+                      offerId: l.offerId,
+                      lineDiscount:
+                        l.lineDiscount ??
+                        (typeof l.lineDiscountPct === "number"
+                          ? Math.round(
+                              (l.unitPrice * l.qty * (l.lineDiscountPct / 100) +
+                                Number.EPSILON) *
+                                100,
+                            ) / 100
+                          : 0),
+                      discountSource:
+                        l.discountSource ??
+                        (l.offerId
+                          ? "offer"
+                          : typeof l.lineDiscountPct === "number" &&
+                              l.lineDiscountPct > 0
+                            ? "manual"
+                            : undefined),
                     },
               ),
             },
@@ -527,6 +655,9 @@ export function PosProvider({ children }: { children: React.ReactNode }) {
           const receiptNum =
             (sale.receipt_number as string | null | undefined)?.trim() ||
             newReceiptId();
+          const outstandingAfter = onAccount
+            ? (customerCreditSummary?.outstandingBalance ?? 0) + totRounded
+            : undefined;
           const entry: PosTransaction = {
             receiptId: receiptNum,
             saleId: sale.id,
@@ -536,9 +667,16 @@ export function PosProvider({ children }: { children: React.ReactNode }) {
             discount,
             subtotal: s,
             tax: t,
-            total: tot,
+            total: totRounded,
             amountTendered: tendered,
             changeDue: changeRounded,
+            customerId: selectedCustomer?.id,
+            customerName:
+              sale.customer_name ??
+              selectedCustomer?.name ??
+              undefined,
+            onAccount,
+            outstandingAfterSale: outstandingAfter,
           };
           const changeDue = changeRounded;
           setTransactions((prev) => {
@@ -560,17 +698,19 @@ export function PosProvider({ children }: { children: React.ReactNode }) {
               .join(" · "),
           );
         } catch (e) {
-          posToast.error(
-            "Could not save sale",
-            formatApiErrorForUser(e),
-          );
+          const msg =
+            e instanceof Error ? e.message : formatApiErrorForUser(e);
+          if (msg.includes("CREDIT_LIMIT_EXCEEDED")) {
+            return { creditLimitExceeded: true };
+          }
+          posToast.error("Could not save sale", formatApiErrorForUser(e));
         } finally {
           salePostingRef.current = false;
         }
         return;
       }
 
-      const changeRounded = Math.round(Math.max(0, tendered - tot) * 100) / 100;
+      const changeRounded = roundMoney(Math.max(0, tendered - totRounded));
       const changeDue = changeRounded;
       const entry: PosTransaction = {
         receiptId: newReceiptId(),
@@ -580,7 +720,7 @@ export function PosProvider({ children }: { children: React.ReactNode }) {
         discount,
         subtotal: s,
         tax: t,
-        total: tot,
+        total: totRounded,
         amountTendered: tendered,
         changeDue: changeRounded,
       };
@@ -611,6 +751,8 @@ export function PosProvider({ children }: { children: React.ReactNode }) {
       roleForDiscountPolicy,
       posSessionId,
       createSaleMutation,
+      selectedCustomer,
+      customerCreditSummary,
     ],
   );
 
@@ -654,6 +796,12 @@ export function PosProvider({ children }: { children: React.ReactNode }) {
         applyLineDiscountPct,
         applyTotalDiscountPct,
         setLineComment,
+        selectedCustomer,
+        customerCreditSummary,
+        customerCreditLoading,
+        selectCustomer,
+        clearCustomer,
+        refreshCustomerCredit,
         completePayment,
         posSessionId,
         posSessionLoading,

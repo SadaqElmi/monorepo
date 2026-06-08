@@ -52,15 +52,16 @@ export function canConfirm(status: TransferStatus): boolean {
 }
 
 /**
- * Ship only from confirmed and only when approval is approved.
+ * Ship from confirmed when approval is not required (`none`) or explicitly approved.
+ * `pending` / `rejected` block shipping until a manager approves or approval is re-requested.
  */
 export function canShip(
   status: TransferStatus,
   approvalState?: ApprovalStateInput,
 ): boolean {
   if (status !== "confirmed") return false;
-  const a = (approvalState ?? "").toLowerCase().trim();
-  return a === "approved";
+  const a = (approvalState ?? "none").toLowerCase().trim() || "none";
+  return a === "approved" || a === "none";
 }
 
 /** Reversed while still `shipped` is allowed in DB — receiving must stay blocked. */
@@ -103,6 +104,6 @@ export function canApproveOrReject(
   actorRole?: string | null,
 ): boolean {
   const role = (actorRole ?? "").toLowerCase().trim();
-  if (role !== "manager" && role !== "admin") return false;
+  if (role !== "manager" && role !== "admin" && role !== "owner") return false;
   return (approvalState ?? "").toLowerCase().trim() === "pending";
 }

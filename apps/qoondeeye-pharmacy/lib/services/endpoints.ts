@@ -4,9 +4,9 @@
  */
 
 export const getBaseUrl = () =>
-  //process.env.NEXT_PUBLIC_API_URL_LOCAL ?? "http://localhost:5555";
-process.env.NEXT_PUBLIC_API_URL ??
-"https://backend-production-1dc6.up.railway.app";
+  process.env.NEXT_PUBLIC_API_URL_LOCAL ?? "http://localhost:5555";
+//process.env.NEXT_PUBLIC_API_URL ??
+//"https://backend-production-1dc6.up.railway.app";
 
 export const API_BASE = getBaseUrl();
 
@@ -24,6 +24,11 @@ export const STAFF_PREFIX = `${API_BASE}/api/staff`;
 export const SYSTEM_USERS_PREFIX = `${API_BASE}/api/system-users`;
 export const CATEGORIES_PREFIX = `${API_BASE}/api/categories`;
 export const PRODUCTS_PREFIX = `${API_BASE}/api/products`;
+export const UOMS_PREFIX = `${API_BASE}/api/uoms`;
+export const PRICING_PREFIX = `${API_BASE}/api/pricing`;
+export const PRICE_GROUPS_PREFIX = `${API_BASE}/api/price-groups`;
+export const OFFERS_PREFIX = `${API_BASE}/api/offers`;
+export const IMPORTS_PREFIX = `${API_BASE}/api/imports`;
 export const BRANCHES_PREFIX = `${API_BASE}/api/branches`;
 export const ROLES_PREFIX = `${API_BASE}/api/roles`;
 export const INVENTORY_PREFIX = `${API_BASE}/api/inventory`;
@@ -53,3 +58,4 @@ export const TRANSFERS_PREFIX = apiUrl(
 
 /** POS device / shift APIs (cash declaration, Z-report data). */
 export const POS_PREFIX = `${API_BASE}/api/pos`;
+export const TRANSACTION_REGISTER_PREFIX = `${POS_PREFIX}/transaction-register`;

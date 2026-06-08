@@ -1,8 +1,5 @@
-import { requireServerSession } from "@/lib/auth-server";
+import { redirect } from "next/navigation";
 
-import Client from "./supplier-payments-client";
-
-export default async function Page() {
-  await requireServerSession();
-  return <Client />;
+export default function Page() {
+  redirect("/vendors/supplier-payments");
 }

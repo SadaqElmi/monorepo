@@ -1,6 +1,7 @@
 "use client";
 
 import * as React from "react";
+import { useSearchParams } from "next/navigation";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { format } from "date-fns";
 import { Loader2 } from "lucide-react";
@@ -51,6 +52,7 @@ const PAYMENT_METHOD_PRESETS = [
 const PAYMENTS_LIMIT = 80;
 
 export default function CustomerPaymentsPage() {
+  const searchParams = useSearchParams();
   const queryClient = useQueryClient();
   const branchFacet = useErpBranchFacet();
   const [tenantSlug] = React.useState(
@@ -61,7 +63,14 @@ export default function CustomerPaymentsPage() {
   const [submitting, setSubmitting] = React.useState(false);
   const [error, setError] = React.useState<string | null>(null);
 
-  const [customerId, setCustomerId] = React.useState("");
+  const [customerId, setCustomerId] = React.useState(
+    () => searchParams.get("customerId") ?? "",
+  );
+
+  React.useEffect(() => {
+    const fromUrl = searchParams.get("customerId");
+    if (fromUrl) setCustomerId(fromUrl);
+  }, [searchParams]);
   const [amount, setAmount] = React.useState("");
   const [paymentDate, setPaymentDate] = React.useState(
     format(new Date(), "yyyy-MM-dd"),

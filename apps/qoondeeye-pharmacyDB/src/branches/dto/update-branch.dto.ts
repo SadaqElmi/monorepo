@@ -7,6 +7,10 @@ export class UpdateBranchDto {
 
   @IsOptional()
   @IsString()
+  code?: string;
+
+  @IsOptional()
+  @IsString()
   phone?: string;
 
   @IsOptional()

@@ -16,6 +16,7 @@ import { PrismaService } from '../prisma/prisma.service';
 import { ReconciliationService } from '../reconciliation/reconciliation.service';
 import { CacheInvalidationService } from '../cache/cache-invalidation.service';
 import { TenantService } from '../tenant/tenant.service';
+import { hasEffectivePermission } from '../common/security/permission-catalog';
 import type { TransferRepairConfirmDto } from './dto/transfer-repair-confirm.dto';
 import type { CreateTransferDto } from './dto/create-transfer.dto';
 import { deriveStateFromEvents } from './replay/transfer-replay.util';
@@ -76,7 +77,11 @@ export type TransferMonitoringOverview = {
 };
 
 type TransferRow = Record<string, unknown>;
-type ActorContext = { userId?: string | null; userRole?: string | null };
+type ActorContext = {
+  userId?: string | null;
+  userRole?: string | null;
+  permissionCodes?: readonly string[];
+};
 type EventContext = {
   idempotencyKey?: string | null;
   correlationId?: string | null;
@@ -1055,9 +1060,16 @@ export class TransfersService {
 
   private assertApproverRole(actor: ActorContext) {
     const role = this.normalizeRole(actor.userRole);
-    if (role !== 'admin' && role !== 'manager') {
-      throw new ForbiddenException('Only manager/admin can approve or reject');
+    if (
+      hasEffectivePermission(actor.permissionCodes ?? [], 'approve_transfer') ||
+      role === 'admin' ||
+      role === 'owner'
+    ) {
+      return;
     }
+    throw new ForbiddenException(
+      'Missing permission: approve_transfer',
+    );
   }
 
   private transferAmountFromLines(
@@ -1427,7 +1439,7 @@ export class TransfersService {
 
   private canShipByApproval(approvalState: string | null | undefined): boolean {
     const a = this.normalizeApproval(approvalState);
-    return a === 'approved';
+    return a === 'approved' || a === 'none';
   }
 
   async create(
@@ -1828,7 +1840,6 @@ export class TransfersService {
         `UPDATE stock_transfers
          SET status = 'confirmed',
              confirmed_at = CURRENT_TIMESTAMP,
-             approval_state = 'pending',
              expected_stock_snapshot = $2::jsonb,
              lock_version = lock_version + 1
          WHERE id = $1::uuid AND status = 'draft'`,

@@ -17,7 +17,6 @@ import {
   normalizeRole,
   requiresAssignedBranch,
 } from '../common/security/branch-access.policy';
-import { ALL_ACCOUNTING_PERMISSIONS } from '../common/security/accounting-permissions';
 
 /** Response shape for unified login (frontend uses for redirect) */
 export type LoginResponse = {
@@ -176,12 +175,6 @@ export class AuthService {
         tenant.schemaName,
         user.id,
       );
-      if (
-        permissionCodes.length === 0 &&
-        (roleLower === 'admin' || roleLower === 'manager')
-      ) {
-        permissionCodes = [...ALL_ACCOUNTING_PERMISSIONS];
-      }
 
       const token = await this.signToken({
         sub: user.id,
@@ -326,6 +319,10 @@ export class AuthService {
       }
 
       const resolvedRole = matched.role_name.trim().toLowerCase();
+      const permissionCodes = await this.loadTenantPermissionCodes(
+        tenant.schemaName,
+        matched.id,
+      );
 
       const token = await this.signToken(
         {
@@ -336,6 +333,7 @@ export class AuthService {
           tenantId: tenant.id,
           authMode: 'pin',
           canViewAllBranches: false,
+          permissions: permissionCodes,
         },
         this.cashierJwtSignOptions(),
       );
@@ -358,7 +356,7 @@ export class AuthService {
         assignedBranchId: matched.branch_id,
         allowedBranchIds: matched.branch_id ? [matched.branch_id] : [],
         canViewAllBranches: false,
-        permissions: [],
+        permissions: permissionCodes,
       };
     });
   }
@@ -441,6 +439,10 @@ export class AuthService {
     await this.touchPosDevice(device.id);
 
     const resolvedRole = matched.role_name.trim().toLowerCase();
+    const permissionCodes = await this.loadTenantPermissionCodes(
+      device.tenantSchema,
+      matched.id,
+    );
 
     const token = await this.signToken(
       {
@@ -452,6 +454,7 @@ export class AuthService {
         authMode: 'device_pin',
         posDeviceId: device.id,
         canViewAllBranches: false,
+        permissions: permissionCodes,
       },
       this.cashierJwtSignOptions(),
     );
@@ -472,7 +475,7 @@ export class AuthService {
       assignedBranchId: matched.branch_id,
       allowedBranchIds: [matched.branch_id],
       canViewAllBranches: false,
-      permissions: [],
+      permissions: permissionCodes,
     };
   }
 
@@ -881,10 +884,7 @@ export class AuthService {
       type: 'tenant_user',
       tenantSchema: tenant.schemaName,
       tenantId: tenant.id,
-      permissions:
-        permissionCodes.length > 0
-          ? permissionCodes
-          : [...ALL_ACCOUNTING_PERMISSIONS],
+      permissions: permissionCodes,
     });
 
     return {
@@ -899,10 +899,7 @@ export class AuthService {
       tenantId: tenant.id,
       tenantSlug: tenant.schemaName,
       userType: 'tenant',
-      permissions:
-        permissionCodes.length > 0
-          ? permissionCodes
-          : [...ALL_ACCOUNTING_PERMISSIONS],
+      permissions: permissionCodes,
     };
   }
 
@@ -1107,13 +1104,6 @@ export class AuthService {
         schemaName,
         user.id,
       );
-      const rl = roleName.toLowerCase();
-      if (
-        permissionCodes.length === 0 &&
-        (rl === 'admin' || rl === 'manager')
-      ) {
-        permissionCodes = [...ALL_ACCOUNTING_PERMISSIONS];
-      }
 
       const token = await this.signToken({
         sub: user.id,

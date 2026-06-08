@@ -25,6 +25,18 @@ export const UNIT_TYPES: UnitType[] = ["PC", "Box", "Ctn", "router"];
 
 export const PAYMENT_METHOD_LABELS = POS_PAYMENT_METHOD_LABELS;
 
+/** Only cash may accept over-tender (change shown as "Charge" on the receipt). */
+export const CASH_PAYMENT_METHOD_ID = "cash";
+
+export const CUSTOMER_CREDIT_PAYMENT_METHOD_ID = "customer-credit";
+
+export function isCashPaymentMethod(codeOrLabel: string): boolean {
+  const raw = codeOrLabel.trim();
+  if (!raw) return false;
+  if (raw.toLowerCase() === CASH_PAYMENT_METHOD_ID) return true;
+  return raw === PAYMENT_METHOD_LABELS[CASH_PAYMENT_METHOD_ID];
+}
+
 export type PaymentMethod = {
   id: string;
   label: string;
