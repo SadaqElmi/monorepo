@@ -25,6 +25,10 @@ export const erpKeys = {
     ["erp", "staff", tenant, facet] as const,
   chartOfAccounts: (tenant: string, facet: string, branchId?: string) =>
     ["erp", "chart-of-accounts", tenant, facet, branchId ?? ""] as const,
+  accounts: (tenant: string, facet: string, branchId?: string) =>
+    ["erp", "accounts", tenant, facet, branchId ?? ""] as const,
+  account: (tenant: string, facet: string, accountId: string) =>
+    ["erp", "account", tenant, facet, accountId] as const,
   journalEntries: (
     tenant: string,
     facet: string,
@@ -68,6 +72,8 @@ export const erpKeys = {
     ["erp", "transfer-monitoring", tenant, facet] as const,
   controlCenter: (tenant: string, facet: string, params: unknown) =>
     ["erp", "control-center", tenant, facet, params] as const,
+  importCenterRunning: (tenant: string) =>
+    ["erp", "import-center", "running", tenant] as const,
   accountingAlerts: (
     tenant: string,
     facet: string,
@@ -208,6 +214,28 @@ export const erpKeys = {
       logsPage,
       pageSize,
     ] as const,
+  transactionRegister: (
+    tenant: string,
+    facet: string,
+    page: number,
+    pageSize: number,
+    filtersKey: unknown,
+  ) =>
+    [
+      "erp",
+      "transaction-register",
+      tenant,
+      facet,
+      page,
+      pageSize,
+      filtersKey,
+    ] as const,
+  transactionRegisterDetail: (
+    tenant: string,
+    facet: string,
+    registerId: string,
+  ) =>
+    ["erp", "transaction-register-detail", tenant, facet, registerId] as const,
   auditTrail: (
     tenant: string,
     facet: string,

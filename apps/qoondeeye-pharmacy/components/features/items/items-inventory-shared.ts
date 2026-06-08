@@ -128,6 +128,8 @@ export function branchIdsForGrid(
 }
 
 function defaultItemNo(p: Product) {
+  const itemNo = p.itemNo?.trim();
+  if (itemNo) return itemNo.toUpperCase();
   const s = p.sku?.trim();
   if (s) return s.length > 12 ? s.slice(0, 12).toUpperCase() : s.toUpperCase();
   return p.id.slice(0, 8).toUpperCase();
@@ -244,8 +246,7 @@ export function computeProductAggregateRows(
         reorders.push(cell.reorder);
       }
     }
-    const reorder =
-      reorders.length > 0 ? Math.min(...reorders) : 10;
+    const reorder = reorders.length > 0 ? Math.min(...reorders) : 10;
     const status = stockStatus(qty, reorder);
     if (statusFilter !== "__all__" && status !== statusFilter) continue;
 

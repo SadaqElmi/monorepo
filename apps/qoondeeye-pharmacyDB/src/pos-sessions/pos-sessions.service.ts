@@ -18,6 +18,7 @@ import {
 import { BatchesService } from '../batches/batches.service';
 import { CategoriesService } from '../categories/categories.service';
 import { ProductsService } from '../products/products.service';
+import { UomsService } from '../uoms/uoms.service';
 
 function round2(n: number): number {
   return Math.round((n + Number.EPSILON) * 100) / 100;
@@ -61,6 +62,7 @@ export class PosSessionsService {
     private readonly productsService: ProductsService,
     private readonly batchesService: BatchesService,
     private readonly categoriesService: CategoriesService,
+    private readonly uomsService: UomsService,
   ) {}
 
   /** Products, batches, and categories for the register in one response. */
@@ -78,7 +80,18 @@ export class PosSessionsService {
         allowedBranchIds,
       ),
     ]);
-    return { prods, batchesData, cats };
+    const uomsByProduct = await this.uomsService.listProductUomsForProducts(
+      schemaName,
+      prods.map((p) => p.id),
+    );
+    return {
+      prods: prods.map((p) => ({
+        ...p,
+        uoms: uomsByProduct[p.id] ?? [],
+      })),
+      batchesData,
+      cats,
+    };
   }
 
   private ensureBranch(branchId: string, allowedBranchIds: string[]): void {

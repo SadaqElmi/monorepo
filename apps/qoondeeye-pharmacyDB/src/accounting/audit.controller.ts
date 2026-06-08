@@ -5,14 +5,18 @@ import {
   Query,
   Req,
   Res,
+  UseGuards,
 } from '@nestjs/common';
 import type { FastifyReply, FastifyRequest } from 'fastify';
 import { resolveReportBranchScope } from '../common/branch-scope';
+import { PermissionGuard } from '../common/security/permission.guard';
+import { RequirePermissions } from '../common/security/require-permissions.decorator';
 import { TenantContextService } from '../tenant/tenant-context.service';
 import { TenantService } from '../tenant/tenant.service';
 import { AuditLogService } from './audit-log.service';
 
 @Controller('audit')
+@UseGuards(PermissionGuard)
 export class AuditController {
   constructor(
     private readonly tenantContext: TenantContextService,
@@ -29,6 +33,7 @@ export class AuditController {
   }
 
   @Get('verify')
+  @RequirePermissions('view_audit_logs')
   async verify(
     @Req() req: FastifyRequest,
     @Query('branchId') branchId?: string,
@@ -64,6 +69,7 @@ export class AuditController {
   }
 
   @Get('export')
+  @RequirePermissions('export_audit_package')
   async export(
     @Req() req: FastifyRequest,
     @Res() res: FastifyReply,

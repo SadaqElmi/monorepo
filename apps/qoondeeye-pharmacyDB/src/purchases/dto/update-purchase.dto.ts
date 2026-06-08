@@ -8,12 +8,17 @@ import {
   IsNumber,
   IsUUID,
   IsDateString,
+  IsBoolean,
 } from 'class-validator';
 import { Type } from 'class-transformer';
 
 class UpdatePurchaseItemDto {
   @IsUUID()
   productId!: string;
+
+  @IsOptional()
+  @IsUUID()
+  uomId?: string;
 
   @IsInt()
   quantity!: number;
@@ -31,8 +36,24 @@ class UpdatePurchaseItemDto {
   sellingPrice?: number;
 
   @IsOptional()
+  @IsBoolean()
+  updateSellingPrice?: boolean;
+
+  @IsOptional()
   @IsDateString()
   expiryDate?: string;
+
+  @IsOptional()
+  @IsNumber()
+  lineDiscount?: number;
+
+  @IsOptional()
+  @IsNumber()
+  taxAmount?: number;
+
+  @IsOptional()
+  @IsString()
+  lineNotes?: string;
 }
 
 export class UpdatePurchaseDto {
@@ -49,12 +70,40 @@ export class UpdatePurchaseDto {
   invoiceNumber?: string;
 
   @IsOptional()
+  @IsString()
+  supplierInvoiceNo?: string;
+
+  @IsOptional()
+  @IsString()
+  purchaseOrderNo?: string;
+
+  @IsOptional()
   @IsNumber()
   totalAmount?: number;
 
   @IsOptional()
   @IsDateString()
   purchaseDate?: string;
+
+  @IsOptional()
+  @IsDateString()
+  orderDate?: string;
+
+  @IsOptional()
+  @IsDateString()
+  postingDate?: string;
+
+  @IsOptional()
+  @IsDateString()
+  dueDate?: string;
+
+  @IsOptional()
+  @IsString()
+  notes?: string;
+
+  @IsOptional()
+  @IsBoolean()
+  onCredit?: boolean;
 
   @IsOptional()
   @IsArray()

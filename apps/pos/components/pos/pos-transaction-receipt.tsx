@@ -18,6 +18,7 @@ import {
 import type { PosTransaction, PosTransactionLine } from "@repo/types";
 import { POS_TAX_RATE } from "@repo/types";
 import { cn, formatMoney } from "@repo/utils";
+import { isCashPaymentMethod } from "@/features/register/model/constants";
 
 export type { PosTransaction, PosTransactionLine };
 
@@ -99,7 +100,8 @@ export function PosTransactionReceipt({
       : paid != null
         ? Math.max(0, Math.round((paid - totalSale) * 100) / 100)
         : 0;
-  const showPaidSection = paid != null || changeAmt >= 0.01;
+  const cashPayment = isCashPaymentMethod(tx.paymentMethod);
+  const showPaidSection = paid != null || (cashPayment && changeAmt >= 0.01);
 
   return (
     <Card
@@ -149,6 +151,40 @@ export function PosTransactionReceipt({
           </span>
           <span>{registerLabel}</span>
         </div>
+        {tx.customerName ? (
+          <div className="flex items-center justify-between gap-3 text-[11px]">
+            <span className="receipt-muted uppercase tracking-wide">
+              Customer
+            </span>
+            <span className="text-right font-medium">{tx.customerName}</span>
+          </div>
+        ) : null}
+        <div className="flex items-center justify-between gap-3 text-[11px]">
+          <span className="receipt-muted uppercase tracking-wide">Payment</span>
+          <span className="font-medium">{tx.paymentMethod}</span>
+        </div>
+        {tx.onAccount ? (
+          <>
+            <div className="flex items-center justify-between gap-3 text-[11px]">
+              <span className="receipt-muted uppercase tracking-wide">
+                Credit amount
+              </span>
+              <span className="font-medium tabular-nums">
+                {formatMoney(totalSale)}
+              </span>
+            </div>
+            {tx.outstandingAfterSale != null ? (
+              <div className="flex items-center justify-between gap-3 text-[11px]">
+                <span className="receipt-muted uppercase tracking-wide">
+                  Balance after
+                </span>
+                <span className="font-medium tabular-nums">
+                  {formatMoney(tx.outstandingAfterSale)}
+                </span>
+              </div>
+            ) : null}
+          </>
+        ) : null}
         <Separator className="my-1 bg-neutral-300" />
       </CardContent>
 
@@ -267,7 +303,7 @@ export function PosTransactionReceipt({
                   </span>
                 </div>
               ) : null}
-              {changeAmt >= 0.01 ? (
+              {cashPayment && changeAmt >= 0.01 ? (
                 <div className="flex justify-between gap-2 text-[11px]">
                   <span className="font-bold uppercase tracking-wide">
                     Charge

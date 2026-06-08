@@ -9,6 +9,20 @@ import type { Product } from "@repo/types";
 import type { Sale } from "@repo/types";
 
 import { appendReportBranchQuery } from "@/lib/accounting-report-query";
+import {
+  parseImportCenterSearchParams,
+  type ImportCenterPageData,
+} from "@/lib/import-center";
+import type {
+  ImportCenterDashboard,
+  ImportCenterFiltersQuery,
+  ImportCenterJobListItem,
+  ImportJobListItem,
+  ImportType,
+  ImportJobStatus,
+} from "@/lib/services/imports";
+
+export type { ImportCenterPageData } from "@/lib/import-center";
 import { sanitizeBranchIdForQuery } from "@/lib/branch-scope";
 import {
   ACCOUNTING_PREFIX,
@@ -30,13 +44,17 @@ import {
   SYSTEM_USERS_PREFIX,
   TENANTS_PREFIX,
   TRANSFERS_PREFIX,
+  IMPORTS_PREFIX,
 } from "@/lib/services/endpoints";
 import {
   serverJsonFetch,
   serverJsonFetchWithSession,
   serverPlatformJsonFetch,
 } from "@/lib/services/server-http";
-import type { Branch } from "@/lib/services/branches";
+import {
+  filterOperationalBranches,
+  type Branch,
+} from "@/lib/services/branches";
 import type { StaffMember } from "@/lib/services/staff";
 import type { Role } from "@/lib/services/roles";
 import type { Customer } from "@/lib/services/customers";
@@ -56,6 +74,7 @@ import type {
 } from "@/lib/services/inventory-history";
 import type {
   ChartOfAccountRow,
+  ChartAccountRow,
   JournalEntryRow,
   JournalLineFlatRow,
   JournalAuditResult,
@@ -90,7 +109,8 @@ const cachedTenantGet = cache(
 export async function getBranchesServer(
   tenantSlug: string,
 ): Promise<Branch[]> {
-  return cachedTenantGet<Branch[]>(tenantSlug, BRANCHES_PREFIX);
+  const rows = await cachedTenantGet<Branch[]>(tenantSlug, BRANCHES_PREFIX);
+  return filterOperationalBranches(rows);
 }
 
 export async function getProductsServer(
@@ -200,6 +220,18 @@ export async function getChartOfAccountsServer(
   const q = b ? `?branchId=${encodeURIComponent(b)}` : "";
   return serverJsonFetch<ChartOfAccountRow[]>(
     `${ACCOUNTING_PREFIX}/chart-of-accounts${q}`,
+    { tenantSlug },
+  );
+}
+
+export async function getAccountsServer(
+  tenantSlug: string,
+  branchId?: string,
+): Promise<ChartAccountRow[]> {
+  const b = sanitizeBranchIdForQuery(branchId);
+  const q = b ? `?branchId=${encodeURIComponent(b)}` : "";
+  return serverJsonFetch<ChartAccountRow[]>(
+    `${ACCOUNTING_PREFIX}/accounts${q}`,
     { tenantSlug },
   );
 }
@@ -517,4 +549,107 @@ export async function getAuditTrailServerSimple(
     `${ACCOUNTING_PREFIX}/audit-trail?${q}`,
     { tenantSlug },
   );
+}
+
+function importCenterFilterQs(
+  filters: ImportCenterFiltersQuery,
+): string {
+  const q = new URLSearchParams();
+  if (filters.importType) q.set("importType", filters.importType);
+  if (filters.status) q.set("status", filters.status);
+  if (filters.from) q.set("from", filters.from);
+  if (filters.to) q.set("to", filters.to);
+  if (filters.createdBy) q.set("createdBy", filters.createdBy);
+  if (filters.limit != null) q.set("limit", String(filters.limit));
+  if (filters.offset != null) q.set("offset", String(filters.offset));
+  const s = q.toString();
+  return s ? `?${s}` : "";
+}
+
+export async function getImportCenterDashboardServer(
+  tenantSlug: string,
+  filters: Omit<ImportCenterFiltersQuery, "limit" | "offset" | "status"> = {},
+): Promise<ImportCenterDashboard> {
+  return serverJsonFetch<ImportCenterDashboard>(
+    `${IMPORTS_PREFIX}/center/dashboard${importCenterFilterQs(filters)}`,
+    { tenantSlug, cacheMode: "report" },
+  );
+}
+
+export async function listImportCenterJobsServer(
+  tenantSlug: string,
+  filters: ImportCenterFiltersQuery,
+): Promise<{ jobs: ImportCenterJobListItem[]; total: number }> {
+  return serverJsonFetch<{ jobs: ImportCenterJobListItem[]; total: number }>(
+    `${IMPORTS_PREFIX}/center/jobs${importCenterFilterQs(filters)}`,
+    { tenantSlug, cacheMode: "report" },
+  );
+}
+
+export async function listImportCenterFailedServer(
+  tenantSlug: string,
+  limit = 10,
+): Promise<{ jobs: ImportJobListItem[]; total: number }> {
+  const q = new URLSearchParams({ limit: String(limit), offset: "0" });
+  return serverJsonFetch<{ jobs: ImportJobListItem[]; total: number }>(
+    `${IMPORTS_PREFIX}/center/failed?${q}`,
+    { tenantSlug, cacheMode: "report" },
+  );
+}
+
+export function importCenterFiltersFromSearchParams(
+  raw: Record<string, string | string[] | undefined>,
+): ImportCenterFiltersQuery {
+  const p = parseImportCenterSearchParams(raw);
+  return {
+    importType: p.importType as ImportType | undefined,
+    status: p.status as ImportJobStatus | undefined,
+    from: p.from,
+    to: p.to,
+    createdBy: p.createdBy,
+    limit: p.limit,
+    offset: p.offset,
+  };
+}
+
+export async function loadImportCenterPageData(
+  tenantSlug: string,
+  searchParams: Record<string, string | string[] | undefined>,
+): Promise<ImportCenterPageData> {
+  const filters = importCenterFiltersFromSearchParams(searchParams);
+  const pageNum = Math.max(
+    1,
+    Number(
+      typeof searchParams.page === "string"
+        ? searchParams.page
+        : Array.isArray(searchParams.page)
+          ? searchParams.page[0]
+          : 1,
+    ) || 1,
+  );
+  const pageSize = 25;
+  const listFilters: ImportCenterFiltersQuery = {
+    ...filters,
+    limit: pageSize,
+    offset: (pageNum - 1) * pageSize,
+  };
+  const dashFilters = {
+    importType: filters.importType,
+    from: filters.from,
+    to: filters.to,
+    createdBy: filters.createdBy,
+  };
+  const [dashboard, jobs, failed] = await Promise.all([
+    getImportCenterDashboardServer(tenantSlug, dashFilters),
+    listImportCenterJobsServer(tenantSlug, listFilters),
+    listImportCenterFailedServer(tenantSlug, 10),
+  ]);
+  return {
+    dashboard,
+    jobs,
+    failed,
+    filters: listFilters,
+    pageNum,
+    pageSize,
+  };
 }

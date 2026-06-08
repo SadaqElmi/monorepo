@@ -460,8 +460,8 @@ export default function InventoryHistoryPage() {
         <p className="text-xs text-muted-foreground">
           Before/after quantities are not stored per movement in v1; a future ledger
           will add running balances.{" "}
-          <Link href={ROUTES.inventory.stock} className="text-primary underline-offset-4 hover:underline">
-            Stock levels
+          <Link href={ROUTES.inventory.items} className="text-primary underline-offset-4 hover:underline">
+            Inventory items
           </Link>{" "}
           reflect current on-hand totals.
         </p>

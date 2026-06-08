@@ -1,4 +1,5 @@
 import type { UnitType } from "@repo/types";
+import type { ProductUom } from "@repo/types";
 
 export type PosCatalogProduct = {
   id: string;
@@ -15,5 +16,13 @@ export type PosCatalogProduct = {
   showCompare?: boolean;
   stock: "in" | "low";
   unitType: UnitType;
+  uomId?: string;
+  uomCode?: string;
+  uomSymbol?: string | null;
+  conversionFactorToBase?: number;
+  priceGroupId?: string;
+  offerId?: string;
+  discountSource?: string;
+  uoms?: ProductUom[];
 };
 

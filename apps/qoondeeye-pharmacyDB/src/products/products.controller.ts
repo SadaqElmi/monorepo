@@ -10,15 +10,19 @@ import {
   Query,
   BadRequestException,
   NotFoundException,
+  UseGuards,
 } from '@nestjs/common';
 import type { FastifyRequest } from 'fastify';
 import { parsePagedQueryParam } from '../common/pagination.util';
+import { PermissionGuard } from '../common/security/permission.guard';
+import { RequirePermissions } from '../common/security/require-permissions.decorator';
 import { ProductsService } from './products.service';
 import { TenantContextService } from '../tenant/tenant-context.service';
 import { CreateProductDto } from './dto/create-product.dto';
 import { UpdateProductDto } from './dto/update-product.dto';
 
 @Controller('products')
+@UseGuards(PermissionGuard)
 export class ProductsController {
   constructor(
     private readonly productsService: ProductsService,
@@ -26,6 +30,7 @@ export class ProductsController {
   ) {}
 
   @Get()
+  @RequirePermissions('view_products')
   async findAll(
     @Req() req: FastifyRequest,
     @Query('page') page?: string,
@@ -47,6 +52,7 @@ export class ProductsController {
 
   /** All products in the tenant (for purchases, stock views). Explicitly not branch-filtered. */
   @Get('catalog')
+  @RequirePermissions('view_products')
   async findCatalog() {
     const { schema, tenantId } = this.ensureTenant();
     return this.productsService.findAllTenantCatalog(schema, tenantId);
@@ -54,6 +60,7 @@ export class ProductsController {
 
   /** Transfer picker catalog scoped to active branch visibility and stock rows. */
   @Get('transfer-catalog')
+  @RequirePermissions('view_products')
   async findTransferCatalog(@Req() req: FastifyRequest) {
     const { schema } = this.ensureTenant();
     return this.productsService.findTransferCatalog(
@@ -64,6 +71,7 @@ export class ProductsController {
 
   /** Id, barcode, or name search (for items-by-location, POS helpers). */
   @Get('lookup')
+  @RequirePermissions('view_products')
   async lookup(@Req() req: FastifyRequest, @Query('q') q: string) {
     const { schema } = this.ensureTenant();
     return this.productsService.lookup(
@@ -74,6 +82,7 @@ export class ProductsController {
   }
 
   @Get('barcode/:barcode')
+  @RequirePermissions('view_products')
   async findByBarcode(
     @Req() req: FastifyRequest,
     @Param('barcode') barcode: string,
@@ -91,23 +100,114 @@ export class ProductsController {
     return row;
   }
 
-  @Get(':id')
-  async findOne(@Req() req: FastifyRequest, @Param('id') id: string) {
+  @Get(':id/suppliers')
+  @RequirePermissions('view_products')
+  async listSuppliers(@Req() req: FastifyRequest, @Param('id') id: string) {
     const { schema } = this.ensureTenant();
-    return this.productsService.findOne(
+    return this.productsService.listSuppliers(
       schema,
       id,
       req.allowedBranchIds ?? [],
     );
   }
 
+  @Post(':id/suppliers')
+  @RequirePermissions('edit_product')
+  async addSupplier(
+    @Req() req: FastifyRequest,
+    @Param('id') id: string,
+    @Body()
+    dto: {
+      supplierId: string;
+      isPreferred?: boolean;
+      lastCostPrice?: number | null;
+      supplierItemCode?: string | null;
+    },
+  ) {
+    const { schema, tenantId } = this.ensureTenant();
+    return this.productsService.addSupplier(
+      schema,
+      tenantId,
+      id,
+      req.allowedBranchIds ?? [],
+      dto,
+    );
+  }
+
+  @Patch(':id/suppliers/:supplierId')
+  @RequirePermissions('edit_product')
+  async updateSupplierLink(
+    @Req() req: FastifyRequest,
+    @Param('id') id: string,
+    @Param('supplierId') supplierId: string,
+    @Body()
+    dto: {
+      isPreferred?: boolean;
+      lastCostPrice?: number | null;
+      supplierItemCode?: string | null;
+    },
+  ) {
+    const { schema, tenantId } = this.ensureTenant();
+    return this.productsService.updateSupplierLink(
+      schema,
+      tenantId,
+      id,
+      supplierId,
+      req.allowedBranchIds ?? [],
+      dto,
+    );
+  }
+
+  @Delete(':id/suppliers/:supplierId')
+  @RequirePermissions('edit_product')
+  async removeSupplier(
+    @Req() req: FastifyRequest,
+    @Param('id') id: string,
+    @Param('supplierId') supplierId: string,
+  ) {
+    const { schema, tenantId } = this.ensureTenant();
+    return this.productsService.removeSupplier(
+      schema,
+      tenantId,
+      id,
+      supplierId,
+      req.allowedBranchIds ?? [],
+    );
+  }
+
+  @Post(':id/suppliers/:supplierId/preferred')
+  @RequirePermissions('edit_product')
+  async setPreferredSupplier(
+    @Req() req: FastifyRequest,
+    @Param('id') id: string,
+    @Param('supplierId') supplierId: string,
+  ) {
+    const { schema, tenantId } = this.ensureTenant();
+    return this.productsService.setPreferredSupplier(
+      schema,
+      tenantId,
+      id,
+      supplierId,
+      req.allowedBranchIds ?? [],
+    );
+  }
+
+  @Get(':id')
+  @RequirePermissions('view_products')
+  async findOne(@Req() req: FastifyRequest, @Param('id') id: string) {
+    const { schema } = this.ensureTenant();
+    return this.productsService.findOne(schema, id, req.allowedBranchIds ?? []);
+  }
+
   @Post()
+  @RequirePermissions('create_product')
   async create(@Body() dto: CreateProductDto) {
     const { schema, tenantId } = this.ensureTenant();
     return this.productsService.create(schema, tenantId, dto);
   }
 
   @Patch(':id')
+  @RequirePermissions('edit_product')
   async update(
     @Req() req: FastifyRequest,
     @Param('id') id: string,
@@ -124,6 +224,7 @@ export class ProductsController {
   }
 
   @Delete(':id')
+  @RequirePermissions('delete_product')
   async remove(@Req() req: FastifyRequest, @Param('id') id: string) {
     const { schema, tenantId } = this.ensureTenant();
     return this.productsService.remove(

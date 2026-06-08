@@ -1,6 +1,7 @@
 "use client";
 
-import { Plus, Search } from "lucide-react";
+import Link from "next/link";
+import { FileText, Plus, Search } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -32,13 +33,19 @@ export function BillsStickyHeader({
             className="h-9 rounded-full pl-9"
           />
         </div>
+        <Button variant="outline" className="gap-2 rounded-full" asChild>
+          <Link href="/vendors/bills/new">
+            <FileText className="h-4 w-4" />
+            Purchase order
+          </Link>
+        </Button>
         <Button
           className="gap-2 rounded-full bg-primary text-primary-foreground shadow-md hover:bg-primary/90"
           onClick={onNewPurchase}
           disabled={newPurchaseDisabled}
         >
           <Plus className="h-4 w-4" />
-          New Purchase
+          Quick bill
         </Button>
       </div>
     </header>

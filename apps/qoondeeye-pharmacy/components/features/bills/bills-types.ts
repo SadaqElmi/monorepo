@@ -6,6 +6,7 @@ export type EditablePurchase = {
   branchId: string;
   invoiceNumber: string;
   productId: string;
+  uomId: string;
   quantity: string;
   batchNumber: string;
   costPrice: string;

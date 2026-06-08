@@ -2,12 +2,15 @@ import {
   BadRequestException,
   Body,
   Controller,
+  Delete,
   Get,
   ForbiddenException,
   Param,
+  Patch,
   Post,
   Query,
   Req,
+  UseGuards,
 } from '@nestjs/common';
 import type { FastifyRequest } from 'fastify';
 import {
@@ -30,9 +33,15 @@ import { FinancialReportsService } from './financial-reports.service';
 import { CreatePaymentTermDto } from './dto/create-payment-term.dto';
 import { CreateFollowUpLevelDto } from './dto/create-follow-up-level.dto';
 import { MergeChartOfAccountsDto } from './dto/merge-chart-of-accounts.dto';
+import { UpdateChartOfAccountReconciliationDto } from './dto/update-chart-of-account-reconciliation.dto';
+import { CreateChartOfAccountDto } from './dto/create-chart-of-account.dto';
+import { UpdateChartOfAccountDto } from './dto/update-chart-of-account.dto';
 import { ChartOfAccountsMergeService } from './chart-of-accounts-merge.service';
 import { BranchSecurityMetricsService } from './branch-security-metrics.service';
+import { AuditLogService } from './audit-log.service';
 import { isGlobalBranchRole } from '../common/branch-scope/branch-scope.util';
+import { PermissionGuard } from '../common/security/permission.guard';
+import { RequirePermissions } from '../common/security/require-permissions.decorator';
 import {
   parsePagedQueryParam,
   toPagedResult,
@@ -46,10 +55,48 @@ interface ChartOfAccountsListRow {
   account_type: string;
   account_key: string | null;
   is_system: boolean;
+  allow_reconciliation: boolean;
   payment_method_key: string | null;
   parent_id: string | null;
   created_at: Date;
 }
+
+interface ChartOfAccountCrudRecord {
+  id: string;
+  branch_id: string;
+  code: string | null;
+  name: string;
+  account_type: string;
+  account_key: string | null;
+  parent_id: string | null;
+  active: boolean;
+  allow_reconciliation: boolean;
+  description: string | null;
+  is_system: boolean;
+  created_at: Date | string | null;
+  updated_at: Date | string | null;
+}
+
+type ChartOfAccountCrudResponse = Omit<
+  ChartOfAccountCrudRecord,
+  'branch_id' | 'is_system'
+>;
+
+const CHART_OF_ACCOUNT_TYPE_CODES = new Set([
+  'asset_cash',
+  'asset_current',
+  'asset_receivable',
+  'asset_fixed',
+  'liability_current',
+  'liability_payable',
+  'equity',
+  'income',
+  'expense',
+  'cost_of_goods_sold',
+  'asset',
+  'liability',
+  'section',
+]);
 
 interface JournalEntryRow {
   id: string;
@@ -103,6 +150,7 @@ export class AccountingController {
     private readonly financialReports: FinancialReportsService,
     private readonly chartOfAccountsMerge: ChartOfAccountsMergeService,
     private readonly branchSecurityMetrics: BranchSecurityMetricsService,
+    private readonly auditLog: AuditLogService,
   ) {}
 
   private ensureTenant() {
@@ -125,6 +173,131 @@ export class AccountingController {
       hash = (hash * 31 + key.charCodeAt(i)) >>> 0;
     }
     return hash.toString(16).padStart(8, '0');
+  }
+
+  private canManageSystemAccounts(req: FastifyRequest): boolean {
+    const role = req.userRole?.trim().toLowerCase() ?? '';
+    return role === 'admin' || role === 'owner' || role === 'super_admin';
+  }
+
+  private accountCrudSelectSql(): string {
+    return `id::text AS id,
+            branch_id::text AS branch_id,
+            code,
+            name,
+            account_type,
+            account_key,
+            parent_id::text AS parent_id,
+            COALESCE(active, TRUE) AS active,
+            COALESCE(allow_reconciliation, FALSE) AS allow_reconciliation,
+            description,
+            COALESCE(is_system, FALSE) AS is_system,
+            created_at,
+            updated_at`;
+  }
+
+  private accountCrudResponse(
+    row: ChartOfAccountCrudRecord,
+  ): ChartOfAccountCrudResponse {
+    return {
+      id: row.id,
+      code: row.code,
+      name: row.name,
+      account_type: row.account_type,
+      account_key: row.account_key,
+      parent_id: row.parent_id,
+      active: row.active,
+      allow_reconciliation: row.allow_reconciliation,
+      description: row.description,
+      created_at: row.created_at,
+      updated_at: row.updated_at,
+    };
+  }
+
+  private resolveAliasedString(
+    camelValue: string | null | undefined,
+    snakeValue: string | null | undefined,
+    fieldName: string,
+  ): string | null | undefined {
+    if (
+      camelValue !== undefined &&
+      camelValue !== null &&
+      snakeValue !== undefined &&
+      snakeValue !== null &&
+      camelValue.trim() !== snakeValue.trim()
+    ) {
+      throw new BadRequestException(
+        `${fieldName} and ${fieldName.replace(/[A-Z]/g, (m) => `_${m.toLowerCase()}`)} must match`,
+      );
+    }
+    return camelValue ?? snakeValue ?? undefined;
+  }
+
+  private normalizeNullableString(
+    value: string | null | undefined,
+  ): string | null {
+    if (value === undefined || value === null) return null;
+    const trimmed = value.trim();
+    return trimmed ? trimmed : null;
+  }
+
+  private normalizeAccountType(
+    value: string | null | undefined,
+  ): string | undefined {
+    if (value === undefined || value === null) return undefined;
+    const normalized = value.trim();
+    if (!normalized) return undefined;
+    if (!CHART_OF_ACCOUNT_TYPE_CODES.has(normalized)) {
+      throw new BadRequestException(`Unsupported account type: ${normalized}`);
+    }
+    return normalized;
+  }
+
+  private requireAccountValue(
+    value: string | null | undefined,
+    label: string,
+  ): string {
+    const trimmed = value?.trim();
+    if (!trimmed) {
+      throw new BadRequestException(`${label} is required`);
+    }
+    return trimmed;
+  }
+
+  private async countAccountJournalLines(
+    tx: {
+      $queryRawUnsafe<T = unknown>(
+        query: string,
+        ...values: unknown[]
+      ): Promise<T>;
+    },
+    accountId: string,
+  ): Promise<number> {
+    const [usage] = await tx.$queryRawUnsafe<{ c: bigint }[]>(
+      `SELECT COUNT(*)::bigint AS c
+       FROM journal_lines
+       WHERE account_id = $1::uuid`,
+      accountId,
+    );
+    return Number(usage?.c ?? 0);
+  }
+
+  private async countAccountChildren(
+    tx: {
+      $queryRawUnsafe<T = unknown>(
+        query: string,
+        ...values: unknown[]
+      ): Promise<T>;
+    },
+    accountId: string,
+  ): Promise<number> {
+    const [children] = await tx.$queryRawUnsafe<{ c: bigint }[]>(
+      `SELECT COUNT(*)::bigint AS c
+       FROM chart_of_accounts
+       WHERE parent_id = $1::uuid`,
+      accountId,
+    );
+    return Number(children?.c ?? 0);
   }
 
   @Get('supplier-payments')
@@ -378,6 +551,8 @@ export class AccountingController {
   }
 
   @Post('period/approve')
+  @UseGuards(PermissionGuard)
+  @RequirePermissions('close_period')
   async approvePeriod(
     @Req() req: FastifyRequest,
     @Body()
@@ -408,6 +583,8 @@ export class AccountingController {
   }
 
   @Post('period/reopen')
+  @UseGuards(PermissionGuard)
+  @RequirePermissions('reopen_period')
   async reopenPeriod(
     @Req() req: FastifyRequest,
     @Body()
@@ -448,13 +625,478 @@ export class AccountingController {
     await this.tenantService.applyTenantSchemaPatches(schema);
     return this.prisma.withTenantSchema(schema, (tx) =>
       tx.$queryRawUnsafe<ChartOfAccountsListRow[]>(
-        `SELECT id, branch_id, code, name, account_type, account_key, is_system, payment_method_key, parent_id, created_at
+        `SELECT id, branch_id, code, name, account_type, account_key, is_system, allow_reconciliation, payment_method_key, parent_id, created_at
          FROM chart_of_accounts
          WHERE branch_id = $1::uuid
          ORDER BY code NULLS LAST, name`,
         target,
       ),
     );
+  }
+
+  @Get('reconciliation/accounts')
+  async reconciliationAccounts(
+    @Req() req: FastifyRequest,
+    @Query('branchId') branchId?: string,
+  ) {
+    this.ensureTenant();
+    const target = resolveSingleBranchId(req, branchId);
+    const schema = this.tenantContext.getSchemaName()!;
+    await this.tenantService.applyTenantSchemaPatches(schema);
+    return this.prisma.withTenantSchema(schema, (tx) =>
+      tx.$queryRawUnsafe<ChartOfAccountsListRow[]>(
+        `SELECT id, branch_id, code, name, account_type, account_key, is_system, allow_reconciliation, payment_method_key, parent_id, created_at
+         FROM chart_of_accounts
+         WHERE branch_id = $1::uuid
+           AND allow_reconciliation = TRUE
+           AND COALESCE(active, TRUE) = TRUE
+         ORDER BY code NULLS LAST, name`,
+        target,
+      ),
+    );
+  }
+
+  @Get('accounts')
+  async listAccounts(
+    @Req() req: FastifyRequest,
+    @Query('branchId') branchId?: string,
+  ): Promise<ChartOfAccountCrudResponse[]> {
+    this.ensureTenant();
+    const branchIds = branchId?.trim()
+      ? [resolveSingleBranchId(req, branchId)]
+      : assertAllowedBranches(req);
+    const schema = this.tenantContext.getSchemaName()!;
+    await this.tenantService.applyTenantSchemaPatches(schema);
+    return this.prisma.withTenantSchema(schema, async (tx) => {
+      const rows = await tx.$queryRawUnsafe<ChartOfAccountCrudRecord[]>(
+        `SELECT ${this.accountCrudSelectSql()}
+         FROM chart_of_accounts
+         WHERE branch_id = ANY($1::uuid[])
+         ORDER BY code NULLS LAST, name`,
+        branchIds,
+      );
+      return rows.map((row) => this.accountCrudResponse(row));
+    });
+  }
+
+  @Get('accounts/:id')
+  async getAccount(
+    @Req() req: FastifyRequest,
+    @Param('id') id: string,
+  ): Promise<ChartOfAccountCrudResponse> {
+    this.ensureTenant();
+    const allowed = assertAllowedBranches(req);
+    const schema = this.tenantContext.getSchemaName()!;
+    await this.tenantService.applyTenantSchemaPatches(schema);
+    return this.prisma.withTenantSchema(schema, async (tx) => {
+      const [account] = await tx.$queryRawUnsafe<ChartOfAccountCrudRecord[]>(
+        `SELECT ${this.accountCrudSelectSql()}
+         FROM chart_of_accounts
+         WHERE id = $1::uuid
+           AND branch_id = ANY($2::uuid[])`,
+        id,
+        allowed,
+      );
+      if (!account) {
+        throw new ForbiddenException('Account not found');
+      }
+      return this.accountCrudResponse(account);
+    });
+  }
+
+  @Post('accounts')
+  @UseGuards(PermissionGuard)
+  @RequirePermissions('manage_accounting_configuration')
+  async createAccount(
+    @Req() req: FastifyRequest,
+    @Body() dto: CreateChartOfAccountDto,
+  ): Promise<ChartOfAccountCrudResponse> {
+    this.ensureTenant();
+    const allowed = assertAllowedBranches(req);
+    const requestedBranchId = dto.branchId?.trim() || req.branchId;
+    if (
+      !requestedBranchId ||
+      requestedBranchId.toLowerCase() === 'all' ||
+      !allowed.includes(requestedBranchId)
+    ) {
+      throw new BadRequestException(
+        'Select a single branch before creating an account',
+      );
+    }
+
+    const name = this.requireAccountValue(dto.name, 'Account name');
+    const accountType = this.normalizeAccountType(
+      this.resolveAliasedString(
+        dto.accountType,
+        dto.account_type,
+        'accountType',
+      ),
+    );
+    if (!accountType) {
+      throw new BadRequestException('Account type is required');
+    }
+    const accountKey = this.requireAccountValue(
+      this.resolveAliasedString(dto.accountKey, dto.account_key, 'accountKey'),
+      'Account key',
+    );
+    const code = this.normalizeNullableString(dto.code);
+    const description = this.normalizeNullableString(dto.description);
+    const active = dto.active ?? true;
+
+    const schema = this.tenantContext.getSchemaName()!;
+    await this.tenantService.applyTenantSchemaPatches(schema);
+    return this.prisma.withTenantSchema(schema, async (tx) => {
+      const [duplicate] = await tx.$queryRawUnsafe<{ id: string }[]>(
+        `SELECT id::text AS id
+         FROM chart_of_accounts
+         WHERE branch_id = $1::uuid
+           AND account_key = $2
+         LIMIT 1`,
+        requestedBranchId,
+        accountKey,
+      );
+      if (duplicate) {
+        throw new BadRequestException('Account key already exists');
+      }
+
+      const [created] = await tx.$queryRawUnsafe<ChartOfAccountCrudRecord[]>(
+        `INSERT INTO chart_of_accounts (
+           branch_id, code, name, account_type, account_key, active, description, is_system
+         )
+         VALUES ($1::uuid, $2, $3, $4, $5, $6::boolean, $7, FALSE)
+         RETURNING ${this.accountCrudSelectSql()}`,
+        requestedBranchId,
+        code,
+        name,
+        accountType,
+        accountKey,
+        active,
+        description,
+      );
+      const response = this.accountCrudResponse(created);
+      await this.auditLog.append(tx, {
+        branchId: created.branch_id,
+        actorUserId: req.userId ?? null,
+        tableName: 'chart_of_accounts',
+        recordId: created.id,
+        entityType: 'chart_of_accounts',
+        entityId: created.id,
+        action: 'create',
+        oldPayload: null,
+        newPayload: response,
+      });
+      return response;
+    });
+  }
+
+  @Patch('accounts/:id')
+  @UseGuards(PermissionGuard)
+  @RequirePermissions('manage_accounting_configuration')
+  async updateAccount(
+    @Req() req: FastifyRequest,
+    @Param('id') id: string,
+    @Body() dto: UpdateChartOfAccountDto,
+  ): Promise<ChartOfAccountCrudResponse> {
+    this.ensureTenant();
+    const allowed = assertAllowedBranches(req);
+    const schema = this.tenantContext.getSchemaName()!;
+    await this.tenantService.applyTenantSchemaPatches(schema);
+    return this.prisma.withTenantSchema(schema, async (tx) => {
+      const [account] = await tx.$queryRawUnsafe<ChartOfAccountCrudRecord[]>(
+        `SELECT ${this.accountCrudSelectSql()}
+         FROM chart_of_accounts
+         WHERE id = $1::uuid`,
+        id,
+      );
+      if (!account || !allowed.includes(account.branch_id)) {
+        throw new ForbiddenException('Account not found');
+      }
+      if (account.is_system && !this.canManageSystemAccounts(req)) {
+        throw new ForbiddenException(
+          'System accounts can only be changed by admin or owner',
+        );
+      }
+
+      const rawAccountType = this.resolveAliasedString(
+        dto.accountType,
+        dto.account_type,
+        'accountType',
+      );
+      const rawAccountKey = this.resolveAliasedString(
+        dto.accountKey,
+        dto.account_key,
+        'accountKey',
+      );
+      const nextName =
+        dto.name !== undefined
+          ? this.requireAccountValue(dto.name, 'Account name')
+          : account.name;
+      const nextCode =
+        dto.code !== undefined
+          ? this.normalizeNullableString(dto.code)
+          : account.code;
+      const nextAccountType =
+        rawAccountType !== undefined
+          ? this.normalizeAccountType(rawAccountType)
+          : account.account_type;
+      if (!nextAccountType) {
+        throw new BadRequestException('Account type is required');
+      }
+      const nextAccountKey =
+        rawAccountKey !== undefined
+          ? this.requireAccountValue(rawAccountKey, 'Account key')
+          : account.account_key;
+      if (!nextAccountKey) {
+        throw new BadRequestException('Account key is required');
+      }
+      const nextActive = dto.active ?? account.active;
+      const requestedReconciliation =
+        dto.allowReconciliation ?? dto.allow_reconciliation;
+      if (
+        dto.allowReconciliation !== undefined &&
+        dto.allow_reconciliation !== undefined &&
+        dto.allowReconciliation !== dto.allow_reconciliation
+      ) {
+        throw new BadRequestException(
+          'allowReconciliation and allow_reconciliation must match',
+        );
+      }
+      const nextAllowReconciliation =
+        requestedReconciliation !== undefined
+          ? requestedReconciliation
+          : account.allow_reconciliation;
+      const nextDescription =
+        dto.description !== undefined
+          ? this.normalizeNullableString(dto.description)
+          : account.description;
+
+      const typeChanged = nextAccountType !== account.account_type;
+      const keyChanged = nextAccountKey !== account.account_key;
+      if (typeChanged || keyChanged) {
+        const lineCount = await this.countAccountJournalLines(tx, account.id);
+        if (lineCount > 0 && typeChanged) {
+          throw new BadRequestException(
+            'Account type cannot be changed after journal entries have been posted',
+          );
+        }
+        if (lineCount > 0 && keyChanged) {
+          throw new BadRequestException(
+            'Account key cannot be changed after journal entries have been posted',
+          );
+        }
+      }
+
+      if (keyChanged) {
+        const [duplicate] = await tx.$queryRawUnsafe<{ id: string }[]>(
+          `SELECT id::text AS id
+           FROM chart_of_accounts
+           WHERE branch_id = $1::uuid
+             AND account_key = $2
+             AND id <> $3::uuid
+           LIMIT 1`,
+          account.branch_id,
+          nextAccountKey,
+          account.id,
+        );
+        if (duplicate) {
+          throw new BadRequestException('Account key already exists');
+        }
+      }
+
+      const [updated] = await tx.$queryRawUnsafe<ChartOfAccountCrudRecord[]>(
+        `UPDATE chart_of_accounts
+         SET code = $2,
+             name = $3,
+             account_type = $4,
+             account_key = $5,
+             active = $6::boolean,
+             allow_reconciliation = $7::boolean,
+             description = $8,
+             updated_at = CURRENT_TIMESTAMP
+         WHERE id = $1::uuid
+         RETURNING ${this.accountCrudSelectSql()}`,
+        account.id,
+        nextCode,
+        nextName,
+        nextAccountType,
+        nextAccountKey,
+        nextActive,
+        nextAllowReconciliation,
+        nextDescription,
+      );
+      const oldPayload = this.accountCrudResponse(account);
+      const newPayload = this.accountCrudResponse(updated);
+      await this.auditLog.append(tx, {
+        branchId: account.branch_id,
+        actorUserId: req.userId ?? null,
+        tableName: 'chart_of_accounts',
+        recordId: account.id,
+        entityType: 'chart_of_accounts',
+        entityId: account.id,
+        action: 'update',
+        oldPayload,
+        newPayload,
+      });
+      return newPayload;
+    });
+  }
+
+  @Delete('accounts/:id')
+  @UseGuards(PermissionGuard)
+  @RequirePermissions('manage_accounting_configuration')
+  async deleteAccount(
+    @Req() req: FastifyRequest,
+    @Param('id') id: string,
+  ): Promise<ChartOfAccountCrudResponse> {
+    this.ensureTenant();
+    const allowed = assertAllowedBranches(req);
+    const schema = this.tenantContext.getSchemaName()!;
+    await this.tenantService.applyTenantSchemaPatches(schema);
+    return this.prisma.withTenantSchema(schema, async (tx) => {
+      const [account] = await tx.$queryRawUnsafe<ChartOfAccountCrudRecord[]>(
+        `SELECT ${this.accountCrudSelectSql()}
+         FROM chart_of_accounts
+         WHERE id = $1::uuid`,
+        id,
+      );
+      if (!account || !allowed.includes(account.branch_id)) {
+        throw new ForbiddenException('Account not found');
+      }
+      if (account.is_system && !this.canManageSystemAccounts(req)) {
+        throw new ForbiddenException(
+          'System accounts can only be archived by admin or owner',
+        );
+      }
+
+      const lineCount = await this.countAccountJournalLines(tx, account.id);
+      const childCount = await this.countAccountChildren(tx, account.id);
+      if (lineCount > 0 || childCount > 0 || account.is_system) {
+        const [archived] = await tx.$queryRawUnsafe<ChartOfAccountCrudRecord[]>(
+          `UPDATE chart_of_accounts
+           SET active = FALSE,
+               updated_at = CURRENT_TIMESTAMP
+           WHERE id = $1::uuid
+           RETURNING ${this.accountCrudSelectSql()}`,
+          account.id,
+        );
+        const oldPayload = this.accountCrudResponse(account);
+        const newPayload = this.accountCrudResponse(archived);
+        await this.auditLog.append(tx, {
+          branchId: account.branch_id,
+          actorUserId: req.userId ?? null,
+          tableName: 'chart_of_accounts',
+          recordId: account.id,
+          entityType: 'chart_of_accounts',
+          entityId: account.id,
+          action: 'archive',
+          oldPayload,
+          newPayload,
+        });
+        return newPayload;
+      }
+
+      const oldPayload = this.accountCrudResponse(account);
+      await this.auditLog.append(tx, {
+        branchId: account.branch_id,
+        actorUserId: req.userId ?? null,
+        tableName: 'chart_of_accounts',
+        recordId: account.id,
+        entityType: 'chart_of_accounts',
+        entityId: account.id,
+        action: 'delete',
+        oldPayload,
+        newPayload: null,
+      });
+      await tx.$queryRawUnsafe(
+        `DELETE FROM chart_of_accounts
+         WHERE id = $1::uuid`,
+        account.id,
+      );
+      return oldPayload;
+    });
+  }
+
+  @Patch('chart-of-accounts/:id/allow-reconciliation')
+  @UseGuards(PermissionGuard)
+  @RequirePermissions('manage_accounting_configuration')
+  async updateChartOfAccountReconciliation(
+    @Req() req: FastifyRequest,
+    @Param('id') id: string,
+    @Body() dto: UpdateChartOfAccountReconciliationDto,
+  ) {
+    this.ensureTenant();
+    const requested = dto.allowReconciliation ?? dto.allow_reconciliation;
+    if (requested === undefined) {
+      throw new BadRequestException('allowReconciliation is required');
+    }
+    if (
+      dto.allowReconciliation !== undefined &&
+      dto.allow_reconciliation !== undefined &&
+      dto.allowReconciliation !== dto.allow_reconciliation
+    ) {
+      throw new BadRequestException(
+        'allowReconciliation and allow_reconciliation must match',
+      );
+    }
+
+    const allowed = assertAllowedBranches(req);
+    const schema = this.tenantContext.getSchemaName()!;
+    await this.tenantService.applyTenantSchemaPatches(schema);
+    return this.prisma.withTenantSchema(schema, async (tx) => {
+      const [account] = await tx.$queryRawUnsafe<ChartOfAccountsListRow[]>(
+        `SELECT id, branch_id, code, name, account_type, account_key, is_system, allow_reconciliation, payment_method_key, parent_id, created_at
+         FROM chart_of_accounts
+         WHERE id = $1::uuid`,
+        id,
+      );
+      if (!account || !allowed.includes(account.branch_id)) {
+        throw new ForbiddenException('Account not found');
+      }
+      const role = req.userRole?.trim().toLowerCase() ?? '';
+      const canChangeSystemAccount =
+        role === 'admin' || role === 'owner' || role === 'super_admin';
+      if (account.is_system && !canChangeSystemAccount) {
+        throw new ForbiddenException(
+          'System account reconciliation can only be changed by admin or owner',
+        );
+      }
+      if (account.allow_reconciliation === requested) {
+        return account;
+      }
+
+      const [updated] = await tx.$queryRawUnsafe<ChartOfAccountsListRow[]>(
+        `UPDATE chart_of_accounts
+         SET allow_reconciliation = $2::boolean
+         WHERE id = $1::uuid
+         RETURNING id, branch_id, code, name, account_type, account_key, is_system, allow_reconciliation, payment_method_key, parent_id, created_at`,
+        id,
+        requested,
+      );
+
+      await this.auditLog.append(tx, {
+        branchId: account.branch_id,
+        actorUserId: req.userId ?? null,
+        tableName: 'chart_of_accounts',
+        recordId: account.id,
+        entityType: 'chart_of_accounts',
+        entityId: account.id,
+        action: 'update_allow_reconciliation',
+        oldPayload: {
+          allow_reconciliation: account.allow_reconciliation,
+          account_key: account.account_key,
+          code: account.code,
+          name: account.name,
+        },
+        newPayload: {
+          allow_reconciliation: updated.allow_reconciliation,
+          account_key: updated.account_key,
+          code: updated.code,
+          name: updated.name,
+        },
+      });
+
+      return updated;
+    });
   }
 
   @Get('journal-entries/:id')
@@ -588,6 +1230,8 @@ export class AccountingController {
   }
 
   @Post('journal-entries')
+  @UseGuards(PermissionGuard)
+  @RequirePermissions('post_journal')
   async createManualJournal(
     @Req() req: FastifyRequest,
     @Body() dto: CreateManualJournalDto,

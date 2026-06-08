@@ -65,6 +65,7 @@ type FormMode = "create" | "edit";
 type EditableBranch = {
   id: string;
   name: string;
+  code: string;
   phone: string;
   address: string;
   /** YYYY-MM-DD or empty to clear lock (edit only) */
@@ -301,6 +302,7 @@ export default function BranchesPage({
     setActiveBranch({
       id: "",
       name: "",
+      code: "",
       phone: "",
       address: "",
       accountingLockDate: "",
@@ -314,6 +316,7 @@ export default function BranchesPage({
     setActiveBranch({
       id: b.id,
       name: b.name ?? "",
+      code: b.code ?? "",
       phone: b.phone ?? "",
       address: b.address ?? "",
       accountingLockDate:
@@ -349,6 +352,9 @@ export default function BranchesPage({
 
       const payload = {
         name,
+        code: activeBranch.code.trim().length
+          ? activeBranch.code.trim().toUpperCase()
+          : undefined,
         phone: phone.length ? phone : undefined,
         address: address.length ? address : undefined,
         ...(formMode === "edit"
@@ -531,6 +537,7 @@ export default function BranchesPage({
                   <Table>
                     <TableHeader>
                       <TableRow className="bg-muted/30">
+                          <TableHead>Code</TableHead>
                           <TableHead>Branch Name</TableHead>
                           <TableHead>Location/Address</TableHead>
                           <TableHead>Phone</TableHead>
@@ -561,6 +568,9 @@ export default function BranchesPage({
                           key={b.id}
                           className="hover:bg-primary/5 transition-colors"
                         >
+                          <TableCell className="font-mono text-xs">
+                            {b.code ?? "—"}
+                          </TableCell>
                           <TableCell>
                               <div className="flex items-center gap-3">
                                 <div className="size-9 rounded-xl bg-primary/10 flex items-center justify-center text-primary font-bold text-xs">
@@ -708,6 +718,23 @@ export default function BranchesPage({
                   <p className="text-sm text-muted-foreground">No branch selected.</p>
                 ) : (
                   <>
+                    <div className="space-y-1.5">
+                      <Label htmlFor="branch-code">Branch code</Label>
+                      <Input
+                        id="branch-code"
+                        value={activeBranch.code}
+                        onChange={(e) =>
+                          setActiveBranch((prev) =>
+                            prev ? { ...prev, code: e.target.value } : prev,
+                          )
+                        }
+                        placeholder="e.g. MAIN, BR01"
+                      />
+                      <p className="text-xs text-muted-foreground">
+                        Used in Excel product imports (branch_code column).
+                      </p>
+                    </div>
+
                     <div className="space-y-1.5">
                       <Label htmlFor="branch-name">Branch name</Label>
                       <Input

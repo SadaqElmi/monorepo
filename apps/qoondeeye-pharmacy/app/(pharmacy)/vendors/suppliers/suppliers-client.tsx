@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
@@ -36,7 +37,7 @@ import { ERP_STALE_LIST } from "@/lib/erp-query-options";
 import {
   createSupplier,
   deleteSupplier,
-  getSuppliers,
+  getSuppliersPaged,
   updateSupplier,
   type Supplier,
 } from "@/lib/api";
@@ -59,9 +60,13 @@ type FormMode = "create" | "edit";
 type EditableSupplier = {
   id: string;
   name: string;
+  supplierType: "local" | "international";
+  country: string;
+  city: string;
   phone: string;
   email: string;
   address: string;
+  active: boolean;
 };
 
 function formatDate(dateStr: string | null | undefined) {
@@ -133,19 +138,29 @@ export default function SuppliersPage({
   initialSuppliers = null,
   serverPrefetched = false,
 }: SuppliersPageClientProps = {}) {
+  void initialSuppliers;
+  void serverPrefetched;
   const queryClient = useQueryClient();
   const branchFacet = useErpBranchFacet();
   const [tenantSlug] = React.useState(() => getStoredUser()?.tenantSlug ?? "pharmacy1");
+  const [query, setQuery] = React.useState("");
+  const pageSize = 25;
+  const [page, setPage] = React.useState(1);
 
   const suppliersQuery = useQuery({
-    queryKey: erpKeys.suppliers(tenantSlug, branchFacet),
-    queryFn: () => getSuppliers(tenantSlug),
+    queryKey: [...erpKeys.suppliers(tenantSlug, branchFacet), page, pageSize, query],
+    queryFn: () =>
+      getSuppliersPaged(tenantSlug, {
+        page,
+        limit: pageSize,
+        q: query.trim() || undefined,
+      }),
     enabled: Boolean(tenantSlug && branchFacet),
     staleTime: ERP_STALE_LIST,
-    initialData:
-      serverPrefetched && initialSuppliers ? initialSuppliers : undefined,
   });
-  const suppliers = suppliersQuery.data ?? [];
+  const suppliers = suppliersQuery.data?.items ?? [];
+  const totalSuppliers = suppliersQuery.data?.total ?? suppliers.length;
+  const totalPages = suppliersQuery.data?.totalPages ?? 1;
   const loading = suppliersQuery.isPending;
   const loadError = suppliersQuery.error;
   const [error, setError] = React.useState<string | null>(null);
@@ -158,10 +173,6 @@ export default function SuppliersPage({
         ? "Failed to load suppliers"
         : null);
 
-  const [query, setQuery] = React.useState("");
-  const pageSize = 4;
-  const [page, setPage] = React.useState(1);
-
   const [formOpen, setFormOpen] = React.useState(false);
   const [formMode, setFormMode] = React.useState<FormMode>("create");
   const [activeSupplier, setActiveSupplier] = React.useState<EditableSupplier | null>(null);
@@ -171,25 +182,6 @@ export default function SuppliersPage({
   const [deleteCandidate, setDeleteCandidate] = React.useState<Supplier | null>(null);
   const [deletingId, setDeletingId] = React.useState<string | null>(null);
 
-  const filteredSuppliers = React.useMemo(() => {
-    const q = query.trim().toLowerCase();
-    const sorted = [...suppliers].sort((a, b) =>
-      (a.name ?? "").localeCompare(b.name ?? "", undefined, { sensitivity: "base" }),
-    );
-
-    if (!q) return sorted;
-
-    return sorted.filter((s) => {
-      const haystack = [s.name, s.phone, s.email, s.address]
-        .filter(Boolean)
-        .join(" ")
-        .toLowerCase();
-      return haystack.includes(q) || s.id.toLowerCase().includes(q);
-    });
-  }, [suppliers, query]);
-
-  const totalPages = Math.max(1, Math.ceil(filteredSuppliers.length / pageSize));
-
   React.useEffect(() => {
     setPage((p) => Math.min(p, totalPages));
   }, [totalPages]);
@@ -198,30 +190,29 @@ export default function SuppliersPage({
     setPage(1);
   }, [query]);
 
-  const pagedSuppliers = React.useMemo(() => {
-    const start = (page - 1) * pageSize;
-    return filteredSuppliers.slice(start, start + pageSize);
-  }, [filteredSuppliers, page]);
-
-  const showingStart = filteredSuppliers.length === 0 ? 0 : (page - 1) * pageSize + 1;
-  const showingEnd = Math.min(page * pageSize, filteredSuppliers.length);
+  const showingStart = totalSuppliers === 0 ? 0 : (page - 1) * pageSize + 1;
+  const showingEnd = Math.min(page * pageSize, totalSuppliers);
 
   const stats = React.useMemo(() => {
     return {
-      totalSuppliers: suppliers.length,
+      totalSuppliers,
       activeOrders: 0,
       pendingDeliveries: 0,
     };
-  }, [suppliers.length]);
+  }, [totalSuppliers]);
 
   const openCreate = () => {
     setFormMode("create");
     setActiveSupplier({
       id: "",
       name: "",
+      supplierType: "local",
+      country: "",
+      city: "",
       phone: "",
       email: "",
       address: "",
+      active: true,
     });
     setFormOpen(true);
   };
@@ -231,9 +222,13 @@ export default function SuppliersPage({
     setActiveSupplier({
       id: s.id,
       name: s.name ?? "",
+      supplierType: s.supplier_type === "international" ? "international" : "local",
+      country: s.country ?? "",
+      city: s.city ?? "",
       phone: s.phone ?? "",
       email: s.email ?? "",
       address: s.address ?? "",
+      active: s.active !== false,
     });
     setFormOpen(true);
   };
@@ -256,9 +251,13 @@ export default function SuppliersPage({
 
     const payload = {
       name,
+      supplierType: activeSupplier.supplierType,
+      country: activeSupplier.country.trim() || undefined,
+      city: activeSupplier.city.trim() || undefined,
       phone: activeSupplier.phone.trim() || undefined,
       email: activeSupplier.email.trim() || undefined,
       address: activeSupplier.address.trim() || undefined,
+      active: activeSupplier.active,
     };
 
     try {
@@ -396,7 +395,7 @@ export default function SuppliersPage({
                     <Loader2 className="h-5 w-5 animate-spin" />
                     Loading suppliers…
                   </div>
-                ) : pagedSuppliers.length === 0 ? (
+                ) : suppliers.length === 0 ? (
                   <div className="flex flex-col items-center justify-center gap-3 py-12 px-6 text-center text-sm text-muted-foreground">
                     <p>No suppliers found.</p>
                     <Button onClick={openCreate}>
@@ -422,13 +421,19 @@ export default function SuppliersPage({
                             <TableHead className="font-semibold uppercase tracking-wider text-muted-foreground">
                               Address
                             </TableHead>
+                            <TableHead className="font-semibold uppercase tracking-wider text-muted-foreground">
+                              Status
+                            </TableHead>
+                            <TableHead className="font-semibold uppercase tracking-wider text-muted-foreground">
+                              Status
+                            </TableHead>
                             <TableHead className="w-24 text-right font-semibold uppercase tracking-wider text-primary">
                               Actions
                             </TableHead>
                           </TableRow>
                         </TableHeader>
                         <TableBody>
-                          {pagedSuppliers.map((s) => {
+                          {suppliers.map((s) => {
                             const idShort = s.id.length > 8 ? s.id.slice(0, 8) : s.id;
                             return (
                               <TableRow
@@ -441,11 +446,20 @@ export default function SuppliersPage({
                                       {initialsFor(s.name)}
                                     </div>
                                     <div className="min-w-0">
-                                      <p className="text-sm font-semibold truncate">
+                                      <Link
+                                        href={`/vendors/suppliers/${s.id}`}
+                                        className="block truncate text-sm font-semibold hover:text-primary"
+                                      >
                                         {s.name ?? "Unnamed supplier"}
-                                      </p>
+                                      </Link>
                                       <p className="text-[10px] text-muted-foreground font-medium truncate">
                                         ID: {idShort}
+                                      </p>
+                                      <p className="text-[10px] text-muted-foreground truncate">
+                                        {s.supplier_type === "international" ? "International" : "Local"}
+                                        {[s.city, s.country].filter(Boolean).length
+                                          ? ` - ${[s.city, s.country].filter(Boolean).join(", ")}`
+                                          : ""}
                                       </p>
                                     </div>
                                   </div>
@@ -458,6 +472,11 @@ export default function SuppliersPage({
                                 </TableCell>
                                 <TableCell className="text-sm text-muted-foreground">
                                   {s.address ?? "—"}
+                                </TableCell>
+                                <TableCell>
+                                  <Badge variant={s.active === false ? "outline" : "secondary"}>
+                                    {s.active === false ? "Inactive" : "Active"}
+                                  </Badge>
                                 </TableCell>
                                 <TableCell className="text-right">
                                   <div className="flex justify-end gap-2">
@@ -494,7 +513,7 @@ export default function SuppliersPage({
                         Showing{" "}
                         <span className="font-medium">{showingStart}</span> to{" "}
                         <span className="font-medium">{showingEnd}</span> of{" "}
-                        <span className="font-medium">{filteredSuppliers.length}</span>{" "}
+                        <span className="font-medium">{totalSuppliers}</span>{" "}
                         suppliers
                       </p>
                       <div className="flex items-center gap-2">
@@ -585,6 +604,80 @@ export default function SuppliersPage({
                         placeholder="e.g. Global Pharma Co."
                         required
                       />
+                    </div>
+
+                    <div className="grid gap-3 sm:grid-cols-2">
+                      <div className="space-y-1.5">
+                        <Label htmlFor="supplier-type">Supplier type</Label>
+                        <select
+                          id="supplier-type"
+                          value={activeSupplier.supplierType}
+                          onChange={(e) =>
+                            setActiveSupplier((prev) =>
+                              prev
+                                ? {
+                                    ...prev,
+                                    supplierType:
+                                      e.target.value === "international"
+                                        ? "international"
+                                        : "local",
+                                  }
+                                : prev,
+                            )
+                          }
+                          className="h-10 w-full rounded-md border bg-background px-3 text-sm"
+                        >
+                          <option value="local">Local Supplier</option>
+                          <option value="international">International Supplier</option>
+                        </select>
+                      </div>
+                      <div className="space-y-1.5">
+                        <Label htmlFor="supplier-active">Status</Label>
+                        <select
+                          id="supplier-active"
+                          value={activeSupplier.active ? "active" : "inactive"}
+                          onChange={(e) =>
+                            setActiveSupplier((prev) =>
+                              prev
+                                ? { ...prev, active: e.target.value === "active" }
+                                : prev,
+                            )
+                          }
+                          className="h-10 w-full rounded-md border bg-background px-3 text-sm"
+                        >
+                          <option value="active">Active</option>
+                          <option value="inactive">Inactive</option>
+                        </select>
+                      </div>
+                    </div>
+
+                    <div className="grid gap-3 sm:grid-cols-2">
+                      <div className="space-y-1.5">
+                        <Label htmlFor="supplier-country">Country</Label>
+                        <Input
+                          id="supplier-country"
+                          value={activeSupplier.country}
+                          onChange={(e) =>
+                            setActiveSupplier((prev) =>
+                              prev ? { ...prev, country: e.target.value } : prev,
+                            )
+                          }
+                          placeholder="e.g. Somalia"
+                        />
+                      </div>
+                      <div className="space-y-1.5">
+                        <Label htmlFor="supplier-city">City</Label>
+                        <Input
+                          id="supplier-city"
+                          value={activeSupplier.city}
+                          onChange={(e) =>
+                            setActiveSupplier((prev) =>
+                              prev ? { ...prev, city: e.target.value } : prev,
+                            )
+                          }
+                          placeholder="e.g. Mogadishu"
+                        />
+                      </div>
                     </div>
 
                     <div className="space-y-1.5">

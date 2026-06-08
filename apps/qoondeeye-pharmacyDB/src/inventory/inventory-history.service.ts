@@ -98,7 +98,7 @@ export class InventoryHistoryService {
         'purchase'::text AS action_type,
         pi.product_id,
         bat.batch_number::text AS batch_number,
-        COALESCE(pi.quantity, 0)::int AS quantity_change,
+        COALESCE(pi.base_quantity, pi.quantity, 0)::int AS quantity_change,
         COALESCE(pi.branch_id, p.branch_id) AS branch_id,
         'purchase'::text AS reference_type,
         p.id::text AS reference_id,
@@ -108,7 +108,7 @@ export class InventoryHistoryService {
       INNER JOIN purchases p ON p.id = pi.purchase_id
       LEFT JOIN batches bat ON bat.id = pi.batch_id
       WHERE pi.product_id IS NOT NULL
-        AND COALESCE(pi.quantity, 0) <> 0
+        AND COALESCE(pi.base_quantity, pi.quantity, 0) <> 0
         AND COALESCE(pi.branch_id, p.branch_id) = ANY($1::uuid[])
 
       UNION ALL

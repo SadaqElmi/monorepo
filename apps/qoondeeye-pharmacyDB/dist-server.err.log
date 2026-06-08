@@ -1,0 +1,136 @@
+[31m[Nest] 17948  - [39m06/08/2026, 3:42:18 AM [31m  ERROR[39m [38;5;3m[Http] [39m[31m{
+  "kind": "http_request",
+  "requestId": "eafdbeb5-0392-4bfb-b3cf-380a2b2a1d4e",
+  "method": "PATCH",
+  "path": "/api/products/148ee0bb-4996-45b1-84f5-e689c6ba8796/uoms/e1077fb9-8ea0-42a1-a3d8-5a69d0c9bf3e",
+  "statusCode": 400,
+  "durationMs": 2,
+  "tenantId": null,
+  "branchId": "33511c3c-545e-4dd0-b9cd-1bc1b4eeb896",
+  "userId": "d317a2e3-686a-4e66-b70b-a58ef9f9ba56",
+  "errorMessage": "Bad Request Exception",
+  "errorStack": "BadRequestException: Bad Request Exception\n    at ValidationPipe.exceptionFactory (C:\\Users\\sadaq\\Desktop\\pharmcare\\node_modules\\.pnpm\\@nestjs+common@11.1.19_clas_d9b4c67b67e808f21faa897f7b3ab567\\node_modules\\@nestjs\\common\\pipes\\validation.pipe.js:112:20)\n    at ValidationPipe.transform (C:\\Users\\sadaq\\Desktop\\pharmcare\\node_modules\\.pnpm\\@nestjs+common@11.1.19_clas_d9b4c67b67e808f21faa897f7b3ab567\\node_modules\\@nestjs\\common\\pipes\\validation.pipe.js:79:30)\n    at process.processTicksAndRejections (node:internal/process/task_queues:105:5)\n    at async resolveParamValue (C:\\Users\\sadaq\\Desktop\\pharmcare\\node_modules\\.pnpm\\@nestjs+core@11.1.19_@nestj_e42b3ed2ec324bf7e08ad05584bb1044\\node_modules\\@nestjs\\core\\router\\router-execution-context.js:148:23)\n    at async Promise.all (index 0)\n    at async pipesFn (C:\\Users\\sadaq\\Desktop\\pharmcare\\node_modules\\.pnpm\\@nestjs+core@11.1.19_@nestj_e42b3ed2ec324bf7e08ad05584bb1044\\node_modules\\@nestjs\\core\\router\\router-execution-context.js:151:13)\n    at async C:\\Users\\sadaq\\Desktop\\pharmcare\\node_modules\\.pnpm\\@nestjs+core@11.1.19_@nestj_e42b3ed2ec324bf7e08ad05584bb1044\\node_modules\\@nestjs\\core\\router\\router-execution-context.js:37:30",
+  "ts": "2026-06-08T00:42:18.854Z"
+}[39m
+[31m[Nest] 17948  - [39m06/08/2026, 3:42:27 AM [31m  ERROR[39m [38;5;3m[Http] [39m[31m{
+  "kind": "http_request",
+  "requestId": "99910bf5-08ca-4275-a89b-53012743fb53",
+  "method": "PATCH",
+  "path": "/api/products/148ee0bb-4996-45b1-84f5-e689c6ba8796/uoms/644cfdac-f837-42ab-8f27-7c7c27ee6f68",
+  "statusCode": 400,
+  "durationMs": 1,
+  "tenantId": null,
+  "branchId": "33511c3c-545e-4dd0-b9cd-1bc1b4eeb896",
+  "userId": "d317a2e3-686a-4e66-b70b-a58ef9f9ba56",
+  "errorMessage": "Bad Request Exception",
+  "errorStack": "BadRequestException: Bad Request Exception\n    at ValidationPipe.exceptionFactory (C:\\Users\\sadaq\\Desktop\\pharmcare\\node_modules\\.pnpm\\@nestjs+common@11.1.19_clas_d9b4c67b67e808f21faa897f7b3ab567\\node_modules\\@nestjs\\common\\pipes\\validation.pipe.js:112:20)\n    at ValidationPipe.transform (C:\\Users\\sadaq\\Desktop\\pharmcare\\node_modules\\.pnpm\\@nestjs+common@11.1.19_clas_d9b4c67b67e808f21faa897f7b3ab567\\node_modules\\@nestjs\\common\\pipes\\validation.pipe.js:79:30)\n    at process.processTicksAndRejections (node:internal/process/task_queues:105:5)\n    at async resolveParamValue (C:\\Users\\sadaq\\Desktop\\pharmcare\\node_modules\\.pnpm\\@nestjs+core@11.1.19_@nestj_e42b3ed2ec324bf7e08ad05584bb1044\\node_modules\\@nestjs\\core\\router\\router-execution-context.js:148:23)\n    at async Promise.all (index 0)\n    at async pipesFn (C:\\Users\\sadaq\\Desktop\\pharmcare\\node_modules\\.pnpm\\@nestjs+core@11.1.19_@nestj_e42b3ed2ec324bf7e08ad05584bb1044\\node_modules\\@nestjs\\core\\router\\router-execution-context.js:151:13)\n    at async C:\\Users\\sadaq\\Desktop\\pharmcare\\node_modules\\.pnpm\\@nestjs+core@11.1.19_@nestj_e42b3ed2ec324bf7e08ad05584bb1044\\node_modules\\@nestjs\\core\\router\\router-execution-context.js:37:30",
+  "ts": "2026-06-08T00:42:27.525Z"
+}[39m
+[31m[Nest] 17948  - [39m06/08/2026, 3:42:37 AM [31m  ERROR[39m [38;5;3m[Http] [39m[31m{
+  "kind": "http_request",
+  "requestId": "a4473112-e036-456c-b3eb-0dd430e34209",
+  "method": "PATCH",
+  "path": "/api/products/148ee0bb-4996-45b1-84f5-e689c6ba8796/uoms/e1077fb9-8ea0-42a1-a3d8-5a69d0c9bf3e",
+  "statusCode": 400,
+  "durationMs": 1,
+  "tenantId": null,
+  "branchId": "33511c3c-545e-4dd0-b9cd-1bc1b4eeb896",
+  "userId": "d317a2e3-686a-4e66-b70b-a58ef9f9ba56",
+  "errorMessage": "Bad Request Exception",
+  "errorStack": "BadRequestException: Bad Request Exception\n    at ValidationPipe.exceptionFactory (C:\\Users\\sadaq\\Desktop\\pharmcare\\node_modules\\.pnpm\\@nestjs+common@11.1.19_clas_d9b4c67b67e808f21faa897f7b3ab567\\node_modules\\@nestjs\\common\\pipes\\validation.pipe.js:112:20)\n    at ValidationPipe.transform (C:\\Users\\sadaq\\Desktop\\pharmcare\\node_modules\\.pnpm\\@nestjs+common@11.1.19_clas_d9b4c67b67e808f21faa897f7b3ab567\\node_modules\\@nestjs\\common\\pipes\\validation.pipe.js:79:30)\n    at process.processTicksAndRejections (node:internal/process/task_queues:105:5)\n    at async resolveParamValue (C:\\Users\\sadaq\\Desktop\\pharmcare\\node_modules\\.pnpm\\@nestjs+core@11.1.19_@nestj_e42b3ed2ec324bf7e08ad05584bb1044\\node_modules\\@nestjs\\core\\router\\router-execution-context.js:148:23)\n    at async Promise.all (index 0)\n    at async pipesFn (C:\\Users\\sadaq\\Desktop\\pharmcare\\node_modules\\.pnpm\\@nestjs+core@11.1.19_@nestj_e42b3ed2ec324bf7e08ad05584bb1044\\node_modules\\@nestjs\\core\\router\\router-execution-context.js:151:13)\n    at async C:\\Users\\sadaq\\Desktop\\pharmcare\\node_modules\\.pnpm\\@nestjs+core@11.1.19_@nestj_e42b3ed2ec324bf7e08ad05584bb1044\\node_modules\\@nestjs\\core\\router\\router-execution-context.js:37:30",
+  "ts": "2026-06-08T00:42:37.244Z"
+}[39m
+[31m[Nest] 17948  - [39m06/08/2026, 3:43:17 AM [31m  ERROR[39m [38;5;3m[Http] [39m[31m{
+  "kind": "http_request",
+  "requestId": "a3e9b472-11ed-4791-9a6e-058b13aa4a2c",
+  "method": "PATCH",
+  "path": "/api/products/148ee0bb-4996-45b1-84f5-e689c6ba8796/uoms/e1077fb9-8ea0-42a1-a3d8-5a69d0c9bf3e",
+  "statusCode": 400,
+  "durationMs": 1,
+  "tenantId": null,
+  "branchId": "33511c3c-545e-4dd0-b9cd-1bc1b4eeb896",
+  "userId": "d317a2e3-686a-4e66-b70b-a58ef9f9ba56",
+  "errorMessage": "Bad Request Exception",
+  "errorStack": "BadRequestException: Bad Request Exception\n    at ValidationPipe.exceptionFactory (C:\\Users\\sadaq\\Desktop\\pharmcare\\node_modules\\.pnpm\\@nestjs+common@11.1.19_clas_d9b4c67b67e808f21faa897f7b3ab567\\node_modules\\@nestjs\\common\\pipes\\validation.pipe.js:112:20)\n    at ValidationPipe.transform (C:\\Users\\sadaq\\Desktop\\pharmcare\\node_modules\\.pnpm\\@nestjs+common@11.1.19_clas_d9b4c67b67e808f21faa897f7b3ab567\\node_modules\\@nestjs\\common\\pipes\\validation.pipe.js:79:30)\n    at process.processTicksAndRejections (node:internal/process/task_queues:105:5)\n    at async resolveParamValue (C:\\Users\\sadaq\\Desktop\\pharmcare\\node_modules\\.pnpm\\@nestjs+core@11.1.19_@nestj_e42b3ed2ec324bf7e08ad05584bb1044\\node_modules\\@nestjs\\core\\router\\router-execution-context.js:148:23)\n    at async Promise.all (index 0)\n    at async pipesFn (C:\\Users\\sadaq\\Desktop\\pharmcare\\node_modules\\.pnpm\\@nestjs+core@11.1.19_@nestj_e42b3ed2ec324bf7e08ad05584bb1044\\node_modules\\@nestjs\\core\\router\\router-execution-context.js:151:13)\n    at async C:\\Users\\sadaq\\Desktop\\pharmcare\\node_modules\\.pnpm\\@nestjs+core@11.1.19_@nestj_e42b3ed2ec324bf7e08ad05584bb1044\\node_modules\\@nestjs\\core\\router\\router-execution-context.js:37:30",
+  "ts": "2026-06-08T00:43:17.681Z"
+}[39m
+[31m[Nest] 17948  - [39m06/08/2026, 4:02:08 AM [31m  ERROR[39m [38;5;3m[Http] [39m[31m{
+  "kind": "http_request",
+  "requestId": "d276a318-3d20-49a1-94af-b501e6554553",
+  "method": "POST",
+  "path": "/api/purchases/4652af1c-3f3c-4756-9dd1-cf0d90efe487/post-invoice",
+  "statusCode": 201,
+  "durationMs": 109,
+  "tenantId": null,
+  "branchId": "33511c3c-545e-4dd0-b9cd-1bc1b4eeb896",
+  "userId": "d317a2e3-686a-4e66-b70b-a58ef9f9ba56",
+  "errorMessage": "\nInvalid `prisma.$queryRawUnsafe()` invocation:\n\n\nRaw query failed. Code: `23505`. Message: `duplicate key value violates unique constraint \"product_uom_prices_active_product_uom_uq\"`",
+  "errorStack": "PrismaClientKnownRequestError: \nInvalid `prisma.$queryRawUnsafe()` invocation:\n\n\nRaw query failed. Code: `23505`. Message: `duplicate key value violates unique constraint \"product_uom_prices_active_product_uom_uq\"`\n    at zr.handleRequestError (C:\\Users\\sadaq\\Desktop\\pharmcare\\node_modules\\.pnpm\\@prisma+client@7.8.0_prisma_c1be678eb15ca8627433d66dbb42eeb8\\node_modules\\@prisma\\client\\src\\runtime\\RequestHandler.ts:237:13)\n    at zr.handleAndLogRequestError (C:\\Users\\sadaq\\Desktop\\pharmcare\\node_modules\\.pnpm\\@prisma+client@7.8.0_prisma_c1be678eb15ca8627433d66dbb42eeb8\\node_modules\\@prisma\\client\\src\\runtime\\RequestHandler.ts:183:12)\n    at zr.request (C:\\Users\\sadaq\\Desktop\\pharmcare\\node_modules\\.pnpm\\@prisma+client@7.8.0_prisma_c1be678eb15ca8627433d66dbb42eeb8\\node_modules\\@prisma\\client\\src\\runtime\\RequestHandler.ts:152:12)\n    at process.processTicksAndRejections (node:internal/process/task_queues:105:5)\n    at async a (C:\\Users\\sadaq\\Desktop\\pharmcare\\node_modules\\.pnpm\\@prisma+client@7.8.0_prisma_c1be678eb15ca8627433d66dbb42eeb8\\node_modules\\@prisma\\client\\src\\runtime\\getPrismaClient.ts:963:24)\n    at async PurchasesWorkflowService.promotePurchasePricingOnInvoicePostInTx (C:\\Users\\sadaq\\Desktop\\pharmcare\\apps\\qoondeeye-pharmacyDB\\src\\purchases\\purchases-workflow.service.ts:817:5)\n    at async PurchasesWorkflowService.postPurchaseInvoiceInTx (C:\\Users\\sadaq\\Desktop\\pharmcare\\apps\\qoondeeye-pharmacyDB\\src\\purchases\\purchases-workflow.service.ts:522:5)\n    at async Proxy._transactionWithCallback (C:\\Users\\sadaq\\Desktop\\pharmcare\\node_modules\\.pnpm\\@prisma+client@7.8.0_prisma_c1be678eb15ca8627433d66dbb42eeb8\\node_modules\\@prisma\\client\\src\\runtime\\getPrismaClient.ts:810:18)\n    at async PurchasesService.postInvoice (C:\\Users\\sadaq\\Desktop\\pharmcare\\apps\\qoondeeye-pharmacyDB\\src\\purchases\\purchases.service.ts:913:17)",
+  "ts": "2026-06-08T01:02:08.220Z"
+}[39m
+[31m[Nest] 17948  - [39m06/08/2026, 4:02:08 AM [31m  ERROR[39m [38;5;3m[AllExceptionsFilter] [39m[31mPrisma P2010: 
+Invalid `prisma.$queryRawUnsafe()` invocation:
+
+
+Raw query failed. Code: `23505`. Message: `duplicate key value violates unique constraint "product_uom_prices_active_product_uom_uq"` meta={"driverAdapterError":{"name":"DriverAdapterError","cause":{"originalCode":"23505","originalMessage":"duplicate key value violates unique constraint \"product_uom_prices_active_product_uom_uq\"","kind":"UniqueConstraintViolation","constraint":{"fields":["product_id","uom_id"]}}}}[39m
+PrismaClientKnownRequestError: 
+Invalid `prisma.$queryRawUnsafe()` invocation:
+
+
+Raw query failed. Code: `23505`. Message: `duplicate key value violates unique constraint "product_uom_prices_active_product_uom_uq"`
+    at zr.handleRequestError (C:\Users\sadaq\Desktop\pharmcare\node_modules\.pnpm\@prisma+client@7.8.0_prisma_c1be678eb15ca8627433d66dbb42eeb8\node_modules\@prisma\client\src\runtime\RequestHandler.ts:237:13)
+    at zr.handleAndLogRequestError (C:\Users\sadaq\Desktop\pharmcare\node_modules\.pnpm\@prisma+client@7.8.0_prisma_c1be678eb15ca8627433d66dbb42eeb8\node_modules\@prisma\client\src\runtime\RequestHandler.ts:183:12)
+    at zr.request (C:\Users\sadaq\Desktop\pharmcare\node_modules\.pnpm\@prisma+client@7.8.0_prisma_c1be678eb15ca8627433d66dbb42eeb8\node_modules\@prisma\client\src\runtime\RequestHandler.ts:152:12)
+    at process.processTicksAndRejections (node:internal/process/task_queues:105:5)
+    at async a (C:\Users\sadaq\Desktop\pharmcare\node_modules\.pnpm\@prisma+client@7.8.0_prisma_c1be678eb15ca8627433d66dbb42eeb8\node_modules\@prisma\client\src\runtime\getPrismaClient.ts:963:24)
+    at async PurchasesWorkflowService.promotePurchasePricingOnInvoicePostInTx (C:\Users\sadaq\Desktop\pharmcare\apps\qoondeeye-pharmacyDB\src\purchases\purchases-workflow.service.ts:817:5)
+    at async PurchasesWorkflowService.postPurchaseInvoiceInTx (C:\Users\sadaq\Desktop\pharmcare\apps\qoondeeye-pharmacyDB\src\purchases\purchases-workflow.service.ts:522:5)
+    at async Proxy._transactionWithCallback (C:\Users\sadaq\Desktop\pharmcare\node_modules\.pnpm\@prisma+client@7.8.0_prisma_c1be678eb15ca8627433d66dbb42eeb8\node_modules\@prisma\client\src\runtime\getPrismaClient.ts:810:18)
+    at async PurchasesService.postInvoice (C:\Users\sadaq\Desktop\pharmcare\apps\qoondeeye-pharmacyDB\src\purchases\purchases.service.ts:913:17)
+[31m[Nest] 17948  - [39m06/08/2026, 4:03:08 AM [31m  ERROR[39m [38;5;3m[Http] [39m[31m{
+  "kind": "http_request",
+  "requestId": "6d770539-b2d2-40d9-9399-9a905de4c483",
+  "method": "POST",
+  "path": "/api/purchases/4652af1c-3f3c-4756-9dd1-cf0d90efe487/cancel",
+  "statusCode": 400,
+  "durationMs": 5,
+  "tenantId": null,
+  "branchId": "33511c3c-545e-4dd0-b9cd-1bc1b4eeb896",
+  "userId": "d317a2e3-686a-4e66-b70b-a58ef9f9ba56",
+  "errorMessage": "Purchase not found",
+  "errorStack": "BadRequestException: Purchase not found\n    at <anonymous> (C:\\Users\\sadaq\\Desktop\\pharmcare\\apps\\qoondeeye-pharmacyDB\\src\\purchases\\purchases.service.ts:953:28)\n    at process.processTicksAndRejections (node:internal/process/task_queues:105:5)\n    at async Proxy._transactionWithCallback (C:\\Users\\sadaq\\Desktop\\pharmcare\\node_modules\\.pnpm\\@prisma+client@7.8.0_prisma_c1be678eb15ca8627433d66dbb42eeb8\\node_modules\\@prisma\\client\\src\\runtime\\getPrismaClient.ts:810:18)\n    at async PurchasesService.cancel (C:\\Users\\sadaq\\Desktop\\pharmcare\\apps\\qoondeeye-pharmacyDB\\src\\purchases\\purchases.service.ts:947:17)",
+  "ts": "2026-06-08T01:03:08.505Z"
+}[39m
+[31m[Nest] 17948  - [39m06/08/2026, 4:03:40 AM [31m  ERROR[39m [38;5;3m[Http] [39m[31m{
+  "kind": "http_request",
+  "requestId": "2a80675c-09fd-4a9e-ac74-1209f9d7fe7a",
+  "method": "POST",
+  "path": "/api/purchases/b0984a95-c95e-493a-b802-d33255a4404c/post-invoice",
+  "statusCode": 201,
+  "durationMs": 51,
+  "tenantId": null,
+  "branchId": "33511c3c-545e-4dd0-b9cd-1bc1b4eeb896",
+  "userId": "d317a2e3-686a-4e66-b70b-a58ef9f9ba56",
+  "errorMessage": "\nInvalid `prisma.$queryRawUnsafe()` invocation:\n\n\nRaw query failed. Code: `23505`. Message: `duplicate key value violates unique constraint \"product_uom_prices_active_product_uom_uq\"`",
+  "errorStack": "PrismaClientKnownRequestError: \nInvalid `prisma.$queryRawUnsafe()` invocation:\n\n\nRaw query failed. Code: `23505`. Message: `duplicate key value violates unique constraint \"product_uom_prices_active_product_uom_uq\"`\n    at zr.handleRequestError (C:\\Users\\sadaq\\Desktop\\pharmcare\\node_modules\\.pnpm\\@prisma+client@7.8.0_prisma_c1be678eb15ca8627433d66dbb42eeb8\\node_modules\\@prisma\\client\\src\\runtime\\RequestHandler.ts:237:13)\n    at zr.handleAndLogRequestError (C:\\Users\\sadaq\\Desktop\\pharmcare\\node_modules\\.pnpm\\@prisma+client@7.8.0_prisma_c1be678eb15ca8627433d66dbb42eeb8\\node_modules\\@prisma\\client\\src\\runtime\\RequestHandler.ts:183:12)\n    at zr.request (C:\\Users\\sadaq\\Desktop\\pharmcare\\node_modules\\.pnpm\\@prisma+client@7.8.0_prisma_c1be678eb15ca8627433d66dbb42eeb8\\node_modules\\@prisma\\client\\src\\runtime\\RequestHandler.ts:152:12)\n    at process.processTicksAndRejections (node:internal/process/task_queues:105:5)\n    at async a (C:\\Users\\sadaq\\Desktop\\pharmcare\\node_modules\\.pnpm\\@prisma+client@7.8.0_prisma_c1be678eb15ca8627433d66dbb42eeb8\\node_modules\\@prisma\\client\\src\\runtime\\getPrismaClient.ts:963:24)\n    at async PurchasesWorkflowService.promotePurchasePricingOnInvoicePostInTx (C:\\Users\\sadaq\\Desktop\\pharmcare\\apps\\qoondeeye-pharmacyDB\\src\\purchases\\purchases-workflow.service.ts:817:5)\n    at async PurchasesWorkflowService.postPurchaseInvoiceInTx (C:\\Users\\sadaq\\Desktop\\pharmcare\\apps\\qoondeeye-pharmacyDB\\src\\purchases\\purchases-workflow.service.ts:522:5)\n    at async Proxy._transactionWithCallback (C:\\Users\\sadaq\\Desktop\\pharmcare\\node_modules\\.pnpm\\@prisma+client@7.8.0_prisma_c1be678eb15ca8627433d66dbb42eeb8\\node_modules\\@prisma\\client\\src\\runtime\\getPrismaClient.ts:810:18)\n    at async PurchasesService.postInvoice (C:\\Users\\sadaq\\Desktop\\pharmcare\\apps\\qoondeeye-pharmacyDB\\src\\purchases\\purchases.service.ts:913:17)",
+  "ts": "2026-06-08T01:03:40.385Z"
+}[39m
+[31m[Nest] 17948  - [39m06/08/2026, 4:03:40 AM [31m  ERROR[39m [38;5;3m[AllExceptionsFilter] [39m[31mPrisma P2010: 
+Invalid `prisma.$queryRawUnsafe()` invocation:
+
+
+Raw query failed. Code: `23505`. Message: `duplicate key value violates unique constraint "product_uom_prices_active_product_uom_uq"` meta={"driverAdapterError":{"name":"DriverAdapterError","cause":{"originalCode":"23505","originalMessage":"duplicate key value violates unique constraint \"product_uom_prices_active_product_uom_uq\"","kind":"UniqueConstraintViolation","constraint":{"fields":["product_id","uom_id"]}}}}[39m
+PrismaClientKnownRequestError: 
+Invalid `prisma.$queryRawUnsafe()` invocation:
+
+
+Raw query failed. Code: `23505`. Message: `duplicate key value violates unique constraint "product_uom_prices_active_product_uom_uq"`
+    at zr.handleRequestError (C:\Users\sadaq\Desktop\pharmcare\node_modules\.pnpm\@prisma+client@7.8.0_prisma_c1be678eb15ca8627433d66dbb42eeb8\node_modules\@prisma\client\src\runtime\RequestHandler.ts:237:13)
+    at zr.handleAndLogRequestError (C:\Users\sadaq\Desktop\pharmcare\node_modules\.pnpm\@prisma+client@7.8.0_prisma_c1be678eb15ca8627433d66dbb42eeb8\node_modules\@prisma\client\src\runtime\RequestHandler.ts:183:12)
+    at zr.request (C:\Users\sadaq\Desktop\pharmcare\node_modules\.pnpm\@prisma+client@7.8.0_prisma_c1be678eb15ca8627433d66dbb42eeb8\node_modules\@prisma\client\src\runtime\RequestHandler.ts:152:12)
+    at process.processTicksAndRejections (node:internal/process/task_queues:105:5)
+    at async a (C:\Users\sadaq\Desktop\pharmcare\node_modules\.pnpm\@prisma+client@7.8.0_prisma_c1be678eb15ca8627433d66dbb42eeb8\node_modules\@prisma\client\src\runtime\getPrismaClient.ts:963:24)
+    at async PurchasesWorkflowService.promotePurchasePricingOnInvoicePostInTx (C:\Users\sadaq\Desktop\pharmcare\apps\qoondeeye-pharmacyDB\src\purchases\purchases-workflow.service.ts:817:5)
+    at async PurchasesWorkflowService.postPurchaseInvoiceInTx (C:\Users\sadaq\Desktop\pharmcare\apps\qoondeeye-pharmacyDB\src\purchases\purchases-workflow.service.ts:522:5)
+    at async Proxy._transactionWithCallback (C:\Users\sadaq\Desktop\pharmcare\node_modules\.pnpm\@prisma+client@7.8.0_prisma_c1be678eb15ca8627433d66dbb42eeb8\node_modules\@prisma\client\src\runtime\getPrismaClient.ts:810:18)
+    at async PurchasesService.postInvoice (C:\Users\sadaq\Desktop\pharmcare\apps\qoondeeye-pharmacyDB\src\purchases\purchases.service.ts:913:17)

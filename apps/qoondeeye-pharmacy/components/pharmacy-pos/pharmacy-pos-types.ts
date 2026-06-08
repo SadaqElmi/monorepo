@@ -1,6 +1,6 @@
-import type { PosMiscChargeKind } from "@repo/types";
+import type { PosMiscChargeKind, ProductUom } from "@repo/types";
 
-export type UnitType = "PC" | "Box" | "Ctn" | "router";
+export type UnitType = string;
 
 export type Product = {
   id: string;
@@ -17,6 +17,14 @@ export type Product = {
   showCompare?: boolean;
   stock: "in" | "low";
   unitType: UnitType;
+  uomId?: string;
+  uomCode?: string;
+  uomSymbol?: string;
+  conversionFactorToBase?: number;
+  uoms?: ProductUom[];
+  priceGroupId?: string;
+  offerId?: string;
+  discountSource?: string;
 };
 
 export type CartLine = {
@@ -28,6 +36,15 @@ export type CartLine = {
   listUnitPrice?: number;
   qty: number;
   unitType: UnitType;
+  uomId?: string;
+  uomCode?: string;
+  uomSymbol?: string;
+  conversionFactorToBase?: number;
+  baseQty?: number;
+  priceGroupId?: string;
+  offerId?: string;
+  lineDiscount?: number;
+  discountSource?: string;
   /** Manual charge (delivery/tailor); member_card excluded from billable totals until points. */
   miscChargeKind?: PosMiscChargeKind;
 };

@@ -16,8 +16,13 @@ export interface SaleItemLineRow {
   id: string;
   sale_id: string;
   product_id: string | null;
+  batch_id: string | null;
   quantity: number | string;
   price: number | string | null;
+  uom_id?: string | null;
+  entered_quantity?: number | string | null;
+  conversion_factor_snapshot?: number | string | null;
+  base_quantity?: number | string | null;
 }
 
 export interface ReturnVoucherInsertRow {
@@ -26,6 +31,10 @@ export interface ReturnVoucherInsertRow {
   sale_id: string;
   sale_item_id: string;
   quantity: number | string;
+  uom_id?: string | null;
+  entered_quantity?: number | string | null;
+  conversion_factor_snapshot?: number | string | null;
+  base_quantity?: number | string | null;
   unit_price: number | string | null;
   token: string;
   status: string;
@@ -40,6 +49,10 @@ export interface ReturnVoucherLockedRow {
   sale_id: string;
   sale_item_id: string;
   quantity: number | string;
+  uom_id?: string | null;
+  entered_quantity?: number | string | null;
+  conversion_factor_snapshot?: number | string | null;
+  base_quantity?: number | string | null;
   unit_price: number | string | null;
   token: string;
   status: string;
@@ -66,6 +79,10 @@ export interface ReturnVoucherLookupRow {
   saleId: string;
   saleItemId: string;
   quantity: number | string;
+  uomId?: string | null;
+  enteredQuantity?: number | string | null;
+  conversionFactorSnapshot?: number | string | null;
+  baseQuantity?: number | string | null;
   unitPrice: number | string | null;
   token: string;
   status: string;
@@ -124,7 +141,8 @@ export class ReturnVouchersService {
       }
 
       const [saleItem] = await tx.$queryRawUnsafe<SaleItemLineRow[]>(
-        `SELECT id, sale_id, product_id, quantity, price
+        `SELECT id, sale_id, product_id, batch_id, quantity, price,
+                uom_id, entered_quantity, conversion_factor_snapshot, base_quantity
          FROM sale_items
          WHERE id = $1 AND sale_id = $2
          FOR UPDATE`,
@@ -135,20 +153,17 @@ export class ReturnVouchersService {
         throw new BadRequestException('Sale line not found');
       }
 
-      const soldQty = Number(saleItem.quantity ?? 0);
       const alreadyReturned =
         await this.saleReturnsService.sumReturnedQtyForSaleItem(
           tx,
           saleItem.id,
         );
       const pendingVoucher = await this.sumPendingVoucherQty(tx, saleItem.id);
-      const remaining = soldQty - alreadyReturned - pendingVoucher;
-
-      if (dto.quantity <= 0 || dto.quantity > remaining) {
-        throw new BadRequestException(
-          'Quantity exceeds what can still be returned for this line',
-        );
-      }
+      const resolvedQuantity = this.saleReturnsService.resolveReturnQuantity(
+        dto.quantity,
+        saleItem,
+        alreadyReturned + pendingVoucher,
+      );
 
       const unitPrice = Number(saleItem.price ?? 0);
       const token = randomBytes(32).toString('hex');
@@ -158,14 +173,21 @@ export class ReturnVouchersService {
 
       const [row] = await tx.$queryRawUnsafe<ReturnVoucherInsertRow[]>(
         `INSERT INTO return_vouchers (
-           branch_id, sale_id, sale_item_id, quantity, unit_price, token, status, reason, expires_at
+           branch_id, sale_id, sale_item_id, quantity,
+           uom_id, entered_quantity, conversion_factor_snapshot, base_quantity,
+           unit_price, token, status, reason, expires_at
          )
-         VALUES ($1, $2, $3, $4, $5, $6, 'pending', $7, $8)
-         RETURNING id, branch_id, sale_id, sale_item_id, quantity, unit_price, token, status, reason, expires_at, created_at`,
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $4, $8, $9, 'pending', $10, $11)
+         RETURNING id, branch_id, sale_id, sale_item_id, quantity,
+                   uom_id, entered_quantity, conversion_factor_snapshot, base_quantity,
+                   unit_price, token, status, reason, expires_at, created_at`,
         branchId,
         dto.saleId,
         dto.saleItemId,
-        dto.quantity,
+        resolvedQuantity.baseQuantity,
+        saleItem.uom_id ?? null,
+        resolvedQuantity.enteredQuantity,
+        resolvedQuantity.conversionFactor,
         unitPrice,
         token,
         dto.reason ?? null,
@@ -193,7 +215,9 @@ export class ReturnVouchersService {
     await this.tenantService.applyTenantSchemaPatches(schemaName);
     return this.prisma.withTenantSchema(schemaName, async (tx) => {
       const [v] = await tx.$queryRawUnsafe<ReturnVoucherLockedRow[]>(
-        `SELECT id, branch_id, sale_id, sale_item_id, quantity, unit_price, token, status, reason, expires_at, sale_return_id, used_at, created_at
+        `SELECT id, branch_id, sale_id, sale_item_id, quantity,
+                uom_id, entered_quantity, conversion_factor_snapshot, base_quantity,
+                unit_price, token, status, reason, expires_at, sale_return_id, used_at, created_at
          FROM return_vouchers
          WHERE id = $1 AND branch_id = $2::uuid
          FOR UPDATE`,
@@ -214,7 +238,8 @@ export class ReturnVouchersService {
       }
 
       const [saleItem] = await tx.$queryRawUnsafe<SaleItemLineRow[]>(
-        `SELECT id, sale_id, product_id, quantity, price
+        `SELECT id, sale_id, product_id, batch_id, quantity, price,
+                uom_id, entered_quantity, conversion_factor_snapshot, base_quantity
          FROM sale_items
          WHERE id = $1 AND sale_id = $2
          FOR UPDATE`,
@@ -244,7 +269,12 @@ export class ReturnVouchersService {
         }
       }
 
-      const refundAmount = voucherUnit * Number(v.quantity ?? 0);
+      const refundQuantity = Number(
+        v.entered_quantity ??
+          Number(v.quantity ?? 0) /
+            Number(v.conversion_factor_snapshot ?? 1),
+      );
+      const refundAmount = voucherUnit * refundQuantity;
 
       const [saleReturn] = await tx.$queryRawUnsafe<SaleReturnInsertRow[]>(
         `INSERT INTO sale_returns (sale_id, branch_id, reason, refund_method, refund_amount)
@@ -311,6 +341,10 @@ export class ReturnVouchersService {
            sale_id AS "saleId",
            sale_item_id AS "saleItemId",
            quantity,
+           uom_id AS "uomId",
+           entered_quantity AS "enteredQuantity",
+           conversion_factor_snapshot AS "conversionFactorSnapshot",
+           base_quantity AS "baseQuantity",
            unit_price AS "unitPrice",
            token,
            status,

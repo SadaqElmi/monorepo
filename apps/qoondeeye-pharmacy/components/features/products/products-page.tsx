@@ -1,99 +1,91 @@
 "use client";
 
+import { useQueryClient } from "@tanstack/react-query";
 import { useEffect, useMemo, useState } from "react";
-import {
-  ChevronLeft,
-  ChevronRight,
-  Download,
-  Edit2,
-  Eye,
-  Loader2,
-  MoreHorizontal,
-  Package,
-  Plus,
-  Search,
-  Trash2,
-} from "lucide-react";
 
-import { ErpWorkbenchShell } from "@/components/erp/erp-workbench-shell";
-import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
+import { getStoredUser } from "@/lib/auth-client";
 import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table";
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
-import {
-  Sheet,
-  SheetContent,
-  SheetDescription,
-  SheetFooter,
-  SheetHeader,
-  SheetTitle,
-} from "@/components/ui/sheet";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
-import {
-  Category,
-  type InventoryEntry,
   Product,
+  addProductSupplier,
   createProduct,
   deleteProduct,
-  getCategories,
-  getInventory,
-  getProductByBarcode,
-  getProductsCatalog,
+  getProductSuppliers,
+  getProductUoms,
+  getUoms,
+  getSuppliersPaged,
+  removeProductSupplier,
+  setProductPreferredSupplier,
+  upsertProductUom,
+  type ProductUom,
   updateProduct,
+  updateProductUom,
 } from "@/lib/api";
-import { getStoredUser } from "@/lib/auth-client";
+import { useErpCategories } from "@/hooks/queries/use-erp-categories";
+import { useErpInventory } from "@/hooks/queries/use-erp-inventory";
+import { useDebouncedValue } from "@/hooks/use-debounced-value";
+import { useErpProductsCatalog } from "@/hooks/queries/use-erp-products-catalog";
+import { invalidateErpCatalogQueries } from "@/lib/invalidate-erp-catalog";
+import { updateProductPricing } from "@/lib/services/pricing";
 
-type FormMode = "create" | "edit";
+import { ProductDeleteSheet } from "./product-delete-sheet";
+import { ProductFormSheet } from "./product-form-sheet";
+import { ProductViewSheet } from "./product-view-sheet";
+import { ProductsIntroAndStats } from "./products-intro-and-stats";
+import { ProductsStickyHeader } from "./products-sticky-header";
+import { ProductsTableCard } from "./products-table-card";
+import {
+  EMPTY_PRODUCT_UOM_DRAFT,
+  TABLE_PAGE_SIZE,
+  type EditableProduct,
+  type FormMode,
+  type FormUomDraft,
+  type ProductUomDraft,
+  type ProductsPageProps,
+} from "./products-types";
+import {
+  buildInitialFormUomByCode,
+  getEnabledFormUoms,
+  priceToFormString,
+  productUomDraftFromRow,
+  toNullableNumber,
+} from "./products-utils";
 
-type EditableProduct = {
-  id: string;
-  name: string;
-  sku: string;
-  listPrice: string;
-  categoryId: string;
-  strength: string;
-  formulation: string;
-  unit: string;
-  description: string;
-};
+export type { ProductsPageProps };
 
-export default function ProductsPage() {
+export default function ProductsPage({
+  initialProducts = null,
+  initialCategories = null,
+  initialInventory = null,
+  serverPrefetched = false,
+}: ProductsPageProps) {
+  const queryClient = useQueryClient();
   const [tenantSlug, setTenantSlug] = useState(
     () => getStoredUser()?.tenantSlug ?? "pharmacy1",
   );
-  const [branchNonce, setBranchNonce] = useState(0);
-  const [products, setProducts] = useState<Product[]>([]);
-  const [categories, setCategories] = useState<Category[]>([]);
-  const [inventory, setInventory] = useState<InventoryEntry[]>([]);
-  const [loading, setLoading] = useState(false);
+
+  const productsQuery = useErpProductsCatalog(tenantSlug, {
+    initialData:
+      serverPrefetched && initialProducts ? initialProducts : undefined,
+  });
+  const categoriesQuery = useErpCategories(tenantSlug, {
+    initialData:
+      serverPrefetched && initialCategories ? initialCategories : undefined,
+  });
+  const inventoryQuery = useErpInventory(tenantSlug, {
+    initialData:
+      serverPrefetched && initialInventory ? initialInventory : undefined,
+  });
+
+  const products = productsQuery.data ?? [];
+  const categories = categoriesQuery.data ?? [];
+  const inventory = inventoryQuery.data ?? [];
+  const loading =
+    productsQuery.isPending ||
+    categoriesQuery.isPending ||
+    inventoryQuery.isPending;
+  const loadError =
+    productsQuery.error ?? categoriesQuery.error ?? inventoryQuery.error;
+
   const [error, setError] = useState<string | null>(null);
   const [activeBranchId, setActiveBranchId] = useState<string | null>(null);
 
@@ -103,13 +95,41 @@ export default function ProductsPage() {
     null,
   );
   const [saving, setSaving] = useState(false);
+  const [formNotice, setFormNotice] = useState<string | null>(null);
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
   const [deleteCandidate, setDeleteCandidate] = useState<Product | null>(null);
+
   const [viewOpen, setViewOpen] = useState(false);
   const [viewProduct, setViewProduct] = useState<Product | null>(null);
+  const [productSuppliers, setProductSuppliers] = useState<
+    Awaited<ReturnType<typeof getProductSuppliers>>
+  >([]);
+  const [productUoms, setProductUoms] = useState<ProductUom[]>([]);
+  const [allUoms, setAllUoms] = useState<Awaited<ReturnType<typeof getUoms>>>(
+    [],
+  );
+  const [formUomByCode, setFormUomByCode] = useState<
+    Record<string, FormUomDraft>
+  >({});
+  const [productUomDraft, setProductUomDraft] = useState<ProductUomDraft>(
+    EMPTY_PRODUCT_UOM_DRAFT,
+  );
+  const [productUomEditing, setProductUomEditing] = useState<
+    Record<string, ProductUomDraft>
+  >({});
+  const [allSuppliers, setAllSuppliers] = useState<
+    Awaited<ReturnType<typeof getSuppliersPaged>>["items"]
+  >([]);
+  const [supplierToAdd, setSupplierToAdd] = useState("");
+  const [supplierLinksLoading, setSupplierLinksLoading] = useState(false);
+  const [supplierLinkSaving, setSupplierLinkSaving] = useState(false);
+  const [uomSaving, setUomSaving] = useState(false);
+
   const [categoryTab, setCategoryTab] = useState<string>("__all__");
   const [query, setQuery] = useState("");
+  const debouncedQuery = useDebouncedValue(query, 300);
+  const [tablePage, setTablePage] = useState(1);
 
   useEffect(() => {
     const handler = () => {
@@ -121,49 +141,21 @@ export default function ProductsPage() {
       }
       setCategoryTab("__all__");
       setQuery("");
-      setBranchNonce((n) => n + 1);
     };
     handler();
     window.addEventListener("activeBranchChanged", handler);
     return () => window.removeEventListener("activeBranchChanged", handler);
   }, []);
 
-  useEffect(() => {
-    if (!tenantSlug) return;
-    let cancelled = false;
-
-    const load = async () => {
-      try {
-        setLoading(true);
-        setError(null);
-        const [productsData, categoriesData, inventoryData] = await Promise.all(
-          [
-            getProductsCatalog(tenantSlug),
-            getCategories(tenantSlug),
-            getInventory(tenantSlug),
-          ],
-        );
-        if (!cancelled) {
-          setProducts(productsData);
-          setCategories(categoriesData);
-          setInventory(inventoryData);
-        }
-      } catch (err) {
-        if (!cancelled) {
-          setError(
-            err instanceof Error ? err.message : "Failed to load products",
-          );
-        }
-      } finally {
-        if (!cancelled) setLoading(false);
-      }
-    };
-
-    load();
-    return () => {
-      cancelled = true;
-    };
-  }, [tenantSlug, branchNonce]);
+  const dataUpdatedAt = Math.max(
+    productsQuery.dataUpdatedAt,
+    categoriesQuery.dataUpdatedAt,
+    inventoryQuery.dataUpdatedAt,
+  );
+  const isListFetching =
+    productsQuery.isFetching ||
+    categoriesQuery.isFetching ||
+    inventoryQuery.isFetching;
 
   const handleRefresh = () => {
     if (!tenantSlug.trim()) {
@@ -171,7 +163,17 @@ export default function ProductsPage() {
       return;
     }
     setTenantSlug((prev) => prev.trim());
+    void invalidateErpCatalogQueries(queryClient);
+    void inventoryQuery.refetch();
   };
+
+  const displayError =
+    error ??
+    (loadError instanceof Error
+      ? loadError.message
+      : loadError
+        ? "Failed to load products"
+        : null);
 
   const handleOpenCreate = () => {
     if (!tenantSlug) {
@@ -183,33 +185,38 @@ export default function ProductsPage() {
       id: "",
       name: "",
       sku: "",
-      listPrice: "",
       categoryId: "",
       strength: "",
       formulation: "",
       unit: "",
       description: "",
+      costPrice: "",
+      sellingPrice: "",
+      reorderLevel: "10",
     });
+    setFormUomByCode({});
+    setFormNotice(null);
     setFormOpen(true);
   };
 
-  const handleOpenEdit = (prod: Product) => {
+  const handleOpenEdit = (prod: Product, notice?: string | null) => {
     if (!tenantSlug) return;
     setFormMode("edit");
     setActiveProduct({
       id: prod.id,
       name: prod.name,
       sku: prod.sku ?? "",
-      listPrice:
-        prod.listPrice != null && prod.listPrice !== ""
-          ? String(prod.listPrice)
-          : "",
       categoryId: prod.categoryId ?? "",
       strength: prod.strength ?? "",
       formulation: prod.formulation ?? "",
       unit: prod.unit ?? "",
       description: prod.description ?? "",
+      costPrice: priceToFormString(prod.uomCostPrice),
+      sellingPrice: priceToFormString(prod.uomSellingPrice ?? prod.listPrice),
+      reorderLevel: "10",
     });
+    setFormUomByCode({});
+    setFormNotice(notice ?? null);
     setFormOpen(true);
   };
 
@@ -217,6 +224,8 @@ export default function ProductsPage() {
     if (saving) return;
     setFormOpen(false);
     setActiveProduct(null);
+    setFormUomByCode({});
+    setFormNotice(null);
   };
 
   const handleOpenView = (prod: Product) => {
@@ -227,37 +236,300 @@ export default function ProductsPage() {
   const handleCloseView = () => {
     setViewOpen(false);
     setViewProduct(null);
+    setProductSuppliers([]);
+    setProductUoms([]);
+    setAllUoms([]);
+    setProductUomDraft(EMPTY_PRODUCT_UOM_DRAFT);
+    setProductUomEditing({});
+    setSupplierToAdd("");
+  };
+
+  useEffect(() => {
+    if (!viewOpen || !viewProduct || !tenantSlug) return;
+    let cancelled = false;
+    setSupplierLinksLoading(true);
+    void Promise.all([
+      getProductSuppliers(tenantSlug, viewProduct.id),
+      getProductUoms(tenantSlug, viewProduct.id),
+      getSuppliersPaged(tenantSlug, { page: 1, limit: 200 }),
+      getUoms(tenantSlug),
+    ])
+      .then(([links, uoms, suppliersPage, tenantUoms]) => {
+        if (cancelled) return;
+        setProductSuppliers(links);
+        setProductUoms(uoms);
+        setAllSuppliers(suppliersPage.items);
+        setAllUoms(tenantUoms);
+      })
+      .catch((err) => {
+        if (!cancelled) {
+          setError(
+            err instanceof Error
+              ? err.message
+              : "Failed to load product suppliers",
+          );
+        }
+      })
+      .finally(() => {
+        if (!cancelled) setSupplierLinksLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [viewOpen, viewProduct, tenantSlug]);
+
+  useEffect(() => {
+    if (!formOpen || formMode !== "create" || !tenantSlug) return;
+    let cancelled = false;
+    void getUoms(tenantSlug)
+      .then((uoms) => {
+        if (cancelled) return;
+        const active = uoms.filter((u) => u.active !== false);
+        setAllUoms(active);
+        setFormUomByCode((prev) => {
+          const hasExisting = Object.keys(prev).length > 0;
+          if (!hasExisting) return buildInitialFormUomByCode(active);
+          const next = buildInitialFormUomByCode(active);
+          for (const code of Object.keys(next)) {
+            const existing = prev[code];
+            if (existing) next[code] = existing;
+          }
+          return next;
+        });
+      })
+      .catch((err) => {
+        if (!cancelled) {
+          setError(err instanceof Error ? err.message : "Failed to load UOMs");
+        }
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [formOpen, formMode, tenantSlug]);
+
+  const reloadProductSuppliers = async (productId: string) => {
+    const links = await getProductSuppliers(tenantSlug, productId);
+    setProductSuppliers(links);
+  };
+
+  const reloadProductUoms = async (productId: string) => {
+    const uoms = await getProductUoms(tenantSlug, productId);
+    setProductUoms(uoms);
+  };
+
+  const handleAddSupplierLink = async () => {
+    if (!viewProduct || !supplierToAdd) return;
+    try {
+      setSupplierLinkSaving(true);
+      await addProductSupplier(tenantSlug, viewProduct.id, {
+        supplierId: supplierToAdd,
+      });
+      setSupplierToAdd("");
+      await reloadProductSuppliers(viewProduct.id);
+      await invalidateErpCatalogQueries(queryClient);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to add supplier");
+    } finally {
+      setSupplierLinkSaving(false);
+    }
+  };
+
+  const handlePreferredSupplier = async (supplierId: string) => {
+    if (!viewProduct) return;
+    try {
+      setSupplierLinkSaving(true);
+      await setProductPreferredSupplier(tenantSlug, viewProduct.id, supplierId);
+      await reloadProductSuppliers(viewProduct.id);
+      await invalidateErpCatalogQueries(queryClient);
+    } catch (err) {
+      setError(
+        err instanceof Error ? err.message : "Failed to set preferred supplier",
+      );
+    } finally {
+      setSupplierLinkSaving(false);
+    }
+  };
+
+  const handleRemoveSupplierLink = async (supplierId: string) => {
+    if (!viewProduct) return;
+    try {
+      setSupplierLinkSaving(true);
+      await removeProductSupplier(tenantSlug, viewProduct.id, supplierId);
+      await reloadProductSuppliers(viewProduct.id);
+      await invalidateErpCatalogQueries(queryClient);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to remove supplier");
+    } finally {
+      setSupplierLinkSaving(false);
+    }
   };
 
   const handleChange = (field: keyof EditableProduct, value: string) => {
+    if (field === "sku") {
+      setFormNotice(null);
+    }
     setActiveProduct((prev) => (prev ? { ...prev, [field]: value } : prev));
   };
+  const toggleFormUomEnabled = (code: string, enabled: boolean) => {
+    setFormUomByCode((prev) => {
+      const row = prev[code];
+      if (!row) return prev;
 
-  const handleSkuBlurCreate = async () => {
-    if (formMode !== "create" || !tenantSlug || !activeProduct) return;
-    const code = activeProduct.sku.trim();
-    if (code.length < 3) return;
-    try {
-      const p = await getProductByBarcode(tenantSlug, code);
-      const lp =
-        p.listPrice != null && String(p.listPrice) !== ""
-          ? String(p.listPrice)
-          : "";
-      setActiveProduct({
-        id: "",
-        name: p.name,
-        sku: p.sku ?? code,
-        listPrice: lp,
-        categoryId: p.categoryId ?? "",
-        strength: p.strength ?? "",
-        formulation: p.formulation ?? "",
-        unit: p.unit ?? "",
-        description: p.description ?? "",
-      });
-      setError(null);
-    } catch {
-      /* new barcode — keep typing */
+      const next = { ...prev };
+
+      if (!enabled) {
+        if (row.isBase) {
+          const successor = Object.values(next).find(
+            (candidate) => candidate.enabled && candidate.code !== code,
+          );
+          if (successor) {
+            for (const key of Object.keys(next)) {
+              const current = next[key];
+              if (!current.enabled || current.code === code) continue;
+              const isBase = current.code === successor.code;
+              next[key] = {
+                ...current,
+                isBase,
+                conversionFactorToBase: isBase
+                  ? "1"
+                  : current.conversionFactorToBase,
+              };
+            }
+          }
+        }
+        next[code] = {
+          ...row,
+          enabled: false,
+          isBase: false,
+          isPurchaseDefault: false,
+          isSalesDefault: false,
+          isPosDefault: false,
+        };
+        return next;
+      }
+
+      const hasBase = Object.values(next).some(
+        (candidate) => candidate.enabled && candidate.isBase,
+      );
+      const makeBase = !hasBase;
+      next[code] = {
+        ...row,
+        enabled: true,
+        isBase: makeBase,
+        conversionFactorToBase: makeBase
+          ? "1"
+          : row.conversionFactorToBase || "1",
+        isPurchaseDefault: makeBase ? true : row.isPurchaseDefault,
+        isSalesDefault: makeBase ? true : row.isSalesDefault,
+        isPosDefault: makeBase ? true : row.isPosDefault,
+      };
+      return next;
+    });
+  };
+
+  const setFormUomBase = (code: string) => {
+    setFormUomByCode((prev) => {
+      const row = prev[code];
+      if (!row?.enabled) return prev;
+
+      const next = { ...prev };
+      for (const key of Object.keys(next)) {
+        const current = next[key];
+        if (!current.enabled) {
+          next[key] = { ...current, isBase: false };
+          continue;
+        }
+        const isBase = current.code === code;
+        next[key] = {
+          ...current,
+          isBase,
+          conversionFactorToBase: isBase ? "1" : current.conversionFactorToBase,
+        };
+      }
+      return next;
+    });
+  };
+
+  const patchFormUom = (code: string, patch: Partial<FormUomDraft>) => {
+    if (patch.isBase) {
+      setFormUomBase(code);
+      return;
     }
+    setFormUomByCode((prev) => {
+      const row = prev[code];
+      if (!row) return prev;
+      const next = { ...prev };
+      const singleDefaultKeys = [
+        "isPurchaseDefault",
+        "isSalesDefault",
+        "isPosDefault",
+      ] as const;
+      for (const key of singleDefaultKeys) {
+        if (patch[key] === true) {
+          for (const currentCode of Object.keys(next)) {
+            if (currentCode !== code) {
+              next[currentCode] = { ...next[currentCode], [key]: false };
+            }
+          }
+        }
+      }
+      next[code] = { ...row, ...patch };
+      return next;
+    });
+  };
+
+  const saveProductUomDraft = async (
+    row: ProductUom | null,
+    draft: ProductUomDraft,
+  ) => {
+    if (!viewProduct || !tenantSlug || !draft.uomId) return;
+    const factor = Number(draft.conversionFactorToBase);
+    if (!Number.isFinite(factor) || factor <= 0) {
+      setError("UOM conversion factor must be greater than 0");
+      return;
+    }
+    try {
+      setUomSaving(true);
+      setError(null);
+      const sharedInput = {
+        conversionFactorToBase: factor,
+        isBase: draft.isBase,
+        isPurchaseDefault: draft.isPurchaseDefault,
+        isSalesDefault: draft.isSalesDefault,
+        isPosDefault: draft.isPosDefault,
+        isActive: draft.isActive,
+        sellingPrice: toNullableNumber(draft.sellingPrice) ?? null,
+      };
+      if (row) {
+        await updateProductUom(tenantSlug, viewProduct.id, row.id, sharedInput);
+      } else {
+        await upsertProductUom(tenantSlug, viewProduct.id, {
+          uomId: draft.uomId,
+          ...sharedInput,
+        });
+        setProductUomDraft(EMPTY_PRODUCT_UOM_DRAFT);
+      }
+      setProductUomEditing((prev) => {
+        if (!row) return prev;
+        const copy = { ...prev };
+        delete copy[row.id];
+        return copy;
+      });
+      await reloadProductUoms(viewProduct.id);
+      await invalidateErpCatalogQueries(queryClient);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to save product UOM");
+    } finally {
+      setUomSaving(false);
+    }
+  };
+
+  const disableProductUom = async (row: ProductUom) => {
+    if (!viewProduct) return;
+    await saveProductUomDraft(row, {
+      ...productUomDraftFromRow(row),
+      isActive: false,
+    });
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -268,51 +540,74 @@ export default function ProductsPage() {
       setSaving(true);
       setError(null);
 
-      const lp = activeProduct.listPrice.trim();
-      const listPriceNum = lp.length ? Number.parseFloat(lp) : NaN;
+      const enabledFormUoms = getEnabledFormUoms(formUomByCode);
+      if (formMode === "create" && enabledFormUoms.length === 0) {
+        setError("Enable at least one unit of measure.");
+        return;
+      }
+
+      const baseUomCode =
+        formMode === "create"
+          ? enabledFormUoms.find((row) => row.isBase)?.code.trim() ||
+            enabledFormUoms[0]?.code.trim() ||
+            ""
+          : activeProduct.unit.trim();
       const payload = {
         name: activeProduct.name.trim(),
         sku: activeProduct.sku.trim() || undefined,
-        listPrice:
-          lp.length > 0 && Number.isFinite(listPriceNum)
-            ? listPriceNum
-            : undefined,
         categoryId: activeProduct.categoryId.trim() || undefined,
         strength: activeProduct.strength.trim() || undefined,
         formulation: activeProduct.formulation.trim() || undefined,
-        unit: activeProduct.unit.trim() || undefined,
+        unit: baseUomCode || undefined,
         description: activeProduct.description.trim() || undefined,
         catalogWide: true as const,
       };
 
+      const costPrice = toNullableNumber(activeProduct.costPrice);
+      const sellingPrice = toNullableNumber(activeProduct.sellingPrice);
+
       if (formMode === "create") {
-        const created = await createProduct(tenantSlug, payload);
-        setProducts((prev) => [created, ...prev]);
+        const reorderLevel = toNullableNumber(activeProduct.reorderLevel);
+        await createProduct(tenantSlug, {
+          ...payload,
+          listPrice: sellingPrice,
+          reorderLevel: reorderLevel ?? 10,
+          uoms: enabledFormUoms.map((row) => ({
+            code: row.code.trim(),
+            conversionFactorToBase: Number(row.conversionFactorToBase || 1),
+            isBase: row.isBase,
+            isPurchaseDefault: row.isPurchaseDefault,
+            isSalesDefault: row.isSalesDefault,
+            isPosDefault: row.isPosDefault,
+            ...(row.isBase && costPrice != null ? { costPrice } : {}),
+            sellingPrice: toNullableNumber(row.sellingPrice) ?? sellingPrice,
+          })),
+        });
       } else {
-        const updated = await updateProduct(tenantSlug, activeProduct.id, {
+        await updateProduct(tenantSlug, activeProduct.id, {
           name: payload.name,
           sku: payload.sku,
-          listPrice:
-            lp.length === 0
-              ? null
-              : Number.isFinite(listPriceNum)
-                ? listPriceNum
-                : undefined,
           categoryId: payload.categoryId || null,
           strength: payload.strength,
           formulation: payload.formulation,
           unit: payload.unit,
           description: payload.description,
+          listPrice: sellingPrice ?? null,
         });
-        setProducts((prev) =>
-          prev.map((p) => (p.id === updated.id ? updated : p)),
-        );
+        if (costPrice !== undefined) {
+          await updateProductPricing(tenantSlug, activeProduct.id, {
+            costPrice: costPrice ?? 0,
+          });
+        }
       }
+      await invalidateErpCatalogQueries(queryClient);
 
       setFormOpen(false);
       setActiveProduct(null);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to save product");
+      const message =
+        err instanceof Error ? err.message : "Failed to save product";
+      setError(message);
     } finally {
       setSaving(false);
     }
@@ -325,14 +620,13 @@ export default function ProductsPage() {
   };
 
   const handleConfirmDelete = async () => {
-    if (!tenantSlug) return;
-    if (!deleteCandidate) return;
+    if (!tenantSlug || !deleteCandidate) return;
 
     try {
       setDeletingId(deleteCandidate.id);
       setError(null);
       await deleteProduct(tenantSlug, deleteCandidate.id);
-      setProducts((prev) => prev.filter((p) => p.id !== deleteCandidate.id));
+      await invalidateErpCatalogQueries(queryClient);
       setDeleteConfirmOpen(false);
       setDeleteCandidate(null);
     } catch (err) {
@@ -348,7 +642,7 @@ export default function ProductsPage() {
   );
 
   const filteredProducts = useMemo(() => {
-    const q = query.trim().toLowerCase();
+    const q = debouncedQuery.trim().toLowerCase();
     return [...products]
       .filter((p) =>
         categoryTab === "__all__" ? true : p.categoryId === categoryTab,
@@ -373,7 +667,21 @@ export default function ProductsPage() {
       .sort((a, b) =>
         a.name.localeCompare(b.name, undefined, { sensitivity: "base" }),
       );
-  }, [categoryMap, categoryTab, products, query]);
+  }, [categoryMap, categoryTab, products, debouncedQuery]);
+
+  useEffect(() => {
+    setTablePage(1);
+  }, [debouncedQuery, categoryTab]);
+
+  const tableTotalPages = Math.max(
+    1,
+    Math.ceil(filteredProducts.length / TABLE_PAGE_SIZE),
+  );
+  const safeTablePage = Math.min(tablePage, tableTotalPages);
+  const pagedProducts = useMemo(() => {
+    const start = (safeTablePage - 1) * TABLE_PAGE_SIZE;
+    return filteredProducts.slice(start, start + TABLE_PAGE_SIZE);
+  }, [filteredProducts, safeTablePage]);
 
   const productStockMap = useMemo(() => {
     const map = new Map<string, number>();
@@ -381,10 +689,7 @@ export default function ProductsPage() {
       const productId = item.product_id;
       if (!productId) continue;
       if (activeBranchId && item.branch_id !== activeBranchId) continue;
-      map.set(
-        productId,
-        (map.get(productId) ?? 0) + Number(item.quantity ?? 0),
-      );
+      map.set(productId, (map.get(productId) ?? 0) + Number(item.quantity ?? 0));
     }
     return map;
   }, [inventory, activeBranchId]);
@@ -393,359 +698,49 @@ export default function ProductsPage() {
   const totalCount = products.length;
 
   return (
-    <ErpWorkbenchShell
-      breadcrumbs={[
-        { label: "Stock", href: "/inventory/stock" },
-        { label: "Products (Legacy)" },
-      ]}
-      headerEnd={
-        <>
-          <div className="hidden items-center gap-2 md:flex">
-            <div className="relative w-[320px] max-w-[32vw]">
-              <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-              <Input
-                value={query}
-                onChange={(e) => setQuery(e.target.value)}
-                placeholder="Search by name or barcode..."
-                className="h-9 rounded-full pl-9"
-              />
-            </div>
-            <Button variant="outline" className="gap-1.5 rounded-full">
-              <Download className="h-4 w-4" />
-              Export
-            </Button>
-            <Button
-              className="gap-1.5 rounded-full shadow-md shadow-primary/20 hover:bg-primary/90"
-              onClick={handleOpenCreate}
-              disabled={!tenantSlug}
-            >
-              <Plus className="h-4 w-4" />
-              Add New Product
-            </Button>
-          </div>
-        </>
-      }
-    >
+    <div className="flex min-h-0 flex-1 flex-col">
+      <ProductsStickyHeader
+        query={query}
+        onQueryChange={setQuery}
+        onAddProduct={handleOpenCreate}
+        addDisabled={!tenantSlug}
+      />
+
       <main className="mx-auto w-full max-w-7xl space-y-6 p-6 md:p-8">
-        <div className="flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
-          <div>
-            <h1 className="text-3xl font-semibold tracking-tight">
-              Product Inventory
-            </h1>
-            <p className="text-sm text-muted-foreground">
-              Manage, track and update your pharmacy stock levels.
-            </p>
-          </div>
-          <div className="inline-flex items-center gap-2 self-start rounded-full bg-muted px-3 py-1 text-xs text-muted-foreground md:self-auto">
-            <span className="uppercase tracking-wide">Tenant</span>
-            <span className="h-1 w-1 rounded-full bg-emerald-500" />
-            <span className="font-medium text-foreground/80">
-              {tenantSlug || "Not set"}
-            </span>
-          </div>
-        </div>
+        <ProductsIntroAndStats tenantSlug={tenantSlug} totalCount={totalCount} />
 
-        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
-          <StatCard
-            label="Total Products"
-            value={totalCount.toLocaleString()}
-            tone="primary"
-            hint="Synced from catalog"
-          />
-          <StatCard
-            label="Low Stock"
-            value="—"
-            tone="warning"
-            hint="Requires stock tracking"
-          />
-          <StatCard
-            label="Expired Items"
-            value="—"
-            tone="destructive"
-            hint="Requires batch tracking"
-          />
-          <StatCard
-            label="Stock Value"
-            value="—"
-            tone="info"
-            hint="Requires pricing"
-          />
-        </div>
-
-        {error && (
+        {displayError ? (
           <p className="rounded-md border border-destructive/40 bg-destructive/5 px-3 py-2 text-sm text-destructive">
-            {error}
+            {displayError}
           </p>
-        )}
+        ) : null}
 
-        <Card className="overflow-hidden rounded-2xl ring-1 ring-foreground/10">
-          <CardHeader className="border-b bg-muted/20 pb-4">
-            <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
-              <div className="space-y-1">
-                <CardTitle>Products</CardTitle>
-                <CardDescription>
-                  Backed by{" "}
-                  <code className="font-mono text-xs">/api/products</code> with{" "}
-                  <code className="font-mono text-xs">X-Tenant</code>.
-                </CardDescription>
-              </div>
-              <div className="inline-flex items-center gap-1.5 rounded-full bg-muted px-3 py-1.5 text-[11px] text-muted-foreground">
-                <Package className="h-3.5 w-3.5" />
-                {totalCount} product{totalCount === 1 ? "" : "s"}
-              </div>
-            </div>
-
-            <div className="flex flex-col gap-3 md:hidden">
-              <div className="relative">
-                <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-                <Input
-                  value={query}
-                  onChange={(e) => setQuery(e.target.value)}
-                  placeholder="Search by name or barcode..."
-                  className="h-10 rounded-xl pl-9"
-                />
-              </div>
-              <div className="flex gap-2">
-                <Button variant="outline" className="flex-1 gap-1.5 rounded-xl">
-                  <Download className="h-4 w-4" />
-                  Export
-                </Button>
-                <Button
-                  className="flex-1 gap-1.5 rounded-xl"
-                  onClick={handleOpenCreate}
-                  disabled={!tenantSlug}
-                >
-                  <Plus className="h-4 w-4" />
-                  Add
-                </Button>
-              </div>
-            </div>
-          </CardHeader>
-
-          <CardContent className="p-0">
-            {!tenantSlug ? (
-              <p className="py-8 text-sm text-muted-foreground">
-                Enter a tenant slug above to load products.
-              </p>
-            ) : loading ? (
-              <div className="flex items-center justify-center gap-2 py-10 text-sm text-muted-foreground">
-                <Loader2 className="h-4 w-4 animate-spin" />
-                Loading products…
-              </div>
-            ) : filteredProducts.length === 0 ? (
-              <div className="flex flex-col items-center justify-center gap-2 py-10 text-center text-sm text-muted-foreground">
-                <p>No products yet.</p>
-                <Button size="sm" className="mt-2" onClick={handleOpenCreate}>
-                  <Plus className="mr-1 h-4 w-4" />
-                  Add first product
-                </Button>
-              </div>
-            ) : (
-              <>
-                <div className="flex flex-wrap items-center justify-between gap-3 border-b bg-background px-4 py-3">
-                  <div className="flex items-center gap-2 overflow-x-auto">
-                    <button
-                      type="button"
-                      onClick={() => setCategoryTab("__all__")}
-                      className={`whitespace-nowrap rounded-xl px-4 py-2 text-sm font-semibold ${
-                        categoryTab === "__all__"
-                          ? "bg-primary/10 text-primary"
-                          : "bg-muted/40 text-muted-foreground hover:bg-muted"
-                      }`}
-                    >
-                      All Categories
-                    </button>
-                    {categories.slice(0, 8).map((c) => (
-                      <button
-                        key={c.id}
-                        type="button"
-                        onClick={() => setCategoryTab(c.id)}
-                        className={`whitespace-nowrap rounded-xl px-4 py-2 text-sm font-medium ${
-                          categoryTab === c.id
-                            ? "bg-primary/10 text-primary"
-                            : "bg-muted/40 text-muted-foreground hover:bg-muted"
-                        }`}
-                      >
-                        {c.name}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-
-                <Table>
-                  <TableHeader>
-                    <TableRow className="bg-muted/30">
-                      <TableHead>Product Name</TableHead>
-                      <TableHead>Strength / Form</TableHead>
-                      <TableHead>Category</TableHead>
-                      <TableHead>Barcode</TableHead>
-                      <TableHead>Unit</TableHead>
-                      <TableHead className="text-right">Actions</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {filteredProducts.map((prod) => {
-                      const categoryName =
-                        (prod.categoryId
-                          ? categoryMap.get(prod.categoryId)?.name
-                          : undefined) ??
-                        prod.category?.name ??
-                        "—";
-                      const strengthForm = [
-                        prod.strength?.trim(),
-                        prod.formulation?.trim(),
-                      ]
-                        .filter(Boolean)
-                        .join(" · ");
-                      const stockQty = productStockMap.get(prod.id) ?? 0;
-                      return (
-                        <TableRow key={prod.id}>
-                          <TableCell>
-                            <div className="flex flex-col">
-                              <span className="text-sm font-medium">
-                                {prod.name}
-                              </span>
-                              <span className="text-xs text-muted-foreground">
-                                Stock: {stockQty.toLocaleString()}
-                              </span>
-                            </div>
-                          </TableCell>
-                          <TableCell className="text-sm text-muted-foreground">
-                            {strengthForm || "—"}
-                          </TableCell>
-                          <TableCell>
-                            {categoryName === "—" ? (
-                              <span className="text-sm text-muted-foreground">
-                                —
-                              </span>
-                            ) : (
-                              <Badge
-                                variant="secondary"
-                                className="rounded-lg bg-primary/10 text-primary"
-                              >
-                                {categoryName}
-                              </Badge>
-                            )}
-                          </TableCell>
-                          <TableCell className="font-mono text-sm text-muted-foreground">
-                            {prod.sku ?? "—"}
-                          </TableCell>
-                          <TableCell className="text-sm text-muted-foreground">
-                            {prod.unit ?? "—"}
-                          </TableCell>
-                          <TableCell className="text-right">
-                            <div className="flex items-center justify-end gap-2">
-                              <DropdownMenu>
-                                <DropdownMenuTrigger asChild>
-                                  <Button
-                                    variant="ghost"
-                                    size="icon-sm"
-                                    className="rounded-lg text-muted-foreground hover:bg-muted"
-                                    title="Actions"
-                                  >
-                                    <MoreHorizontal className="h-4 w-4" />
-                                    <span className="sr-only">Actions</span>
-                                  </Button>
-                                </DropdownMenuTrigger>
-                                <DropdownMenuContent
-                                  align="end"
-                                  className="w-44"
-                                >
-                                  <DropdownMenuItem
-                                    onSelect={() => handleOpenView(prod)}
-                                  >
-                                    <Eye className="h-4 w-4" />
-                                    View
-                                  </DropdownMenuItem>
-                                  <DropdownMenuItem
-                                    onSelect={() => handleOpenEdit(prod)}
-                                  >
-                                    <Edit2 className="h-4 w-4" />
-                                    Edit
-                                  </DropdownMenuItem>
-                                  <DropdownMenuSeparator />
-                                  <DropdownMenuItem
-                                    variant="destructive"
-                                    onSelect={() => requestDelete(prod)}
-                                    disabled={deletingId === prod.id}
-                                  >
-                                    {deletingId === prod.id ? (
-                                      <Loader2 className="h-4 w-4 animate-spin" />
-                                    ) : (
-                                      <Trash2 className="h-4 w-4" />
-                                    )}
-                                    Delete
-                                  </DropdownMenuItem>
-                                </DropdownMenuContent>
-                              </DropdownMenu>
-                            </div>
-                          </TableCell>
-                        </TableRow>
-                      );
-                    })}
-                  </TableBody>
-                </Table>
-
-                <div className="flex items-center justify-between border-t bg-muted/20 px-4 py-3">
-                  <span className="text-sm font-medium text-muted-foreground">
-                    Showing {showingCount === 0 ? 0 : 1}-{showingCount} of{" "}
-                    {totalCount.toLocaleString()} products
-                  </span>
-                  <div className="flex items-center gap-2">
-                    <Button
-                      variant="outline"
-                      size="icon-sm"
-                      className="rounded-lg"
-                      disabled
-                    >
-                      <ChevronLeft className="h-4 w-4" />
-                      <span className="sr-only">Previous</span>
-                    </Button>
-                    <div className="flex items-center gap-1">
-                      <Button size="icon-sm" className="rounded-lg" disabled>
-                        1
-                      </Button>
-                      <Button
-                        variant="outline"
-                        size="icon-sm"
-                        className="rounded-lg"
-                        disabled
-                      >
-                        2
-                      </Button>
-                      <Button
-                        variant="outline"
-                        size="icon-sm"
-                        className="rounded-lg"
-                        disabled
-                      >
-                        3
-                      </Button>
-                      <span className="px-1 text-muted-foreground">…</span>
-                      <Button
-                        variant="outline"
-                        size="icon-sm"
-                        className="rounded-lg"
-                        disabled
-                      >
-                        257
-                      </Button>
-                    </div>
-                    <Button
-                      variant="outline"
-                      size="icon-sm"
-                      className="rounded-lg"
-                      disabled
-                    >
-                      <ChevronRight className="h-4 w-4" />
-                      <span className="sr-only">Next</span>
-                    </Button>
-                  </div>
-                </div>
-              </>
-            )}
-          </CardContent>
-        </Card>
+        <ProductsTableCard
+          tenantSlug={tenantSlug}
+          loading={loading}
+          totalCount={totalCount}
+          showingCount={showingCount}
+          query={query}
+          onQueryChange={setQuery}
+          categoryTab={categoryTab}
+          onCategoryTabChange={setCategoryTab}
+          categories={categories}
+          filteredProducts={filteredProducts}
+          pagedProducts={pagedProducts}
+          categoryMap={categoryMap}
+          productStockMap={productStockMap}
+          tablePage={safeTablePage}
+          tableTotalPages={tableTotalPages}
+          onTablePageChange={setTablePage}
+          dataUpdatedAt={dataUpdatedAt}
+          isListFetching={isListFetching}
+          onRefresh={handleRefresh}
+          onAddProduct={handleOpenCreate}
+          deletingId={deletingId}
+          onView={handleOpenView}
+          onEdit={handleOpenEdit}
+          onDelete={requestDelete}
+        />
 
         <footer className="border-t border-primary/10 py-6 text-center">
           <p className="text-xs font-medium text-muted-foreground">
@@ -753,269 +748,57 @@ export default function ProductsPage() {
           </p>
         </footer>
 
-        <Sheet
+        <ProductFormSheet
           open={formOpen}
-          onOpenChange={(open) => {
-            if (!open) handleCloseForm();
-            else setFormOpen(true);
-          }}
-        >
-          <SheetContent side="right" className="sm:max-w-lg">
-            <form onSubmit={handleSubmit} className="flex h-full flex-col">
-              <SheetHeader className="border-b">
-                <SheetTitle>
-                  {formMode === "create" ? "New product" : "Edit product"}
-                </SheetTitle>
-                <SheetDescription>
-                  Add key details like name, barcode, strength, and category.
-                </SheetDescription>
-              </SheetHeader>
+          mode={formMode}
+          product={activeProduct}
+          categories={categories}
+          allUoms={allUoms}
+          formUomByCode={formUomByCode}
+          formNotice={formNotice}
+          saving={saving}
+          onOpenChange={setFormOpen}
+          onClose={handleCloseForm}
+          onSubmit={handleSubmit}
+          onFieldChange={handleChange}
+          onToggleFormUomEnabled={toggleFormUomEnabled}
+          onPatchFormUom={patchFormUom}
+          onSetFormUomBase={setFormUomBase}
+        />
 
-              <div className="flex-1 space-y-4 overflow-y-auto p-4">
-                {!activeProduct ? (
-                  <div className="text-sm text-muted-foreground">
-                    Select a product to edit.
-                  </div>
-                ) : (
-                  <>
-                    <div className="space-y-1.5">
-                      <Label htmlFor="prod-name">Product name</Label>
-                      <Input
-                        id="prod-name"
-                        value={activeProduct.name}
-                        onChange={(e) => handleChange("name", e.target.value)}
-                        required
-                        placeholder="e.g. Amoxicillin"
-                      />
-                    </div>
-
-                    <div className="space-y-1.5">
-                      <Label htmlFor="prod-sku">Barcode / SKU (optional)</Label>
-                      <Input
-                        id="prod-sku"
-                        value={activeProduct.sku}
-                        onChange={(e) => handleChange("sku", e.target.value)}
-                        onBlur={() => void handleSkuBlurCreate()}
-                        placeholder="Scan or type barcode, then tab away"
-                        autoComplete="off"
-                      />
-                    </div>
-
-                    <div className="space-y-1.5">
-                      <Label htmlFor="prod-list-price">
-                        List Price (optional)
-                      </Label>
-                      <p className="text-xs text-muted-foreground">
-                        Catalog base price for promos and reports. Shelf selling
-                        price is set on batches or when receiving stock.
-                      </p>
-                      <Input
-                        id="prod-list-price"
-                        inputMode="decimal"
-                        value={activeProduct.listPrice}
-                        onChange={(e) =>
-                          handleChange("listPrice", e.target.value)
-                        }
-                        placeholder="0.00"
-                      />
-                    </div>
-
-                    <div className="space-y-1.5">
-                      <Label>Category</Label>
-                      <Select
-                        value={activeProduct.categoryId || "__none__"}
-                        onValueChange={(v) =>
-                          handleChange("categoryId", v === "__none__" ? "" : v)
-                        }
-                      >
-                        <SelectTrigger className="w-full">
-                          <SelectValue placeholder="Select a category" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="__none__">No category</SelectItem>
-                          {categories.map((c) => (
-                            <SelectItem key={c.id} value={c.id}>
-                              {c.name}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                    </div>
-
-                    <div className="grid grid-cols-2 gap-3">
-                      <div className="space-y-1.5">
-                        <Label htmlFor="prod-strength">Strength</Label>
-                        <Input
-                          id="prod-strength"
-                          value={activeProduct.strength}
-                          onChange={(e) =>
-                            handleChange("strength", e.target.value)
-                          }
-                          placeholder="500mg"
-                        />
-                      </div>
-                      <div className="space-y-1.5">
-                        <Label htmlFor="prod-unit">Unit</Label>
-                        <Input
-                          id="prod-unit"
-                          value={activeProduct.unit}
-                          onChange={(e) => handleChange("unit", e.target.value)}
-                          placeholder="capsule, tablet, ml"
-                        />
-                      </div>
-                    </div>
-
-                    <div className="space-y-1.5">
-                      <Label htmlFor="prod-formulation">Form (optional)</Label>
-                      <Input
-                        id="prod-formulation"
-                        value={activeProduct.formulation}
-                        onChange={(e) =>
-                          handleChange("formulation", e.target.value)
-                        }
-                        placeholder="Capsule, Suspension, Syrup"
-                      />
-                    </div>
-
-                    <div className="space-y-1.5">
-                      <Label htmlFor="prod-desc">Description (optional)</Label>
-                      <Input
-                        id="prod-desc"
-                        value={activeProduct.description}
-                        onChange={(e) =>
-                          handleChange("description", e.target.value)
-                        }
-                        placeholder="Brief notes to help staff"
-                      />
-                    </div>
-                  </>
-                )}
-              </div>
-
-              <SheetFooter className="border-t">
-                <div className="flex w-full items-center justify-end gap-2">
-                  <Button
-                    type="button"
-                    variant="outline"
-                    onClick={handleCloseForm}
-                    disabled={saving}
-                  >
-                    Cancel
-                  </Button>
-                  <Button type="submit" disabled={saving || !activeProduct}>
-                    {saving && (
-                      <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />
-                    )}
-                    {formMode === "create" ? "Create product" : "Save changes"}
-                  </Button>
-                </div>
-              </SheetFooter>
-            </form>
-          </SheetContent>
-        </Sheet>
-
-        <Sheet
+        <ProductViewSheet
           open={viewOpen}
-          onOpenChange={(open) =>
-            open ? setViewOpen(true) : handleCloseView()
-          }
-        >
-          <SheetContent side="right" className="sm:max-w-lg">
-            <SheetHeader className="border-b">
-              <SheetTitle>Product details</SheetTitle>
-              <SheetDescription>
-                Quick view of the product metadata.
-              </SheetDescription>
-            </SheetHeader>
-            <div className="space-y-4 overflow-y-auto p-4">
-              {!viewProduct ? (
-                <div className="text-sm text-muted-foreground">
-                  No product selected.
-                </div>
-              ) : (
-                <div className="space-y-3">
-                  <div>
-                    <div className="text-xs font-medium text-muted-foreground">
-                      Name
-                    </div>
-                    <div className="text-sm font-semibold">
-                      {viewProduct.name}
-                    </div>
-                  </div>
-                  <div className="grid grid-cols-2 gap-3">
-                    <div>
-                      <div className="text-xs font-medium text-muted-foreground">
-                        Barcode/SKU
-                      </div>
-                      <div className="text-sm font-mono">
-                        {viewProduct.sku ?? "—"}
-                      </div>
-                    </div>
-                    <div>
-                      <div className="text-xs font-medium text-muted-foreground">
-                        Category
-                      </div>
-                      <div className="text-sm">
-                        {(viewProduct.categoryId
-                          ? categoryMap.get(viewProduct.categoryId)?.name
-                          : undefined) ??
-                          viewProduct.category?.name ??
-                          "—"}
-                      </div>
-                    </div>
-                  </div>
-                  <div className="grid grid-cols-2 gap-3">
-                    <div>
-                      <div className="text-xs font-medium text-muted-foreground">
-                        Strength
-                      </div>
-                      <div className="text-sm">
-                        {viewProduct.strength ?? "—"}
-                      </div>
-                    </div>
-                    <div>
-                      <div className="text-xs font-medium text-muted-foreground">
-                        Unit
-                      </div>
-                      <div className="text-sm">{viewProduct.unit ?? "—"}</div>
-                    </div>
-                  </div>
-                  <div>
-                    <div className="text-xs font-medium text-muted-foreground">
-                      Form
-                    </div>
-                    <div className="text-sm">
-                      {viewProduct.formulation ?? "—"}
-                    </div>
-                  </div>
-                  <div>
-                    <div className="text-xs font-medium text-muted-foreground">
-                      Description
-                    </div>
-                    <div className="text-sm text-muted-foreground">
-                      {viewProduct.description ?? "—"}
-                    </div>
-                  </div>
-                  <div className="pt-2">
-                    <Button
-                      className="w-full"
-                      onClick={() => {
-                        handleCloseView();
-                        handleOpenEdit(viewProduct);
-                      }}
-                    >
-                      <Edit2 className="mr-2 h-4 w-4" />
-                      Edit product
-                    </Button>
-                  </div>
-                </div>
-              )}
-            </div>
-          </SheetContent>
-        </Sheet>
+          product={viewProduct}
+          categoryMap={categoryMap}
+          productSuppliers={productSuppliers}
+          productUoms={productUoms}
+          allUoms={allUoms}
+          allSuppliers={allSuppliers}
+          productUomDraft={productUomDraft}
+          productUomEditing={productUomEditing}
+          supplierToAdd={supplierToAdd}
+          supplierLinksLoading={supplierLinksLoading}
+          supplierLinkSaving={supplierLinkSaving}
+          uomSaving={uomSaving}
+          onOpenChange={setViewOpen}
+          onClose={handleCloseView}
+          onEdit={handleOpenEdit}
+          onDraftChange={setProductUomDraft}
+          onEditingChange={setProductUomEditing}
+          onAddUom={() => saveProductUomDraft(null, productUomDraft)}
+          onSaveUom={saveProductUomDraft}
+          onDisableUom={disableProductUom}
+          draftFromRow={productUomDraftFromRow}
+          onSupplierToAddChange={setSupplierToAdd}
+          onAddSupplier={handleAddSupplierLink}
+          onSetPreferred={handlePreferredSupplier}
+          onRemoveSupplier={handleRemoveSupplierLink}
+        />
 
-        <Sheet
+        <ProductDeleteSheet
           open={deleteConfirmOpen}
+          product={deleteCandidate}
+          deleting={!!deletingId}
           onOpenChange={(open) => {
             if (!open) {
               setDeleteConfirmOpen(false);
@@ -1024,99 +807,13 @@ export default function ProductsPage() {
               setDeleteConfirmOpen(true);
             }
           }}
-        >
-          <SheetContent side="bottom" className="sm:max-w-none">
-            <SheetHeader className="border-b">
-              <SheetTitle>Delete product</SheetTitle>
-              <SheetDescription>This action cannot be undone.</SheetDescription>
-            </SheetHeader>
-            <div className="p-4">
-              <div className="rounded-xl border bg-muted/20 p-3 text-sm">
-                <div className="font-medium">
-                  {deleteCandidate?.name ?? "—"}
-                </div>
-                <div className="text-xs text-muted-foreground">
-                  Barcode/SKU:{" "}
-                  <span className="font-mono">
-                    {deleteCandidate?.sku ?? "—"}
-                  </span>
-                </div>
-              </div>
-            </div>
-            <SheetFooter className="border-t">
-              <div className="flex w-full items-center justify-end gap-2">
-                <Button
-                  variant="outline"
-                  onClick={() => {
-                    setDeleteConfirmOpen(false);
-                    setDeleteCandidate(null);
-                  }}
-                  disabled={!!deletingId}
-                >
-                  Cancel
-                </Button>
-                <Button
-                  variant="destructive"
-                  onClick={handleConfirmDelete}
-                  disabled={!deleteCandidate || !!deletingId}
-                >
-                  {deletingId ? (
-                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                  ) : null}
-                  Delete
-                </Button>
-              </div>
-            </SheetFooter>
-          </SheetContent>
-        </Sheet>
+          onCancel={() => {
+            setDeleteConfirmOpen(false);
+            setDeleteCandidate(null);
+          }}
+          onConfirm={handleConfirmDelete}
+        />
       </main>
-    </ErpWorkbenchShell>
-  );
-}
-
-function StatCard({
-  label,
-  value,
-  hint,
-  tone,
-}: {
-  label: string;
-  value: string;
-  hint: string;
-  tone: "primary" | "warning" | "destructive" | "info";
-}) {
-  const iconTone =
-    tone === "primary"
-      ? "bg-primary/10 text-primary"
-      : tone === "warning"
-        ? "bg-amber-500/10 text-amber-600"
-        : tone === "destructive"
-          ? "bg-rose-500/10 text-rose-600"
-          : "bg-blue-500/10 text-blue-600";
-
-  const hintTone =
-    tone === "primary"
-      ? "text-emerald-600"
-      : tone === "warning"
-        ? "text-amber-600"
-        : tone === "destructive"
-          ? "text-rose-600"
-          : "text-blue-600";
-
-  return (
-    <Card className="rounded-2xl ring-1 ring-foreground/10">
-      <CardContent className="space-y-2">
-        <div className="flex items-center justify-between">
-          <span className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-            {label}
-          </span>
-          <div className={`rounded-lg p-2 ${iconTone}`}>
-            <Package className="h-4 w-4" />
-          </div>
-        </div>
-        <div className="text-2xl font-semibold">{value}</div>
-        <div className={`text-xs font-medium ${hintTone}`}>{hint}</div>
-      </CardContent>
-    </Card>
+    </div>
   );
 }

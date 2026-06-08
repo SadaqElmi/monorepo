@@ -4,6 +4,7 @@ import { type JsonHeaders, jsonFetch } from "./http";
 export type Branch = {
   id: string;
   name: string | null;
+  code?: string | null;
   phone?: string | null;
   address?: string | null;
   /** YYYY-MM-DD; inclusive posting lock for accounting */
@@ -11,20 +12,30 @@ export type Branch = {
   created_at?: string;
 };
 
+/** System branch for consolidation journals — not a pharmacy location. */
+export function isConsolidationBranch(branch: Pick<Branch, "name">): boolean {
+  return (branch.name ?? "").trim().toLowerCase() === "consolidation";
+}
+
+export function filterOperationalBranches(branches: Branch[]): Branch[] {
+  return branches.filter((b) => !isConsolidationBranch(b));
+}
+
 export async function getBranches(
   tenantSlug: string,
   init?: Pick<RequestInit, "signal">,
 ): Promise<Branch[]> {
-  return jsonFetch<Branch[]>(BRANCHES_PREFIX, {
+  const rows = await jsonFetch<Branch[]>(BRANCHES_PREFIX, {
     method: "GET",
     headers: { "X-Tenant": tenantSlug } as JsonHeaders,
     signal: init?.signal,
   });
+  return filterOperationalBranches(rows);
 }
 
 export async function createBranch(
   tenantSlug: string,
-  input: { name?: string; phone?: string; address?: string },
+  input: { name?: string; code?: string; phone?: string; address?: string },
 ) {
   return jsonFetch<Branch>(BRANCHES_PREFIX, {
     method: "POST",
@@ -41,6 +52,7 @@ export async function updateBranch(
   id: string,
   input: {
     name?: string;
+    code?: string;
     phone?: string;
     address?: string;
     accountingLockDate?: string | null;

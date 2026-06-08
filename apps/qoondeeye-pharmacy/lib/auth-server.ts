@@ -5,6 +5,7 @@ import { redirect } from "next/navigation";
 import type { AuthCookiePayload } from "@/lib/auth-client";
 import { getAuthFromCookie } from "@/lib/auth-client";
 import { AUTH_TOKEN_COOKIE, AUTH_USER_COOKIE } from "@/lib/auth-constants";
+import { hasEffectivePermission } from "@/lib/permissions";
 
 export type ServerSession = AuthCookiePayload & {
   token: string;
@@ -56,6 +57,21 @@ export async function requireServerSession(): Promise<ServerSession> {
   const session = await getServerSession();
   if (!session?.token || !session.tenantSlug) {
     redirect("/login");
+  }
+  return session;
+}
+
+/** Redirect to dashboard when the session lacks a permission (admin bypass + coarse aliases match backend). */
+export async function requireServerPermission(
+  permission: string,
+): Promise<ServerSession> {
+  const session = await requireServerSession();
+  const permissions = session.permissions ?? [];
+  const isAdmin = session.role?.toLowerCase() === "admin";
+  const canAccess =
+    isAdmin || hasEffectivePermission(permissions, permission);
+  if (!canAccess) {
+    redirect("/dashboard");
   }
   return session;
 }

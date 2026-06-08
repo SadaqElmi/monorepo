@@ -8,8 +8,11 @@ import {
   Query,
   Req,
   Sse,
+  UseGuards,
 } from '@nestjs/common';
 import { SkipThrottle } from '@nestjs/throttler';
+import { PermissionGuard } from '../common/security/permission.guard';
+import { RequirePermissions } from '../common/security/require-permissions.decorator';
 import { TenantContextService } from '../tenant/tenant-context.service';
 import { TenantService } from '../tenant/tenant.service';
 import { assertAllowedBranches } from '../common/branch-scope';
@@ -21,6 +24,7 @@ import { Observable, from, interval } from 'rxjs';
 import { map, startWith, switchMap } from 'rxjs/operators';
 
 @Controller('inventory')
+@UseGuards(PermissionGuard)
 export class InventoryController {
   constructor(
     private readonly inventoryService: InventoryService,
@@ -40,6 +44,7 @@ export class InventoryController {
   /** Periodic inventory snapshot for the current branch scope (MVP "real-time"). */
   @SkipThrottle()
   @Sse('stream')
+  @RequirePermissions('view_products')
   inventoryStream(@Req() req: FastifyRequest): Observable<MessageEvent> {
     this.ensureTenant();
     const allowedBranchIds = req.allowedBranchIds ?? [];
@@ -62,6 +67,7 @@ export class InventoryController {
   }
 
   @Get()
+  @RequirePermissions('view_products')
   findAll(
     @Req() req: FastifyRequest,
     @Query('page') page?: string,
@@ -87,6 +93,7 @@ export class InventoryController {
 
   /** Paginated unified stock movement timeline (sales, purchases, returns, transfers). */
   @Get('history')
+  @RequirePermissions('view_products')
   async history(
     @Req() req: FastifyRequest,
     @Query('page') page?: string,
@@ -148,6 +155,7 @@ export class InventoryController {
   }
 
   @Get('product/:productId/stock')
+  @RequirePermissions('view_products')
   stockByProduct(@Param('productId') productId: string, @Req() req: FastifyRequest) {
     this.ensureTenant();
     const allowedBranchIds = req.allowedBranchIds ?? [];
@@ -162,6 +170,7 @@ export class InventoryController {
   }
 
   @Get(':id')
+  @RequirePermissions('view_products')
   findOne(@Param('id') id: string, @Req() req: FastifyRequest) {
     this.ensureTenant();
     return this.inventoryService.findOne(

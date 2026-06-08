@@ -32,15 +32,18 @@ export class AllExceptionsFilter implements ExceptionFilter {
 
     if (exception instanceof Prisma.PrismaClientKnownRequestError) {
       const { status, clientMessage, code } = prismaKnownToHttp(exception);
+      const debugDetails = prismaKnownDebugDetails(exception);
       this.logger.error(
-        `Prisma ${exception.code}: ${exception.message}`,
+        `Prisma ${exception.code}: ${exception.message}${
+          debugDetails.meta ? ` meta=${JSON.stringify(debugDetails.meta)}` : ''
+        }`,
         exception.stack,
       );
       response.status(status).send({
         statusCode: status,
         message: clientMessage,
         error: code,
-        ...(isProd ? {} : { details: { prismaCode: exception.code } }),
+        ...(isProd ? {} : { details: debugDetails }),
       });
       return;
     }
@@ -55,7 +58,8 @@ export class AllExceptionsFilter implements ExceptionFilter {
       return;
     }
 
-    const err = exception instanceof Error ? exception : new Error(String(exception));
+    const err =
+      exception instanceof Error ? exception : new Error(String(exception));
     this.logger.error(err.message, err.stack);
     response.status(HttpStatus.INTERNAL_SERVER_ERROR).send({
       statusCode: HttpStatus.INTERNAL_SERVER_ERROR,
@@ -66,9 +70,11 @@ export class AllExceptionsFilter implements ExceptionFilter {
   }
 }
 
-function prismaKnownToHttp(
-  exception: Prisma.PrismaClientKnownRequestError,
-): { status: number; clientMessage: string; code: string } {
+function prismaKnownToHttp(exception: Prisma.PrismaClientKnownRequestError): {
+  status: number;
+  clientMessage: string;
+  code: string;
+} {
   switch (exception.code) {
     case 'P2002': {
       const target = metaTarget(exception.meta);
@@ -135,6 +141,25 @@ function prismaRawQueryMessage(meta: unknown): string | undefined {
   return typeof m.message === 'string' && m.message.trim()
     ? m.message.trim()
     : undefined;
+}
+
+function prismaKnownDebugDetails(
+  exception: Prisma.PrismaClientKnownRequestError,
+): {
+  prismaCode: string;
+  rawQueryMessage?: string;
+  meta?: Record<string, unknown>;
+} {
+  const rawQueryMessage = prismaRawQueryMessage(exception.meta);
+  const meta =
+    exception.meta && typeof exception.meta === 'object'
+      ? (exception.meta as Record<string, unknown>)
+      : undefined;
+  return {
+    prismaCode: exception.code,
+    ...(rawQueryMessage ? { rawQueryMessage } : {}),
+    ...(meta ? { meta } : {}),
+  };
 }
 
 function metaTarget(meta: unknown): string[] {

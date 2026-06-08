@@ -24,6 +24,8 @@ declare module 'fastify' {
     userCanViewAllBranches?: boolean;
     /** Resolved from JWT `permissions` (or legacy admin/manager fallback). */
     permissionCodes?: string[];
+    /** Set when JWT type is `super_admin`. */
+    isSuperAdmin?: boolean;
     /** Global request idempotency/correlation metadata. */
     idempotencyKey?: string;
     correlationId?: string;

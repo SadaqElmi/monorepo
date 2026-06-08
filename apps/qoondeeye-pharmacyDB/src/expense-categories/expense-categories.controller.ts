@@ -7,13 +7,17 @@ import {
   Patch,
   Delete,
   BadRequestException,
+  UseGuards,
 } from '@nestjs/common';
+import { PermissionGuard } from '../common/security/permission.guard';
+import { RequirePermissions } from '../common/security/require-permissions.decorator';
 import { TenantContextService } from '../tenant/tenant-context.service';
 import { ExpenseCategoriesService } from './expense-categories.service';
 import { CreateExpenseCategoryDto } from './dto/create-expense-category.dto';
 import { UpdateExpenseCategoryDto } from './dto/update-expense-category.dto';
 
 @Controller('expense-categories')
+@UseGuards(PermissionGuard)
 export class ExpenseCategoriesController {
   constructor(
     private readonly expenseCategoriesService: ExpenseCategoriesService,
@@ -29,6 +33,7 @@ export class ExpenseCategoriesController {
   }
 
   @Get()
+  @RequirePermissions('view_expenses')
   findAll() {
     this.ensureTenant();
     return this.expenseCategoriesService.findAll(
@@ -37,6 +42,7 @@ export class ExpenseCategoriesController {
   }
 
   @Get(':id')
+  @RequirePermissions('view_expenses')
   findOne(@Param('id') id: string) {
     this.ensureTenant();
     return this.expenseCategoriesService.findOne(
@@ -46,6 +52,7 @@ export class ExpenseCategoriesController {
   }
 
   @Post()
+  @RequirePermissions('manage_accounting_configuration')
   create(@Body() dto: CreateExpenseCategoryDto) {
     this.ensureTenant();
     return this.expenseCategoriesService.create(
@@ -55,6 +62,7 @@ export class ExpenseCategoriesController {
   }
 
   @Patch(':id')
+  @RequirePermissions('manage_accounting_configuration')
   update(@Param('id') id: string, @Body() dto: UpdateExpenseCategoryDto) {
     this.ensureTenant();
     return this.expenseCategoriesService.update(
@@ -65,6 +73,7 @@ export class ExpenseCategoriesController {
   }
 
   @Delete(':id')
+  @RequirePermissions('manage_accounting_configuration')
   remove(@Param('id') id: string) {
     this.ensureTenant();
     return this.expenseCategoriesService.remove(

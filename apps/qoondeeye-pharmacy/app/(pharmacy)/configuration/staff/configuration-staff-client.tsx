@@ -25,14 +25,8 @@ import { useErpBranches } from "@/hooks/queries/use-erp-branches";
 import { useErpBranchFacet } from "@/hooks/use-erp-branch-facet";
 import { erpKeys } from "@/lib/erp-query-keys";
 import { ERP_STALE_LIST, ERP_STALE_STATIC } from "@/lib/erp-query-options";
-import {
-  Breadcrumb,
-  BreadcrumbItem,
-  BreadcrumbLink,
-  BreadcrumbList,
-  BreadcrumbPage,
-  BreadcrumbSeparator,
-} from "@/components/ui/breadcrumb";
+import { ConfigurationModuleShell } from "@/components/configuration/configuration-module-shell";
+import { ConfigurationErrorBanner } from "@/components/configuration/configuration-status-banner";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
@@ -43,9 +37,16 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { Checkbox } from "@/components/ui/checkbox";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Separator } from "@/components/ui/separator";
 import {
   Select,
   SelectContent,
@@ -63,7 +64,9 @@ import { cn } from "@/lib/utils";
 import {
   ALL_PERMISSIONS,
   PERMISSION_FULL_LABEL,
-  PERMISSION_SHORT_LABEL,
+  PERMISSION_GROUP_LABELS,
+  PERMISSION_GROUPS,
+  type PermissionGroupId,
   type PermissionName,
 } from "@/lib/permissions";
 import {
@@ -74,7 +77,6 @@ import {
   getStaff,
   getRoles,
   updateStaff,
-  updateRole,
 } from "@/lib/api";
 
 type FormMode = "create" | "edit";
@@ -111,19 +113,10 @@ function permissionSetForRole(role: Role | undefined): Set<PermissionName> {
   return set;
 }
 
-/** Preserve unknown permission strings from the API when PATCHing a role. */
-function nextPermissionsForToggle(
-  role: Role,
-  permission: PermissionName,
-  checked: boolean,
-): string[] {
-  const extras = (role.permissions ?? []).filter(
-    (p) => !ALL_PERMISSIONS.includes(p as PermissionName),
-  );
-  const known = permissionSetForRole(role);
-  if (checked) known.add(permission);
-  else known.delete(permission);
-  return [...extras, ...Array.from(known)];
+function staffStatusLabel(role: Role | undefined): string {
+  if (!role) return "Unassigned";
+  if (role.active === false) return "Inactive role";
+  return "Active";
 }
 
 function getRoleBadgeClass(role: string | null | undefined) {
@@ -191,14 +184,10 @@ export default function PharmacyStaffPage() {
   const [page, setPage] = useState(1);
   const [pageLength] = useState(15);
 
-  const [permissionSavingKey, setPermissionSavingKey] = useState<
-    string | null
-  >(null);
-
   const roleNames = useMemo(
     () =>
-      [...roleRecords.map((r) => r.name)].sort((a, b) =>
-        a.localeCompare(b, undefined, { sensitivity: "base" }),
+      [...roleRecords.filter((r) => r.active !== false).map((r) => r.name)].sort(
+        (a, b) => a.localeCompare(b, undefined, { sensitivity: "base" }),
       ),
     [roleRecords],
   );
@@ -243,51 +232,6 @@ export default function PharmacyStaffPage() {
   const handleSearch = (value: string) => {
     setSearchTerm(value);
     setPage(1);
-  };
-
-  const handlePermissionToggle = async (
-    member: StaffMember,
-    permission: PermissionName,
-    checked: boolean,
-  ) => {
-    if (!tenantSlug) return;
-    const role = findRoleForMember(member, roleRecords);
-    if (!role) {
-      toast.error("Assign a role first", {
-        description:
-          "Permissions apply to a named role. Edit this team member and choose a role.",
-      });
-      return;
-    }
-
-    const key = `${role.id}:${permission}`;
-    try {
-      setPermissionSavingKey(key);
-      setError(null);
-      const permissions = nextPermissionsForToggle(role, permission, checked);
-      await updateRole(tenantSlug, role.id, { permissions });
-      await queryClient.invalidateQueries({ queryKey: ["erp", "roles"] });
-      const affected = staff.filter(
-        (s) => normalizeRoleKey(s.role) === normalizeRoleKey(role.name),
-      ).length;
-      toast.success(
-        checked
-          ? `Granted ${PERMISSION_FULL_LABEL[permission]}`
-          : `Removed ${PERMISSION_FULL_LABEL[permission]}`,
-        {
-          description:
-            affected > 1
-              ? `Role “${role.name}” is shared by ${affected} team members — all of them inherit this change.`
-              : `Updated role “${role.name}”.`,
-        },
-      );
-    } catch (err) {
-      toast.error(
-        err instanceof Error ? err.message : "Could not update permissions",
-      );
-    } finally {
-      setPermissionSavingKey(null);
-    }
   };
 
   const handleOpenCreate = () => {
@@ -506,181 +450,142 @@ export default function PharmacyStaffPage() {
 
   return (
     <TooltipProvider delayDuration={200}>
-      <div className="flex min-h-0 flex-1 flex-col">
-        <header className="flex h-16 shrink-0 items-center gap-2 border-b border-primary/10 bg-background/80 px-4 backdrop-blur-md">
-          <div className="flex flex-1 items-center gap-2">
-            <Separator
-              orientation="vertical"
-              className="mr-2 data-[orientation=vertical]:h-4"
-            />
-            <Breadcrumb>
-              <BreadcrumbList>
-                <BreadcrumbItem className="hidden md:block">
-                  <BreadcrumbLink href="/dashboard">Dashboard</BreadcrumbLink>
-                </BreadcrumbItem>
-                <BreadcrumbSeparator className="hidden md:block" />
-                <BreadcrumbItem>
-                  <BreadcrumbPage>Staff & users</BreadcrumbPage>
-                </BreadcrumbItem>
-              </BreadcrumbList>
-            </Breadcrumb>
-          </div>
+      <ConfigurationModuleShell
+        title="Staff & users"
+        description="Manage pharmacy accounts, branch assignments, and sign-in credentials. Access is controlled by the role assigned to each person."
+        stat={{
+          icon: Users2,
+          value: `${staff.length} member${staff.length === 1 ? "" : "s"}`,
+        }}
+        headerEnd={
           <Button
             size="sm"
-            className="gap-1.5 rounded-full bg-primary shadow-md shadow-primary/20 hover:bg-primary/90"
+            className="gap-1.5 rounded-full shadow-sm"
             onClick={handleOpenCreate}
           >
             <UserPlus className="h-4 w-4" />
             <span className="hidden sm:inline">Add team member</span>
             <span className="sm:hidden">Add</span>
           </Button>
-        </header>
+        }
+      >
+        {displayError ? (
+          <ConfigurationErrorBanner message={displayError} />
+        ) : null}
 
-        <main className="flex flex-1 flex-col gap-4 p-6 md:p-8">
-          <div className="mx-auto flex w-full max-w-[1600px] flex-col gap-4">
-            <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+        <Card className="overflow-hidden border shadow-sm">
+          <CardHeader className="space-y-4 border-b bg-muted/20 px-4 py-5 sm:px-6">
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
               <div>
-                <h1 className="text-2xl font-bold tracking-tight">
-                  Staff & users
-                </h1>
-                <p className="text-sm text-muted-foreground">
-                  Manage accounts, branch assignment, and role permissions in one
-                  matrix.
-                </p>
+                <CardTitle className="text-lg">Team directory</CardTitle>
+                <CardDescription className="mt-1 max-w-2xl">
+                  Everyone listed here can sign in to your pharmacy. Permissions
+                  are inherited from their assigned role.
+                </CardDescription>
               </div>
-              <div className="inline-flex items-center gap-1.5 rounded-full bg-muted/60 px-3 py-1.5 text-xs font-medium text-muted-foreground">
-                <Users2 className="h-3.5 w-3.5" />
-                {staff.length} member{staff.length === 1 ? "" : "s"}
-              </div>
+              <Button
+                variant="outline"
+                size="sm"
+                className="w-fit shrink-0 gap-1.5"
+                asChild
+              >
+                <Link href="/configuration/roles">
+                  <ShieldAlert className="h-3.5 w-3.5" />
+                  Manage roles
+                </Link>
+              </Button>
             </div>
 
-            {displayError && (
-              <div className="rounded-xl border border-destructive/30 bg-destructive/5 px-4 py-3 text-sm text-destructive">
-                {displayError}
-              </div>
-            )}
+            <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+              <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap">
+                <Select
+                  value={roleFilter}
+                  onValueChange={(v) => {
+                    setRoleFilter(v);
+                    setPage(1);
+                  }}
+                >
+                  <SelectTrigger className="w-full bg-background sm:w-[180px]">
+                    <SelectValue placeholder="Role" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">All roles</SelectItem>
+                    {uniqueRolesForFilter.map((r) => (
+                      <SelectItem key={r} value={r}>
+                        {r}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
 
-            <Card className="overflow-hidden border-0 shadow-md">
-              <CardHeader className="border-b bg-muted/30 px-4 py-4 sm:px-6">
-                <div className="flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
-                  <div>
-                    <CardTitle className="text-base">Team directory</CardTitle>
-                    <CardDescription>
-                      Permission columns update the{" "}
-                      <span className="font-medium text-foreground">role</span>{" "}
-                      assigned to each person — anyone sharing that role inherits
-                      the same access.
-                    </CardDescription>
-                  </div>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    className="mt-2 w-fit gap-1.5 sm:mt-0"
-                    asChild
-                  >
-                    <Link href="/configuration/roles">
-                      <ShieldAlert className="h-3.5 w-3.5" />
-                      Manage roles
-                    </Link>
-                  </Button>
+                <Select
+                  value={branchFilter}
+                  onValueChange={(v) => {
+                    setBranchFilter(v);
+                    setPage(1);
+                  }}
+                >
+                  <SelectTrigger className="w-full bg-background sm:w-[180px]">
+                    <SelectValue placeholder="Branch" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">All branches</SelectItem>
+                    <SelectItem value="none">Unassigned</SelectItem>
+                    {branches.map((b) => (
+                      <SelectItem key={b.id} value={b.id}>
+                        {b.name?.trim() || b.id}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+
+                <div className="relative min-w-[200px] flex-1 max-w-md">
+                  <Search className="absolute left-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+                  <Input
+                    placeholder="Search name, email, Staff ID…"
+                    value={searchTerm}
+                    onChange={(e) => handleSearch(e.target.value)}
+                    className="bg-background pl-9"
+                  />
                 </div>
-              </CardHeader>
-              <CardContent className="p-4 sm:p-6">
-                <div className="flex flex-col gap-4">
-                  <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
-                    <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap">
-                      <Select
-                        value={roleFilter}
-                        onValueChange={(v) => {
-                          setRoleFilter(v);
-                          setPage(1);
-                        }}
-                      >
-                        <SelectTrigger className="w-[180px]">
-                          <SelectValue placeholder="Role" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="all">All roles</SelectItem>
-                          {uniqueRolesForFilter.map((r) => (
-                            <SelectItem key={r} value={r}>
-                              {r}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
+              </div>
 
-                      <Select
-                        value={branchFilter}
-                        onValueChange={(v) => {
-                          setBranchFilter(v);
-                          setPage(1);
-                        }}
-                      >
-                        <SelectTrigger className="w-[180px]">
-                          <SelectValue placeholder="Branch" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="all">All branches</SelectItem>
-                          <SelectItem value="none">Unassigned</SelectItem>
-                          {branches.map((b) => (
-                            <SelectItem key={b.id} value={b.id}>
-                              {b.name?.trim() || b.id}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
+              <Button
+                variant="outline"
+                size="sm"
+                className="gap-1.5"
+                type="button"
+                onClick={handleExportStaff}
+              >
+                <Download className="h-4 w-4" />
+                Export CSV
+              </Button>
+            </div>
+          </CardHeader>
 
-                      <div className="relative min-w-[200px] flex-1 max-w-md">
-                        <Search className="absolute left-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-                        <Input
-                          placeholder="Search name, email, Staff ID…"
-                          value={searchTerm}
-                          onChange={(e) => handleSearch(e.target.value)}
-                          className="pl-9"
-                        />
-                      </div>
-                    </div>
-
-                    <div className="flex flex-wrap gap-2">
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        className="gap-1.5"
-                        type="button"
-                        onClick={handleExportStaff}
-                      >
-                        <Download className="h-4 w-4" />
-                        Export
-                      </Button>
-                    </div>
-                  </div>
-
-                  {loading ? (
-                    <div className="flex items-center justify-center gap-2 py-16 text-sm text-muted-foreground">
-                      <Loader2 className="h-5 w-5 animate-spin" />
-                      Loading team…
-                    </div>
-                  ) : sortedStaff.length === 0 ? (
-                    <div className="flex flex-col items-center justify-center gap-3 rounded-xl border border-dashed py-16 text-center">
-                      <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-primary/10 text-primary">
-                        <Users2 className="h-7 w-7" />
-                      </div>
-                      <p className="text-sm font-medium">No team members yet</p>
-                      <p className="max-w-sm text-xs text-muted-foreground">
-                        Add employees so they can sign in and help run your
-                        pharmacy.
-                      </p>
-                      <Button
-                        className="mt-2 gap-2 rounded-xl"
-                        onClick={handleOpenCreate}
-                      >
-                        <UserPlus className="h-4 w-4" />
-                        Add first team member
-                      </Button>
-                    </div>
-                  ) : (
-                    <>
-                      <div className="relative overflow-x-auto rounded-xl border border-border/80">
+          <CardContent className="p-0">
+            {loading ? (
+              <div className="flex items-center justify-center gap-2 py-20 text-sm text-muted-foreground">
+                <Loader2 className="h-5 w-5 animate-spin" />
+                Loading team…
+              </div>
+            ) : sortedStaff.length === 0 ? (
+              <div className="flex flex-col items-center justify-center gap-3 px-6 py-20 text-center">
+                <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-primary/10 text-primary">
+                  <Users2 className="h-7 w-7" />
+                </div>
+                <p className="text-sm font-medium">No team members yet</p>
+                <p className="max-w-sm text-sm text-muted-foreground">
+                  Add employees so they can sign in and help run your pharmacy.
+                </p>
+                <Button className="mt-2 gap-2" onClick={handleOpenCreate}>
+                  <UserPlus className="h-4 w-4" />
+                  Add first team member
+                </Button>
+              </div>
+            ) : (
+              <>
+                <div className="relative overflow-x-auto">
                         <table className="w-max min-w-full border-collapse text-left text-sm">
                           <thead>
                             <tr className="border-b bg-muted/50 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
@@ -699,23 +604,9 @@ export default function PharmacyStaffPage() {
                               <th className="whitespace-nowrap px-3 py-3">
                                 Branch
                               </th>
-                              {ALL_PERMISSIONS.map((p) => (
-                                <th
-                                  key={p}
-                                  className="w-14 min-w-13 px-1 py-3 text-center"
-                                >
-                                  <Tooltip>
-                                    <TooltipTrigger asChild>
-                                      <span className="cursor-help text-[10px] leading-tight">
-                                        {PERMISSION_SHORT_LABEL[p]}
-                                      </span>
-                                    </TooltipTrigger>
-                                    <TooltipContent side="bottom">
-                                      {PERMISSION_FULL_LABEL[p]}
-                                    </TooltipContent>
-                                  </Tooltip>
-                                </th>
-                              ))}
+                              <th className="whitespace-nowrap px-3 py-3">
+                                Status
+                              </th>
                               <th className="whitespace-nowrap px-3 py-3">
                                 Added
                               </th>
@@ -730,7 +621,6 @@ export default function PharmacyStaffPage() {
                                 member,
                                 roleRecords,
                               );
-                              const permSet = permissionSetForRole(role);
                               const branchLabel =
                                 branches.find((b) => b.id === member.branch_id)
                                   ?.name ?? "—";
@@ -780,37 +670,18 @@ export default function PharmacyStaffPage() {
                                   <td className="whitespace-nowrap px-3 py-3 text-xs text-muted-foreground">
                                     {branchLabel}
                                   </td>
-                                  {ALL_PERMISSIONS.map((p) => {
-                                    const busy =
-                                      permissionSavingKey === `${role?.id}:${p}`;
-                                    const disabled = !role;
-                                    return (
-                                      <td
-                                        key={p}
-                                        className="px-1 py-2 text-center align-middle"
-                                      >
-                                        <div className="flex justify-center">
-                                          {busy ? (
-                                            <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
-                                          ) : (
-                                            <Checkbox
-                                              checked={permSet.has(p)}
-                                              disabled={disabled}
-                                              onCheckedChange={(v) =>
-                                                void handlePermissionToggle(
-                                                  member,
-                                                  p,
-                                                  v === true,
-                                                )
-                                              }
-                                              className="border-muted-foreground/40 data-[state=checked]:border-primary data-[state=checked]:bg-primary"
-                                              aria-label={`${PERMISSION_FULL_LABEL[p]} for ${member.name ?? member.id}`}
-                                            />
-                                          )}
-                                        </div>
-                                      </td>
-                                    );
-                                  })}
+                                  <td className="whitespace-nowrap px-3 py-3">
+                                    <Badge
+                                      variant={
+                                        staffStatusLabel(role) === "Active"
+                                          ? "secondary"
+                                          : "outline"
+                                      }
+                                      className="text-xs"
+                                    >
+                                      {staffStatusLabel(role)}
+                                    </Badge>
+                                  </td>
                                   <td className="whitespace-nowrap px-3 py-3 text-xs text-muted-foreground">
                                     {member.created_at
                                       ? format(
@@ -863,8 +734,8 @@ export default function PharmacyStaffPage() {
                         </p>
                       )}
 
-                      {totalPages > 1 && (
-                        <div className="flex flex-col gap-2 border-t pt-4 sm:flex-row sm:items-center sm:justify-between">
+                {totalPages > 1 && (
+                  <div className="flex flex-col gap-2 border-t px-4 py-4 sm:flex-row sm:items-center sm:justify-between sm:px-6">
                           <p className="text-sm text-muted-foreground">
                             Showing{" "}
                             {(safePage - 1) * pageLength + 1}–
@@ -909,32 +780,34 @@ export default function PharmacyStaffPage() {
                               Next
                             </Button>
                           </div>
-                        </div>
-                      )}
-                    </>
-                  )}
-                </div>
-              </CardContent>
-            </Card>
-          </div>
-        </main>
+                  </div>
+                )}
+              </>
+            )}
+          </CardContent>
+        </Card>
 
-        {formOpen && activeStaff && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 px-4 backdrop-blur-sm">
-            <div className="max-h-[90vh] w-full max-w-md overflow-y-auto rounded-2xl border border-border/80 bg-card shadow-xl">
-              <div className="border-b border-border/60 px-6 py-4">
-                <h2 className="text-lg font-semibold">
-                  {formMode === "create"
-                    ? "Add team member"
-                    : "Edit team member"}
-                </h2>
-                <p className="mt-1 text-xs text-muted-foreground">
-                  {formMode === "create"
-                    ? "They will be able to sign in with this pharmacy."
-                    : "Update name, email, role, password, or POS PIN."}
-                </p>
-              </div>
-              <form onSubmit={handleSubmit} className="space-y-4 px-6 py-5">
+        <Dialog
+          open={formOpen && Boolean(activeStaff)}
+          onOpenChange={(open) => {
+            if (!open) handleCloseForm();
+          }}
+        >
+          <DialogContent className="max-h-[90vh] max-w-md overflow-y-auto sm:max-w-lg">
+            <DialogHeader>
+              <DialogTitle>
+                {formMode === "create"
+                  ? "Add team member"
+                  : "Edit team member"}
+              </DialogTitle>
+              <DialogDescription>
+                {formMode === "create"
+                  ? "They will be able to sign in with this pharmacy."
+                  : "Update name, email, role, password, or POS PIN."}
+              </DialogDescription>
+            </DialogHeader>
+            {activeStaff ? (
+              <form onSubmit={handleSubmit} className="space-y-4">
                 <div className="space-y-2">
                   <Label htmlFor="staff-name">Full name</Label>
                   <div className="relative">
@@ -1018,9 +891,47 @@ export default function PharmacyStaffPage() {
                     </SelectContent>
                   </Select>
                   <p className="text-xs text-muted-foreground">
-                    Pick one of your created roles. This must match an existing
-                    role name to link permissions.
+                    Pick an active role. Edit permissions on the{" "}
+                    <Link href="/configuration/roles" className="underline">
+                      Roles
+                    </Link>{" "}
+                    page.
                   </p>
+                  {activeStaff.role?.trim() ? (
+                    <div className="rounded-lg border bg-muted/20 p-3">
+                      <p className="mb-2 text-xs font-medium text-muted-foreground">
+                        Role permissions (read-only)
+                      </p>
+                      <div className="max-h-48 space-y-2 overflow-y-auto text-xs">
+                        {(
+                          Object.keys(PERMISSION_GROUPS) as PermissionGroupId[]
+                        ).map((groupId) => {
+                          const selectedRole = roleRecords.find(
+                            (r) =>
+                              normalizeRoleKey(r.name) ===
+                              normalizeRoleKey(activeStaff.role),
+                          );
+                          const permSet = permissionSetForRole(selectedRole);
+                          const groupPerms = PERMISSION_GROUPS[groupId].filter(
+                            (p) => permSet.has(p),
+                          );
+                          if (!groupPerms.length) return null;
+                          return (
+                            <div key={groupId}>
+                              <p className="font-medium">
+                                {PERMISSION_GROUP_LABELS[groupId]}
+                              </p>
+                              <ul className="mt-1 list-inside list-disc text-muted-foreground">
+                                {groupPerms.map((p) => (
+                                  <li key={p}>{PERMISSION_FULL_LABEL[p]}</li>
+                                ))}
+                              </ul>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  ) : null}
                 </div>
                 <div className="space-y-2">
                   <Label htmlFor="staff-branch">Assigned branch</Label>
@@ -1139,32 +1050,27 @@ export default function PharmacyStaffPage() {
                     )}
                   </div>
                 )}
-                <div className="flex gap-2 pt-2">
+                <DialogFooter className="gap-2 pt-2 sm:gap-0">
                   <Button
                     type="button"
                     variant="outline"
-                    className="flex-1 rounded-xl"
                     onClick={handleCloseForm}
                     disabled={saving}
                   >
                     Cancel
                   </Button>
-                  <Button
-                    type="submit"
-                    className="flex-1 rounded-xl"
-                    disabled={saving}
-                  >
-                    {saving && (
+                  <Button type="submit" disabled={saving}>
+                    {saving ? (
                       <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                    )}
+                    ) : null}
                     {formMode === "create" ? "Add member" : "Save changes"}
                   </Button>
-                </div>
+                </DialogFooter>
               </form>
-            </div>
-          </div>
-        )}
-      </div>
+            ) : null}
+          </DialogContent>
+        </Dialog>
+      </ConfigurationModuleShell>
     </TooltipProvider>
   );
 }

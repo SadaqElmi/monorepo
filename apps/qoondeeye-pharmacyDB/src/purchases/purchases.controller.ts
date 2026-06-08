@@ -10,6 +10,7 @@ import {
   ForbiddenException,
   Query,
   Req,
+  UseGuards,
 } from '@nestjs/common';
 import { parsePagedQueryParam } from '../common/pagination.util';
 import { TenantContextService } from '../tenant/tenant-context.service';
@@ -18,8 +19,11 @@ import { CreatePurchaseDto } from './dto/create-purchase.dto';
 import { UpdatePurchaseDto } from './dto/update-purchase.dto';
 import { CreatePurchaseRefundDto } from './dto/create-purchase-refund.dto';
 import type { FastifyRequest } from 'fastify';
+import { PermissionGuard } from '../common/security/permission.guard';
+import { RequirePermissions } from '../common/security/require-permissions.decorator';
 
 @Controller('purchases')
+@UseGuards(PermissionGuard)
 export class PurchasesController {
   constructor(
     private readonly purchasesService: PurchasesService,
@@ -34,6 +38,7 @@ export class PurchasesController {
     }
   }
 
+  @RequirePermissions('view_purchases')
   @Get()
   findAll(
     @Req() req: FastifyRequest,
@@ -60,20 +65,122 @@ export class PurchasesController {
     );
   }
 
+  @RequirePermissions('view_purchases')
   @Get('line-pricing-by-product')
-  linePricingByProduct(@Req() req: FastifyRequest) {
+  linePricingByProduct(
+    @Req() req: FastifyRequest,
+    @Query('productId') productId?: string,
+    @Query('supplierId') supplierId?: string,
+    @Query('uomId') uomId?: string,
+  ) {
     this.ensureTenant();
     const allowedBranchIds = req.allowedBranchIds ?? [];
     if (!allowedBranchIds.length) {
       throw new ForbiddenException('Access denied to this branch');
     }
+    const schema = this.tenantContext.getSchemaName()!;
+    const pid = productId?.trim();
+    const sid = supplierId?.trim() || null;
+    const uid = uomId?.trim() || null;
+    if (pid) {
+      return this.purchasesService.findLinePricingForProduct(
+        schema,
+        allowedBranchIds,
+        pid,
+        sid,
+        uid,
+      );
+    }
     return this.purchasesService.findLinePricingByProduct(
-      this.tenantContext.getSchemaName()!,
+      schema,
       allowedBranchIds,
+      sid,
+    );
+  }
+
+  @Post(':id/release')
+  @RequirePermissions('edit_purchase')
+  release(@Param('id') id: string, @Req() req: FastifyRequest) {
+    this.ensureTenant();
+    const allowed = req.allowedBranchIds ?? [];
+    if (!allowed.length) {
+      throw new ForbiddenException('Access denied to this branch');
+    }
+    return this.purchasesService.release(
+      this.tenantContext.getSchemaName()!,
+      id,
+      allowed,
+      { actorUserId: req.userId },
+    );
+  }
+
+  @Post(':id/receive')
+  @RequirePermissions('receive_purchase')
+  receive(@Param('id') id: string, @Req() req: FastifyRequest) {
+    this.ensureTenant();
+    const allowed = req.allowedBranchIds ?? [];
+    if (!allowed.length) {
+      throw new ForbiddenException('Access denied to this branch');
+    }
+    return this.purchasesService.receive(
+      this.tenantContext.getSchemaName()!,
+      id,
+      allowed,
+      'pharmacy',
+      { actorUserId: req.userId },
+    );
+  }
+
+  @Post(':id/post-invoice')
+  @RequirePermissions('post_purchase_invoice')
+  postInvoice(@Param('id') id: string, @Req() req: FastifyRequest) {
+    this.ensureTenant();
+    const allowed = req.allowedBranchIds ?? [];
+    if (!allowed.length) {
+      throw new ForbiddenException('Access denied to this branch');
+    }
+    return this.purchasesService.postInvoice(
+      this.tenantContext.getSchemaName()!,
+      id,
+      allowed,
+      { actorUserId: req.userId },
+    );
+  }
+
+  @Post(':id/close')
+  @RequirePermissions('edit_purchase')
+  close(@Param('id') id: string, @Req() req: FastifyRequest) {
+    this.ensureTenant();
+    const allowed = req.allowedBranchIds ?? [];
+    if (!allowed.length) {
+      throw new ForbiddenException('Access denied to this branch');
+    }
+    return this.purchasesService.close(
+      this.tenantContext.getSchemaName()!,
+      id,
+      allowed,
+      { actorUserId: req.userId },
+    );
+  }
+
+  @Post(':id/cancel')
+  @RequirePermissions('edit_purchase')
+  cancel(@Param('id') id: string, @Req() req: FastifyRequest) {
+    this.ensureTenant();
+    const allowed = req.allowedBranchIds ?? [];
+    if (!allowed.length) {
+      throw new ForbiddenException('Access denied to this branch');
+    }
+    return this.purchasesService.cancel(
+      this.tenantContext.getSchemaName()!,
+      id,
+      allowed,
+      { actorUserId: req.userId },
     );
   }
 
   @Post(':id/refunds')
+  @RequirePermissions('edit_purchase')
   createRefund(
     @Param('id') id: string,
     @Body() dto: CreatePurchaseRefundDto,
@@ -94,6 +201,7 @@ export class PurchasesController {
     );
   }
 
+  @RequirePermissions('view_purchases')
   @Get(':id')
   findOne(@Param('id') id: string, @Req() req: FastifyRequest) {
     this.ensureTenant();
@@ -105,6 +213,7 @@ export class PurchasesController {
   }
 
   @Post()
+  @RequirePermissions('create_purchase')
   create(@Body() dto: CreatePurchaseDto, @Req() req: FastifyRequest) {
     this.ensureTenant();
     const allowed = req.allowedBranchIds ?? [];
@@ -123,6 +232,7 @@ export class PurchasesController {
   }
 
   @Patch(':id')
+  @RequirePermissions('edit_purchase')
   update(
     @Param('id') id: string,
     @Body() dto: UpdatePurchaseDto,
@@ -140,6 +250,7 @@ export class PurchasesController {
   }
 
   @Delete(':id')
+  @RequirePermissions('delete_purchase')
   remove(@Param('id') id: string, @Req() req: FastifyRequest) {
     this.ensureTenant();
     return this.purchasesService.remove(
@@ -151,6 +262,7 @@ export class PurchasesController {
   }
 
   @Delete(':id/items')
+  @RequirePermissions('edit_purchase')
   removeItems(@Param('id') id: string, @Req() req: FastifyRequest) {
     this.ensureTenant();
     const allowedBranchIds = req.allowedBranchIds ?? [];

@@ -8,8 +8,11 @@ import {
   Post,
   Query,
   Req,
+  UseGuards,
 } from '@nestjs/common';
 import type { FastifyRequest } from 'fastify';
+import { PermissionGuard } from '../common/security/permission.guard';
+import { RequirePermissions } from '../common/security/require-permissions.decorator';
 import { TenantContextService } from '../tenant/tenant-context.service';
 import { CreateTransferDto } from './dto/create-transfer.dto';
 import { RejectTransferDto } from './dto/reject-transfer.dto';
@@ -18,6 +21,7 @@ import { parsePagedQueryParam } from '../common/pagination.util';
 import { TransfersService } from './transfers.service';
 
 @Controller('transfers')
+@UseGuards(PermissionGuard)
 export class TransfersController {
   constructor(
     private readonly transfersService: TransfersService,
@@ -46,6 +50,7 @@ export class TransfersController {
     };
   }
 
+  @RequirePermissions('transfer_inventory')
   @Get()
   list(
     @Req() req: FastifyRequest,
@@ -82,6 +87,7 @@ export class TransfersController {
     );
   }
 
+  @RequirePermissions('transfer_inventory')
   @Get('monitoring/overview')
   monitoringOverview(@Req() req: FastifyRequest) {
     this.ensureTenant();
@@ -92,6 +98,7 @@ export class TransfersController {
   }
 
   /** GET counts per status (optional `branch_id` = either endpoint). */
+  @RequirePermissions('transfer_inventory')
   @Get('summary/status-counts')
   statusCounts(
     @Req() req: FastifyRequest,
@@ -108,6 +115,7 @@ export class TransfersController {
   }
 
   /** Must be registered before @Get(':id') */
+  @RequirePermissions('transfer_inventory')
   @Get(':id/events')
   getEvents(@Param('id') id: string, @Req() req: FastifyRequest) {
     this.ensureTenant();
@@ -118,6 +126,7 @@ export class TransfersController {
     );
   }
 
+  @RequirePermissions('transfer_inventory')
   @Get(':id')
   getOne(@Param('id') id: string, @Req() req: FastifyRequest) {
     this.ensureTenant();
@@ -128,6 +137,7 @@ export class TransfersController {
     );
   }
 
+  @RequirePermissions('transfer_inventory')
   @Post()
   create(@Body() dto: CreateTransferDto, @Req() req: FastifyRequest) {
     this.ensureTenant();
@@ -141,6 +151,7 @@ export class TransfersController {
     );
   }
 
+  @RequirePermissions('transfer_inventory')
   @Patch(':id')
   update(
     @Param('id') id: string,
@@ -159,6 +170,7 @@ export class TransfersController {
     );
   }
 
+  @RequirePermissions('transfer_inventory')
   @Post(':id/confirm')
   confirm(@Param('id') id: string, @Req() req: FastifyRequest) {
     this.ensureTenant();
@@ -167,11 +179,12 @@ export class TransfersController {
       id,
       req.branchId!,
       req.allowedBranchIds ?? [],
-      { userId: req.userId ?? null, userRole: req.userRole ?? null },
+      { userId: req.userId ?? null, userRole: req.userRole ?? null, permissionCodes: req.permissionCodes ?? [] },
       this.eventContext(req),
     );
   }
 
+  @RequirePermissions('transfer_inventory')
   @Post(':id/request-approval')
   requestApproval(@Param('id') id: string, @Req() req: FastifyRequest) {
     this.ensureTenant();
@@ -180,11 +193,12 @@ export class TransfersController {
       id,
       req.branchId!,
       req.allowedBranchIds ?? [],
-      { userId: req.userId ?? null, userRole: req.userRole ?? null },
+      { userId: req.userId ?? null, userRole: req.userRole ?? null, permissionCodes: req.permissionCodes ?? [] },
       this.eventContext(req),
     );
   }
 
+  @RequirePermissions('approve_transfer')
   @Post(':id/approve')
   approve(@Param('id') id: string, @Req() req: FastifyRequest) {
     this.ensureTenant();
@@ -193,11 +207,12 @@ export class TransfersController {
       id,
       req.branchId!,
       req.allowedBranchIds ?? [],
-      { userId: req.userId ?? null, userRole: req.userRole ?? null },
+      { userId: req.userId ?? null, userRole: req.userRole ?? null, permissionCodes: req.permissionCodes ?? [] },
       this.eventContext(req),
     );
   }
 
+  @RequirePermissions('approve_transfer')
   @Post(':id/reject')
   reject(
     @Param('id') id: string,
@@ -210,12 +225,13 @@ export class TransfersController {
       id,
       req.branchId!,
       req.allowedBranchIds ?? [],
-      { userId: req.userId ?? null, userRole: req.userRole ?? null },
+      { userId: req.userId ?? null, userRole: req.userRole ?? null, permissionCodes: req.permissionCodes ?? [] },
       body?.reason,
       this.eventContext(req),
     );
   }
 
+  @RequirePermissions('transfer_inventory')
   @Post(':id/ship')
   ship(@Param('id') id: string, @Req() req: FastifyRequest) {
     this.ensureTenant();
@@ -224,11 +240,12 @@ export class TransfersController {
       id,
       req.branchId!,
       req.allowedBranchIds ?? [],
-      { userId: req.userId ?? null, userRole: req.userRole ?? null },
+      { userId: req.userId ?? null, userRole: req.userRole ?? null, permissionCodes: req.permissionCodes ?? [] },
       this.eventContext(req),
     );
   }
 
+  @RequirePermissions('transfer_inventory')
   @Post(':id/receive')
   receive(@Param('id') id: string, @Req() req: FastifyRequest) {
     this.ensureTenant();
@@ -237,11 +254,12 @@ export class TransfersController {
       id,
       req.branchId!,
       req.allowedBranchIds ?? [],
-      { userId: req.userId ?? null, userRole: req.userRole ?? null },
+      { userId: req.userId ?? null, userRole: req.userRole ?? null, permissionCodes: req.permissionCodes ?? [] },
       this.eventContext(req),
     );
   }
 
+  @RequirePermissions('transfer_inventory')
   @Post(':id/close')
   close(@Param('id') id: string, @Req() req: FastifyRequest) {
     this.ensureTenant();
@@ -250,11 +268,12 @@ export class TransfersController {
       id,
       req.branchId!,
       req.allowedBranchIds ?? [],
-      { userId: req.userId ?? null, userRole: req.userRole ?? null },
+      { userId: req.userId ?? null, userRole: req.userRole ?? null, permissionCodes: req.permissionCodes ?? [] },
       this.eventContext(req),
     );
   }
 
+  @RequirePermissions('transfer_inventory')
   @Post(':id/reverse')
   reverse(
     @Param('id') id: string,
@@ -267,7 +286,7 @@ export class TransfersController {
       id,
       req.branchId!,
       req.allowedBranchIds ?? [],
-      { userId: req.userId ?? null, userRole: req.userRole ?? null },
+      { userId: req.userId ?? null, userRole: req.userRole ?? null, permissionCodes: req.permissionCodes ?? [] },
       body?.reason,
       this.eventContext(req),
     );

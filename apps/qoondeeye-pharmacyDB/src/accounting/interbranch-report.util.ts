@@ -85,7 +85,7 @@ const SQL_COA_DUE_FROM_ON_SHIPPER = `(
   OR COALESCE(coa.interbranch_type, 'none') = 'receivable'
   OR (
     COALESCE(coa.is_interbranch, false) = true
-    AND coa.account_type = 'asset'
+    AND (coa.account_type = 'asset' OR coa.account_type LIKE 'asset_%')
     AND coa.account_key <> 'due_to_branch'
   )
 )`;
@@ -99,7 +99,7 @@ const SQL_COA_DUE_TO_ON_RECEIVER = `(
   OR COALESCE(coa.interbranch_type, 'none') = 'payable'
   OR (
     COALESCE(coa.is_interbranch, false) = true
-    AND coa.account_type = 'liability'
+    AND (coa.account_type = 'liability' OR coa.account_type LIKE 'liability_%')
     AND coa.account_key <> 'due_from_branch'
   )
 )`;

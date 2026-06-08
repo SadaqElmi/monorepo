@@ -9,6 +9,7 @@ import {
   IsNumber,
   IsString,
   IsUUID,
+  Min,
 } from 'class-validator';
 import { Type } from 'class-transformer';
 
@@ -16,11 +17,23 @@ import { Type } from 'class-transformer';
  * Keep in sync with:
  * packages/validation/src/sales.ts — saleLineSchema
  */
+export class SaleCreditOverrideDto {
+  @IsUUID()
+  managerUserId!: string;
+
+  @IsString()
+  reason!: string;
+}
+
 export class CreateSaleItemDto {
   /** Inventory / catalog line — use this or `miscChargeKind`, not both. */
   @IsOptional()
   @IsUUID()
   productId?: string;
+
+  @IsOptional()
+  @IsUUID()
+  uomId?: string;
 
   /**
    * Manual POS charge (no stock movement): delivery or tailor only.
@@ -37,6 +50,23 @@ export class CreateSaleItemDto {
   @IsOptional()
   @IsNumber()
   price?: number;
+
+  @IsOptional()
+  @IsUUID()
+  priceGroupId?: string;
+
+  @IsOptional()
+  @IsUUID()
+  offerId?: string;
+
+  @IsOptional()
+  @IsNumber()
+  @Min(0)
+  lineDiscount?: number;
+
+  @IsOptional()
+  @IsString()
+  discountSource?: string;
 }
 
 /**
@@ -77,6 +107,11 @@ export class CreateSaleDto {
   @IsOptional()
   @IsUUID()
   posSessionId?: string;
+
+  @IsOptional()
+  @ValidateNested()
+  @Type(() => SaleCreditOverrideDto)
+  creditOverride?: SaleCreditOverrideDto;
 
   @IsArray()
   @ArrayMinSize(1)

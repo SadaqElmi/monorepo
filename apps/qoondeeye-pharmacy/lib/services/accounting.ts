@@ -101,6 +101,22 @@ function appendReportBranchQuery(
     computeReportScopeHash(branchId, aggregateAll, opts?.consolidated),
   );
 }
+
+/** Align x-branch-id with report query branchId / aggregateAll (middleware read scope). */
+export function reportBranchRequestHeaders(
+  tenantSlug: string,
+  branchId?: string,
+  aggregateAll?: boolean,
+): JsonHeaders {
+  const headers: JsonHeaders = { "X-Tenant": tenantSlug };
+  if (aggregateAll) {
+    headers["x-branch-id"] = "all";
+    return headers;
+  }
+  const b = sanitizeBranchIdForQuery(branchId);
+  if (b) headers["x-branch-id"] = b;
+  return headers;
+}
 import { type JsonHeaders, authPost, blobFetch, jsonFetch } from "./http";
 
 export type ChartOfAccountRow = {
@@ -109,11 +125,37 @@ export type ChartOfAccountRow = {
   code: string | null;
   name: string;
   account_type: string;
-  account_key: string;
+  account_key: string | null;
   is_system: boolean;
+  allow_reconciliation: boolean;
   payment_method_key: string | null;
   parent_id: string | null;
   created_at: string | null;
+};
+
+export type ChartAccountRow = {
+  id: string;
+  code: string | null;
+  name: string;
+  account_type: string;
+  account_key: string | null;
+  parent_id: string | null;
+  active: boolean;
+  allow_reconciliation: boolean;
+  description: string | null;
+  created_at: string | null;
+  updated_at: string | null;
+};
+
+export type ChartAccountMutationInput = {
+  branchId?: string;
+  name?: string;
+  code?: string | null;
+  account_type?: string;
+  account_key?: string;
+  active?: boolean;
+  allow_reconciliation?: boolean;
+  description?: string | null;
 };
 
 export type JournalLineRow = {
@@ -150,6 +192,106 @@ export async function getChartOfAccounts(
     method: "GET",
     headers: { "X-Tenant": tenantSlug } as JsonHeaders,
   });
+}
+
+export async function getAccounts(
+  tenantSlug: string,
+  branchId?: string,
+): Promise<ChartAccountRow[]> {
+  const b = sanitizeBranchIdForQuery(branchId);
+  const q = b ? `?branchId=${encodeURIComponent(b)}` : "";
+  return jsonFetch<ChartAccountRow[]>(`${ACCOUNTING_PREFIX}/accounts${q}`, {
+    method: "GET",
+    headers: { "X-Tenant": tenantSlug } as JsonHeaders,
+  });
+}
+
+export async function getAccount(
+  tenantSlug: string,
+  accountId: string,
+): Promise<ChartAccountRow> {
+  return jsonFetch<ChartAccountRow>(
+    `${ACCOUNTING_PREFIX}/accounts/${encodeURIComponent(accountId)}`,
+    {
+      method: "GET",
+      headers: { "X-Tenant": tenantSlug } as JsonHeaders,
+    },
+  );
+}
+
+export async function createAccount(
+  tenantSlug: string,
+  body: ChartAccountMutationInput,
+): Promise<ChartAccountRow> {
+  return authPost<ChartAccountRow>(
+    `${ACCOUNTING_PREFIX}/accounts`,
+    body as Record<string, unknown>,
+    { "X-Tenant": tenantSlug } as JsonHeaders,
+  );
+}
+
+export async function updateAccount(
+  tenantSlug: string,
+  accountId: string,
+  body: ChartAccountMutationInput,
+): Promise<ChartAccountRow> {
+  return jsonFetch<ChartAccountRow>(
+    `${ACCOUNTING_PREFIX}/accounts/${encodeURIComponent(accountId)}`,
+    {
+      method: "PATCH",
+      headers: {
+        "Content-Type": "application/json",
+        "X-Tenant": tenantSlug,
+      } as JsonHeaders,
+      body: JSON.stringify(body),
+    },
+  );
+}
+
+export async function deleteAccount(
+  tenantSlug: string,
+  accountId: string,
+): Promise<ChartAccountRow> {
+  return jsonFetch<ChartAccountRow>(
+    `${ACCOUNTING_PREFIX}/accounts/${encodeURIComponent(accountId)}`,
+    {
+      method: "DELETE",
+      headers: { "X-Tenant": tenantSlug } as JsonHeaders,
+    },
+  );
+}
+
+export async function getReconciliationAccounts(
+  tenantSlug: string,
+  branchId?: string,
+): Promise<ChartOfAccountRow[]> {
+  const b = sanitizeBranchIdForQuery(branchId);
+  const q = b ? `?branchId=${encodeURIComponent(b)}` : "";
+  return jsonFetch<ChartOfAccountRow[]>(
+    `${ACCOUNTING_PREFIX}/reconciliation/accounts${q}`,
+    {
+      method: "GET",
+      headers: { "X-Tenant": tenantSlug } as JsonHeaders,
+    },
+  );
+}
+
+export async function updateChartOfAccountReconciliation(
+  tenantSlug: string,
+  accountId: string,
+  allowReconciliation: boolean,
+): Promise<ChartOfAccountRow> {
+  return jsonFetch<ChartOfAccountRow>(
+    `${ACCOUNTING_PREFIX}/chart-of-accounts/${encodeURIComponent(accountId)}/allow-reconciliation`,
+    {
+      method: "PATCH",
+      headers: {
+        "Content-Type": "application/json",
+        "X-Tenant": tenantSlug,
+      } as JsonHeaders,
+      body: JSON.stringify({ allowReconciliation }),
+    },
+  );
 }
 
 export async function getJournalEntries(
@@ -382,6 +524,8 @@ export type BalanceSheetResult = {
   lines: Array<{
     accountType: string;
     accountKey: string;
+    accountId?: string;
+    code?: string | null;
     name: string;
     balance: number;
     drilldownPath?: string;
@@ -1571,7 +1715,7 @@ export async function getAccountingAlerts(
   appendReportBranchQuery(q, branchId, aggregateAll);
   return jsonFetch(`${REPORTS_PREFIX}/alerts?${q}`, {
     method: "GET",
-    headers: { "X-Tenant": tenantSlug } as JsonHeaders,
+    headers: reportBranchRequestHeaders(tenantSlug, branchId, aggregateAll),
   });
 }
 

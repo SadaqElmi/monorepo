@@ -20,6 +20,7 @@ export const POSTING_ACCOUNT_KEYS: readonly AccountKey[] = [
   'cash_shortage_expense',
   'cash_overage_income',
   'equity_retained',
+  'opening_balance_equity',
 ] as const;
 
 type CoaSeedRow = {
@@ -30,6 +31,29 @@ type CoaSeedRow = {
   payment_method_key: string | null;
   parent_key: string | null;
 };
+
+const RECONCILIABLE_ACCOUNT_KEYS = new Set([
+  'accounts_receivable',
+  'accounts_payable',
+  'receivables',
+  'payables',
+  'customer_control',
+  'supplier_control',
+  'bank',
+  'bank_account',
+  'checking',
+  'checking_account',
+  'savings',
+  'savings_account',
+  'cash',
+  'cash_account',
+  'card_clearing',
+  'wallet_clearing',
+  'payment_clearing',
+  'cash_clearing',
+  'due_from_branch',
+  'due_to_branch',
+]);
 
 /**
  * Dynamics-style chart: additive seed per branch. Section rows use account_type `section`
@@ -307,6 +331,14 @@ const COA_SEED_ROWS: CoaSeedRow[] = [
     payment_method_key: null,
     parent_key: 'sec_equity',
   },
+  {
+    account_key: 'opening_balance_equity',
+    code: '3900',
+    name: 'Opening balance equity',
+    account_type: 'equity',
+    payment_method_key: null,
+    parent_key: 'sec_equity',
+  },
 
   // Income
   {
@@ -449,12 +481,13 @@ export class ChartOfAccountsSeedService {
         account_type: r.account_type,
         account_key: r.account_key,
         payment_method_key: r.payment_method_key,
+        allow_reconciliation: RECONCILIABLE_ACCOUNT_KEYS.has(r.account_key),
       })),
     );
 
     await tx.$queryRawUnsafe(
       `INSERT INTO chart_of_accounts (
-         branch_id, code, name, account_type, account_key, is_system, payment_method_key, is_interbranch, interbranch_type
+         branch_id, code, name, account_type, account_key, is_system, payment_method_key, allow_reconciliation, is_interbranch, interbranch_type
        )
        SELECT $1::uuid,
               x.code,
@@ -463,6 +496,7 @@ export class ChartOfAccountsSeedService {
               x.account_key,
               true,
               NULLIF(TRIM(x.payment_method_key), '')::varchar,
+              x.allow_reconciliation,
               (x.account_key IN ('due_from_branch', 'due_to_branch')),
               CASE
                 WHEN x.account_key = 'due_from_branch' THEN 'receivable'
@@ -474,7 +508,8 @@ export class ChartOfAccountsSeedService {
          name text,
          account_type text,
          account_key text,
-         payment_method_key text
+         payment_method_key text,
+         allow_reconciliation boolean
        )
        ON CONFLICT (branch_id, account_key) DO NOTHING`,
       branchId,

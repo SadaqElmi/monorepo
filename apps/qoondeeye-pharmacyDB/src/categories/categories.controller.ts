@@ -9,15 +9,19 @@ import {
   Req,
   Query,
   BadRequestException,
+  UseGuards,
 } from '@nestjs/common';
 import type { FastifyRequest } from 'fastify';
 import { parsePagedQueryParam } from '../common/pagination.util';
+import { PermissionGuard } from '../common/security/permission.guard';
+import { RequirePermissions } from '../common/security/require-permissions.decorator';
 import { CategoriesService } from './categories.service';
 import { TenantContextService } from '../tenant/tenant-context.service';
 import { CreateCategoryDto } from './dto/create-category.dto';
 import { UpdateCategoryDto } from './dto/update-category.dto';
 
 @Controller('categories')
+@UseGuards(PermissionGuard)
 export class CategoriesController {
   constructor(
     private readonly categoriesService: CategoriesService,
@@ -25,6 +29,7 @@ export class CategoriesController {
   ) {}
 
   @Get()
+  @RequirePermissions('view_products')
   findAll(
     @Req() req: FastifyRequest,
     @Query('page') page?: string,
@@ -45,6 +50,7 @@ export class CategoriesController {
   }
 
   @Get(':id')
+  @RequirePermissions('view_products')
   findOne(@Req() req: FastifyRequest, @Param('id') id: string) {
     const { schema } = this.ensureTenant();
     return this.categoriesService.findOne(
@@ -55,6 +61,7 @@ export class CategoriesController {
   }
 
   @Post()
+  @RequirePermissions('edit_product')
   create(@Req() req: FastifyRequest, @Body() dto: CreateCategoryDto) {
     const { schema, tenantId } = this.ensureTenant();
     const global = dto.global !== false;
@@ -72,6 +79,7 @@ export class CategoriesController {
   }
 
   @Patch(':id')
+  @RequirePermissions('edit_product')
   update(
     @Req() req: FastifyRequest,
     @Param('id') id: string,
@@ -88,6 +96,7 @@ export class CategoriesController {
   }
 
   @Delete(':id')
+  @RequirePermissions('edit_product')
   remove(@Req() req: FastifyRequest, @Param('id') id: string) {
     const { schema, tenantId } = this.ensureTenant();
     return this.categoriesService.remove(

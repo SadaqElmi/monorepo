@@ -10,8 +10,11 @@ import {
   Post,
   Query,
   Req,
+  UseGuards,
 } from '@nestjs/common';
 import { parsePagedQueryParam } from '../common/pagination.util';
+import { PermissionGuard } from '../common/security/permission.guard';
+import { RequirePermissions } from '../common/security/require-permissions.decorator';
 import type { FastifyRequest } from 'fastify';
 import { TenantContextService } from '../tenant/tenant-context.service';
 import { CreateSaleReturnDto } from './dto/create-sale-return.dto';
@@ -19,6 +22,7 @@ import { UpdateSaleReturnDto } from './dto/update-sale-return.dto';
 import { SaleReturnsService } from './sale-returns.service';
 
 @Controller('sale-returns')
+@UseGuards(PermissionGuard)
 export class SaleReturnsController {
   constructor(
     private readonly saleReturnsService: SaleReturnsService,
@@ -34,6 +38,7 @@ export class SaleReturnsController {
   }
 
   @Get()
+  @RequirePermissions('view_sales')
   findAll(
     @Req() req: FastifyRequest,
     @Query('page') page?: string,
@@ -58,6 +63,7 @@ export class SaleReturnsController {
   }
 
   @Get(':id')
+  @RequirePermissions('view_sales')
   findOne(@Param('id') id: string, @Req() req: FastifyRequest) {
     this.ensureTenant();
     const allowedBranchIds = req.allowedBranchIds ?? [];
@@ -72,6 +78,7 @@ export class SaleReturnsController {
   }
 
   @Post()
+  @RequirePermissions('refund_sale')
   create(@Body() dto: CreateSaleReturnDto, @Req() req: FastifyRequest) {
     this.ensureTenant();
     return this.saleReturnsService.create(
@@ -83,6 +90,7 @@ export class SaleReturnsController {
   }
 
   @Patch(':id')
+  @RequirePermissions('refund_sale')
   update(
     @Param('id') id: string,
     @Body() dto: UpdateSaleReturnDto,
@@ -102,6 +110,7 @@ export class SaleReturnsController {
   }
 
   @Delete(':id')
+  @RequirePermissions('refund_sale')
   remove(@Param('id') id: string, @Req() req: FastifyRequest) {
     this.ensureTenant();
     const allowedBranchIds = req.allowedBranchIds ?? [];

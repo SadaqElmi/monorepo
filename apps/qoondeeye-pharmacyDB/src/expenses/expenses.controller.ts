@@ -9,7 +9,10 @@ import {
   BadRequestException,
   ForbiddenException,
   Req,
+  UseGuards,
 } from '@nestjs/common';
+import { PermissionGuard } from '../common/security/permission.guard';
+import { RequirePermissions } from '../common/security/require-permissions.decorator';
 import { TenantContextService } from '../tenant/tenant-context.service';
 import { ExpensesService } from './expenses.service';
 import { CreateExpenseDto } from './dto/create-expense.dto';
@@ -17,6 +20,7 @@ import { UpdateExpenseDto } from './dto/update-expense.dto';
 import type { FastifyRequest } from 'fastify';
 
 @Controller('expenses')
+@UseGuards(PermissionGuard)
 export class ExpensesController {
   constructor(
     private readonly expensesService: ExpensesService,
@@ -32,6 +36,7 @@ export class ExpensesController {
   }
 
   @Get()
+  @RequirePermissions('view_expenses')
   findAll(@Req() req: FastifyRequest) {
     this.ensureTenant();
     const allowedBranchIds = req.allowedBranchIds ?? [];
@@ -45,6 +50,7 @@ export class ExpensesController {
   }
 
   @Get(':id')
+  @RequirePermissions('view_expenses')
   findOne(@Param('id') id: string, @Req() req: FastifyRequest) {
     this.ensureTenant();
     return this.expensesService.findOne(
@@ -55,6 +61,7 @@ export class ExpensesController {
   }
 
   @Post()
+  @RequirePermissions('create_expense')
   create(@Body() dto: CreateExpenseDto, @Req() req: FastifyRequest) {
     this.ensureTenant();
     return this.expensesService.create(
@@ -66,6 +73,7 @@ export class ExpensesController {
   }
 
   @Patch(':id')
+  @RequirePermissions('edit_expense')
   update(
     @Param('id') id: string,
     @Body() dto: UpdateExpenseDto,
@@ -82,6 +90,7 @@ export class ExpensesController {
   }
 
   @Delete(':id')
+  @RequirePermissions('delete_expense')
   remove(@Param('id') id: string, @Req() req: FastifyRequest) {
     this.ensureTenant();
     return this.expensesService.remove(

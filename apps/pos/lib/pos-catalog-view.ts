@@ -36,14 +36,31 @@ export function mapPosCatalogView(raw: PosCatalogData): PosCatalogView {
   const barcodeToProductId: Record<string, string> = {};
 
   const catalogProducts: PosCatalogProduct[] = prods.map((p) => {
+    const uoms = p.uoms ?? [];
+    const selectedUom =
+      uoms.find((u) => u.isPosDefault && u.isActive) ??
+      uoms.find((u) => u.isBase && u.isActive) ??
+      uoms[0];
     const { sellingValue, listValue, showCompare } = resolvePosCatalogPricing(
       p,
       batchesData,
       p.id,
     );
+    const uomSelling =
+      selectedUom?.sellingPrice != null ? Number(selectedUom.sellingPrice) : null;
+    const priceValue =
+      uomSelling != null && Number.isFinite(uomSelling) && uomSelling > 0
+        ? uomSelling
+        : sellingValue;
     productNameById[p.id] = p.name;
     const code = (p.sku ?? "").trim().toLowerCase();
     if (code) barcodeToProductId[code] = p.id;
+    for (const u of uoms) {
+      for (const barcode of u.barcodes ?? []) {
+        const b = barcode.trim().toLowerCase();
+        if (b) barcodeToProductId[b] = p.id;
+      }
+    }
 
     return {
       id: p.id,
@@ -54,12 +71,21 @@ export function mapPosCatalogView(raw: PosCatalogData): PosCatalogView {
         "Catalog item",
       category:
         (p.categoryId && catNames.get(p.categoryId)) || "Uncategorized",
-      price: formatMoney(sellingValue),
-      priceValue: sellingValue,
+      price: formatMoney(priceValue),
+      priceValue,
       listPriceValue: showCompare ? listValue : undefined,
       showCompare,
       stock: "in" as const,
-      unitType: "PC" as UnitType,
+      unitType:
+        (selectedUom?.symbol || selectedUom?.code || p.unit || "PC") as UnitType,
+      uomId: selectedUom?.uomId,
+      uomCode: selectedUom?.code,
+      uomSymbol: selectedUom?.symbol,
+      conversionFactorToBase:
+        selectedUom?.conversionFactorToBase != null
+          ? Number(selectedUom.conversionFactorToBase)
+          : 1,
+      uoms,
     };
   });
 

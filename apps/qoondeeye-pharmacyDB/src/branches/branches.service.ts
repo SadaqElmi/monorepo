@@ -17,11 +17,19 @@ import { TenantService } from '../tenant/tenant.service';
 export interface BranchRow {
   id: string;
   name: string | null;
+  code: string | null;
   phone: string | null;
   address: string | null;
   /** Omitted on some INSERT … RETURNING projections; present on full row reads. */
   accounting_lock_date?: Date | string | null;
   created_at: Date;
+}
+
+/** System branch used for consolidation journals — not a real pharmacy location. */
+const CONSOLIDATION_BRANCH_WHERE = `LOWER(TRIM(name)) <> 'consolidation'`;
+
+function isConsolidationBranchName(name: string | null | undefined): boolean {
+  return (name ?? '').trim().toLowerCase() === 'consolidation';
 }
 
 @Injectable()
@@ -46,7 +54,10 @@ export class BranchesService {
       () =>
         this.prisma.withTenantSchema(schemaName, (tx) =>
           tx.$queryRawUnsafe<BranchRow[]>(
-            `SELECT id, name, phone, address, accounting_lock_date, created_at FROM branches ORDER BY name`,
+            `SELECT id, name, code, phone, address, accounting_lock_date, created_at
+             FROM branches
+             WHERE ${CONSOLIDATION_BRANCH_WHERE}
+             ORDER BY name`,
           ),
         ),
     );
@@ -56,7 +67,9 @@ export class BranchesService {
     await this.tenantService.applyTenantSchemaPatches(schemaName);
     return this.prisma.withTenantSchema(schemaName, async (tx) => {
       const [row] = await tx.$queryRawUnsafe<BranchRow[]>(
-        `SELECT id, name, phone, address, accounting_lock_date, created_at FROM branches WHERE id = $1`,
+        `SELECT id, name, code, phone, address, accounting_lock_date, created_at
+         FROM branches
+         WHERE id = $1 AND ${CONSOLIDATION_BRANCH_WHERE}`,
         id,
       );
       return row ?? null;
@@ -66,13 +79,19 @@ export class BranchesService {
   async create(
     schemaName: string,
     tenantId: string,
-    dto: { name?: string; phone?: string; address?: string },
+    dto: { name?: string; code?: string; phone?: string; address?: string },
   ) {
+    if (isConsolidationBranchName(dto.name)) {
+      throw new BadRequestException(
+        'CONSOLIDATION is reserved for system accounting and cannot be created as a branch.',
+      );
+    }
     await this.tenantService.applyTenantSchemaPatches(schemaName);
     const row = await this.prisma.withTenantSchema(schemaName, async (tx) => {
       const [row] = await tx.$queryRawUnsafe<BranchRow[]>(
-        `INSERT INTO branches (name, phone, address) VALUES ($1, $2, $3) RETURNING id, name, phone, address, created_at`,
+        `INSERT INTO branches (name, code, phone, address) VALUES ($1, $2, $3, $4) RETURNING id, name, code, phone, address, created_at`,
         dto.name ?? null,
+        dto.code ?? null,
         dto.phone ?? null,
         dto.address ?? null,
       );
@@ -95,13 +114,31 @@ export class BranchesService {
     id: string,
     dto: {
       name?: string;
+      code?: string;
       phone?: string;
       address?: string;
       accountingLockDate?: string | null;
     },
   ) {
+    if (isConsolidationBranchName(dto.name)) {
+      throw new BadRequestException(
+        'CONSOLIDATION is reserved for system accounting and cannot be used as a branch name.',
+      );
+    }
     await this.tenantService.applyTenantSchemaPatches(schemaName);
     const row = await this.prisma.withTenantSchema(schemaName, async (tx) => {
+      const [existing] = await tx.$queryRawUnsafe<BranchRow[]>(
+        `SELECT id, name FROM branches WHERE id = $1`,
+        id,
+      );
+      if (!existing) {
+        return null;
+      }
+      if (isConsolidationBranchName(existing.name)) {
+        throw new BadRequestException(
+          'The consolidation system branch cannot be edited.',
+        );
+      }
       const skipLock = dto.accountingLockDate === undefined;
       const rawLock = dto.accountingLockDate;
       const lockDate =
@@ -166,13 +203,15 @@ export class BranchesService {
       const [row] = await tx.$queryRawUnsafe<BranchRow[]>(
         `UPDATE branches SET
            name = COALESCE($2, name),
-           phone = COALESCE($3, phone),
-           address = COALESCE($4, address),
-           accounting_lock_date = CASE WHEN $5::boolean THEN accounting_lock_date ELSE $6::date END
+           code = COALESCE($3, code),
+           phone = COALESCE($4, phone),
+           address = COALESCE($5, address),
+           accounting_lock_date = CASE WHEN $6::boolean THEN accounting_lock_date ELSE $7::date END
          WHERE id = $1
-         RETURNING id, name, phone, address, accounting_lock_date, created_at`,
+         RETURNING id, name, code, phone, address, accounting_lock_date, created_at`,
         id,
         dto.name ?? null,
+        dto.code ?? null,
         dto.phone ?? null,
         dto.address ?? null,
         skipLock,
@@ -191,16 +230,21 @@ export class BranchesService {
   async remove(schemaName: string, id: string) {
     await this.tenantService.applyTenantSchemaPatches(schemaName);
     return this.prisma.withTenantSchema(schemaName, async (tx) => {
-      const [branchRow] = await tx.$queryRawUnsafe<{ id: string }[]>(
-        `SELECT id FROM branches WHERE id = $1::uuid FOR UPDATE`,
+      const [branchRow] = await tx.$queryRawUnsafe<{ id: string; name: string | null }[]>(
+        `SELECT id, name FROM branches WHERE id = $1::uuid FOR UPDATE`,
         id,
       );
       if (!branchRow) {
         throw new NotFoundException(`Branch not found: ${id}`);
       }
+      if (isConsolidationBranchName(branchRow.name)) {
+        throw new BadRequestException(
+          'The consolidation system branch cannot be deleted.',
+        );
+      }
 
       const [countRow] = await tx.$queryRawUnsafe<{ c: bigint }[]>(
-        `SELECT COUNT(*)::bigint AS c FROM branches`,
+        `SELECT COUNT(*)::bigint AS c FROM branches WHERE ${CONSOLIDATION_BRANCH_WHERE}`,
       );
       if (!countRow || Number(countRow.c) <= 1) {
         throw new BadRequestException(

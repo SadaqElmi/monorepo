@@ -1,0 +1,2948 @@
+[32m[Nest] 17948  - [39m06/08/2026, 3:37:29 AM [32m    LOG[39m [38;5;3m[NestFactory] [39m[32mStarting Nest application...[39m
+[32m[Nest] 17948  - [39m06/08/2026, 3:37:29 AM [32m    LOG[39m [38;5;3m[InstanceLoader] [39m[32mLoggingModule dependencies initialized[39m[38;5;3m +75ms[39m
+[32m[Nest] 17948  - [39m06/08/2026, 3:37:29 AM [32m    LOG[39m [38;5;3m[InstanceLoader] [39m[32mConfigHostModule dependencies initialized[39m[38;5;3m +2ms[39m
+[32m[Nest] 17948  - [39m06/08/2026, 3:37:29 AM [32m    LOG[39m [38;5;3m[InstanceLoader] [39m[32mDiscoveryModule dependencies initialized[39m[38;5;3m +0ms[39m
+[32m[Nest] 17948  - [39m06/08/2026, 3:37:29 AM [32m    LOG[39m [38;5;3m[RedisClient] [39m[32mREDIS_URL not set — using in-memory cache only (OK for local dev).[39m
+[32m[Nest] 17948  - [39m06/08/2026, 3:37:29 AM [32m    LOG[39m [38;5;3m[InstanceLoader] [39m[32mConfigModule dependencies initialized[39m[38;5;3m +32ms[39m
+[32m[Nest] 17948  - [39m06/08/2026, 3:37:29 AM [32m    LOG[39m [38;5;3m[InstanceLoader] [39m[32mConfigModule dependencies initialized[39m[38;5;3m +1ms[39m
+[32m[Nest] 17948  - [39m06/08/2026, 3:37:29 AM [32m    LOG[39m [38;5;3m[InstanceLoader] [39m[32mScheduleModule dependencies initialized[39m[38;5;3m +0ms[39m
+[32m[Nest] 17948  - [39m06/08/2026, 3:37:29 AM [32m    LOG[39m [38;5;3m[InstanceLoader] [39m[32mPrismaModule dependencies initialized[39m[38;5;3m +3ms[39m
+[32m[Nest] 17948  - [39m06/08/2026, 3:37:29 AM [32m    LOG[39m [38;5;3m[InstanceLoader] [39m[32mAppRedisModule dependencies initialized[39m[38;5;3m +5ms[39m
+[32m[Nest] 17948  - [39m06/08/2026, 3:37:29 AM [32m    LOG[39m [38;5;3m[InstanceLoader] [39m[32mJwtModule dependencies initialized[39m[38;5;3m +0ms[39m
+[32m[Nest] 17948  - [39m06/08/2026, 3:37:29 AM [32m    LOG[39m [38;5;3m[InstanceLoader] [39m[32mThrottlerModule dependencies initialized[39m[38;5;3m +3ms[39m
+[32m[Nest] 17948  - [39m06/08/2026, 3:37:29 AM [32m    LOG[39m [38;5;3m[InstanceLoader] [39m[32mDomainsModule dependencies initialized[39m[38;5;3m +1ms[39m
+[32m[Nest] 17948  - [39m06/08/2026, 3:37:29 AM [32m    LOG[39m [38;5;3m[InstanceLoader] [39m[32mSystemUsersModule dependencies initialized[39m[38;5;3m +0ms[39m
+[32m[Nest] 17948  - [39m06/08/2026, 3:37:29 AM [32m    LOG[39m [38;5;3m[InstanceLoader] [39m[32mRateLimitModule dependencies initialized[39m[38;5;3m +2ms[39m
+[32m[Nest] 17948  - [39m06/08/2026, 3:37:29 AM [32m    LOG[39m [38;5;3m[InstanceLoader] [39m[32mCacheModule dependencies initialized[39m[38;5;3m +0ms[39m
+[32m[Nest] 17948  - [39m06/08/2026, 3:37:29 AM [32m    LOG[39m [38;5;3m[InstanceLoader] [39m[32mTenantModule dependencies initialized[39m[38;5;3m +1ms[39m
+[32m[Nest] 17948  - [39m06/08/2026, 3:37:29 AM [32m    LOG[39m [38;5;3m[InstanceLoader] [39m[32mNotificationsModule dependencies initialized[39m[38;5;3m +1ms[39m
+[32m[Nest] 17948  - [39m06/08/2026, 3:37:29 AM [32m    LOG[39m [38;5;3m[InstanceLoader] [39m[32mPatientLoansModule dependencies initialized[39m[38;5;3m +0ms[39m
+[32m[Nest] 17948  - [39m06/08/2026, 3:37:29 AM [32m    LOG[39m [38;5;3m[InstanceLoader] [39m[32mAuthModule dependencies initialized[39m[38;5;3m +1ms[39m
+[32m[Nest] 17948  - [39m06/08/2026, 3:37:29 AM [32m    LOG[39m [38;5;3m[InstanceLoader] [39m[32mAppCacheModule dependencies initialized[39m[38;5;3m +3ms[39m
+[32m[Nest] 17948  - [39m06/08/2026, 3:37:29 AM [32m    LOG[39m [38;5;3m[InstanceLoader] [39m[32mUomsModule dependencies initialized[39m[38;5;3m +1ms[39m
+[32m[Nest] 17948  - [39m06/08/2026, 3:37:29 AM [32m    LOG[39m [38;5;3m[InstanceLoader] [39m[32mSuppliersModule dependencies initialized[39m[38;5;3m +1ms[39m
+[32m[Nest] 17948  - [39m06/08/2026, 3:37:29 AM [32m    LOG[39m [38;5;3m[InstanceLoader] [39m[32mStaffModule dependencies initialized[39m[38;5;3m +0ms[39m
+[32m[Nest] 17948  - [39m06/08/2026, 3:37:29 AM [32m    LOG[39m [38;5;3m[InstanceLoader] [39m[32mExpenseCategoriesModule dependencies initialized[39m[38;5;3m +1ms[39m
+[32m[Nest] 17948  - [39m06/08/2026, 3:37:29 AM [32m    LOG[39m [38;5;3m[InstanceLoader] [39m[32mPricingModule dependencies initialized[39m[38;5;3m +0ms[39m
+[32m[Nest] 17948  - [39m06/08/2026, 3:37:29 AM [32m    LOG[39m [38;5;3m[InstanceLoader] [39m[32mOffersModule dependencies initialized[39m[38;5;3m +1ms[39m
+[32m[Nest] 17948  - [39m06/08/2026, 3:37:29 AM [32m    LOG[39m [38;5;3m[InstanceLoader] [39m[32mAppModule dependencies initialized[39m[38;5;3m +0ms[39m
+[32m[Nest] 17948  - [39m06/08/2026, 3:37:29 AM [32m    LOG[39m [38;5;3m[InstanceLoader] [39m[32mCustomersModule dependencies initialized[39m[38;5;3m +0ms[39m
+[32m[Nest] 17948  - [39m06/08/2026, 3:37:29 AM [32m    LOG[39m [38;5;3m[InstanceLoader] [39m[32mExpensesModule dependencies initialized[39m[38;5;3m +0ms[39m
+[32m[Nest] 17948  - [39m06/08/2026, 3:37:29 AM [32m    LOG[39m [38;5;3m[InstanceLoader] [39m[32mReturnsModule dependencies initialized[39m[38;5;3m +3ms[39m
+[32m[Nest] 17948  - [39m06/08/2026, 3:37:29 AM [32m    LOG[39m [38;5;3m[InstanceLoader] [39m[32mTransactionsModule dependencies initialized[39m[38;5;3m +0ms[39m
+[32m[Nest] 17948  - [39m06/08/2026, 3:37:29 AM [32m    LOG[39m [38;5;3m[InstanceLoader] [39m[32mBatchesModule dependencies initialized[39m[38;5;3m +1ms[39m
+[32m[Nest] 17948  - [39m06/08/2026, 3:37:29 AM [32m    LOG[39m [38;5;3m[InstanceLoader] [39m[32mInventoryModule dependencies initialized[39m[38;5;3m +0ms[39m
+[32m[Nest] 17948  - [39m06/08/2026, 3:37:29 AM [32m    LOG[39m [38;5;3m[InstanceLoader] [39m[32mCategoriesModule dependencies initialized[39m[38;5;3m +5ms[39m
+[32m[Nest] 17948  - [39m06/08/2026, 3:37:29 AM [32m    LOG[39m [38;5;3m[InstanceLoader] [39m[32mBranchesModule dependencies initialized[39m[38;5;3m +1ms[39m
+[32m[Nest] 17948  - [39m06/08/2026, 3:37:29 AM [32m    LOG[39m [38;5;3m[InstanceLoader] [39m[32mRolesModule dependencies initialized[39m[38;5;3m +0ms[39m
+[32m[Nest] 17948  - [39m06/08/2026, 3:37:29 AM [32m    LOG[39m [38;5;3m[InstanceLoader] [39m[32mProductsModule dependencies initialized[39m[38;5;3m +1ms[39m
+[32m[Nest] 17948  - [39m06/08/2026, 3:37:29 AM [32m    LOG[39m [38;5;3m[InstanceLoader] [39m[32mSaleReturnsModule dependencies initialized[39m[38;5;3m +0ms[39m
+[32m[Nest] 17948  - [39m06/08/2026, 3:37:29 AM [32m    LOG[39m [38;5;3m[InstanceLoader] [39m[32mPurchasesModule dependencies initialized[39m[38;5;3m +1ms[39m
+[32m[Nest] 17948  - [39m06/08/2026, 3:37:29 AM [32m    LOG[39m [38;5;3m[InstanceLoader] [39m[32mSalesModule dependencies initialized[39m[38;5;3m +0ms[39m
+[32m[Nest] 17948  - [39m06/08/2026, 3:37:29 AM [32m    LOG[39m [38;5;3m[InstanceLoader] [39m[32mReconciliationModule dependencies initialized[39m[38;5;3m +1ms[39m
+[32m[Nest] 17948  - [39m06/08/2026, 3:37:29 AM [32m    LOG[39m [38;5;3m[InstanceLoader] [39m[32mTransfersModule dependencies initialized[39m[38;5;3m +0ms[39m
+[32m[Nest] 17948  - [39m06/08/2026, 3:37:29 AM [32m    LOG[39m [38;5;3m[InstanceLoader] [39m[32mPosSessionsModule dependencies initialized[39m[38;5;3m +1ms[39m
+[32m[Nest] 17948  - [39m06/08/2026, 3:37:29 AM [32m    LOG[39m [38;5;3m[InstanceLoader] [39m[32mAccountingModule dependencies initialized[39m[38;5;3m +1ms[39m
+[32m[Nest] 17948  - [39m06/08/2026, 3:37:29 AM [32m    LOG[39m [38;5;3m[InstanceLoader] [39m[32mReturnVouchersModule dependencies initialized[39m[38;5;3m +1ms[39m
+[32m[Nest] 17948  - [39m06/08/2026, 3:37:29 AM [32m    LOG[39m [38;5;3m[InstanceLoader] [39m[32mImportModule dependencies initialized[39m[38;5;3m +0ms[39m
+CORS allowed origins: http://localhost:3000, http://localhost:3001, http://localhost:3002, https://pos.qoondeeye.online, https://pharmcare.qoondeeye.online
+[33m[Nest] 17948  - [39m06/08/2026, 3:37:29 AM [33m   WARN[39m [38;5;3m[LegacyRouteConverter] [39m[33mUnsupported route path: "/api/*". In previous versions, the symbols ?, *, and + were used to denote optional or repeating path parameters. The latest version of "path-to-regexp" now requires the use of named parameters. For example, instead of using a route like /users/* to capture all routes starting with "/users", you should use /users/*path. For more details, refer to the migration guide. Attempting to auto-convert...[39m
+[33m[Nest] 17948  - [39m06/08/2026, 3:37:29 AM [33m   WARN[39m [38;5;3m[LegacyRouteConverter] [39m[33mUnsupported route path: "/api/*". In previous versions, the symbols ?, *, and + were used to denote optional or repeating path parameters. The latest version of "path-to-regexp" now requires the use of named parameters. For example, instead of using a route like /users/* to capture all routes starting with "/users", you should use /users/*path. For more details, refer to the migration guide. Attempting to auto-convert...[39m
+[33m[Nest] 17948  - [39m06/08/2026, 3:37:29 AM [33m   WARN[39m [38;5;3m[LegacyRouteConverter] [39m[33mUnsupported route path: "/api/*". In previous versions, the symbols ?, *, and + were used to denote optional or repeating path parameters. The latest version of "path-to-regexp" now requires the use of named parameters. For example, instead of using a route like /users/* to capture all routes starting with "/users", you should use /users/*path. For more details, refer to the migration guide. Attempting to auto-convert...[39m
+[32m[Nest] 17948  - [39m06/08/2026, 3:37:29 AM [32m    LOG[39m [38;5;3m[RoutesResolver] [39m[32mAppController {/api}:[39m[38;5;3m +1ms[39m
+[32m[Nest] 17948  - [39m06/08/2026, 3:37:29 AM [32m    LOG[39m [38;5;3m[RouterExplorer] [39m[32mMapped {/api, GET} route[39m[38;5;3m +6ms[39m
+[32m[Nest] 17948  - [39m06/08/2026, 3:37:29 AM [32m    LOG[39m [38;5;3m[RoutesResolver] [39m[32mTenantsController {/api/tenants}:[39m[38;5;3m +1ms[39m
+[32m[Nest] 17948  - [39m06/08/2026, 3:37:29 AM [32m    LOG[39m [38;5;3m[RouterExplorer] [39m[32mMapped {/api/tenants, GET} route[39m[38;5;3m +3ms[39m
+[32m[Nest] 17948  - [39m06/08/2026, 3:37:29 AM [32m    LOG[39m [38;5;3m[RouterExplorer] [39m[32mMapped {/api/tenants/:id, GET} route[39m[38;5;3m +2ms[39m
+[32m[Nest] 17948  - [39m06/08/2026, 3:37:29 AM [32m    LOG[39m [38;5;3m[RouterExplorer] [39m[32mMapped {/api/tenants, POST} route[39m[38;5;3m +2ms[39m
+[32m[Nest] 17948  - [39m06/08/2026, 3:37:29 AM [32m    LOG[39m [38;5;3m[RouterExplorer] [39m[32mMapped {/api/tenants/:id, PATCH} route[39m[38;5;3m +2ms[39m
+[32m[Nest] 17948  - [39m06/08/2026, 3:37:29 AM [32m    LOG[39m [38;5;3m[RouterExplorer] [39m[32mMapped {/api/tenants/schema/:schemaName, DELETE} route[39m[38;5;3m +1ms[39m
+[32m[Nest] 17948  - [39m06/08/2026, 3:37:29 AM [32m    LOG[39m [38;5;3m[RouterExplorer] [39m[32mMapped {/api/tenants/:id, DELETE} route[39m[38;5;3m +1ms[39m
+[32m[Nest] 17948  - [39m06/08/2026, 3:37:29 AM [32m    LOG[39m [38;5;3m[RoutesResolver] [39m[32mAuthController {/api/auth}:[39m[38;5;3m +1ms[39m
+[32m[Nest] 17948  - [39m06/08/2026, 3:37:29 AM [32m    LOG[39m [38;5;3m[RouterExplorer] [39m[32mMapped {/api/auth/login, POST} route[39m[38;5;3m +1ms[39m
+[32m[Nest] 17948  - [39m06/08/2026, 3:37:29 AM [32m    LOG[39m [38;5;3m[RouterExplorer] [39m[32mMapped {/api/auth/pin-login, POST} route[39m[38;5;3m +1ms[39m
+[32m[Nest] 17948  - [39m06/08/2026, 3:37:29 AM [32m    LOG[39m [38;5;3m[RouterExplorer] [39m[32mMapped {/api/auth/staff-login, POST} route[39m[38;5;3m +1ms[39m
+[32m[Nest] 17948  - [39m06/08/2026, 3:37:29 AM [32m    LOG[39m [38;5;3m[RouterExplorer] [39m[32mMapped {/api/auth/pos/enroll, POST} route[39m[38;5;3m +1ms[39m
+[32m[Nest] 17948  - [39m06/08/2026, 3:37:29 AM [32m    LOG[39m [38;5;3m[RouterExplorer] [39m[32mMapped {/api/auth/pos/rebind, POST} route[39m[38;5;3m +1ms[39m
+[32m[Nest] 17948  - [39m06/08/2026, 3:37:29 AM [32m    LOG[39m [38;5;3m[RouterExplorer] [39m[32mMapped {/api/auth/pos/revoke, POST} route[39m[38;5;3m +1ms[39m
+[32m[Nest] 17948  - [39m06/08/2026, 3:37:29 AM [32m    LOG[39m [38;5;3m[RouterExplorer] [39m[32mMapped {/api/auth/register, POST} route[39m[38;5;3m +1ms[39m
+[32m[Nest] 17948  - [39m06/08/2026, 3:37:29 AM [32m    LOG[39m [38;5;3m[RouterExplorer] [39m[32mMapped {/api/auth/super-admin/signup, POST} route[39m[38;5;3m +1ms[39m
+[32m[Nest] 17948  - [39m06/08/2026, 3:37:29 AM [32m    LOG[39m [38;5;3m[RouterExplorer] [39m[32mMapped {/api/auth/super-admin/login, POST} route[39m[38;5;3m +1ms[39m
+[32m[Nest] 17948  - [39m06/08/2026, 3:37:29 AM [32m    LOG[39m [38;5;3m[RouterExplorer] [39m[32mMapped {/api/auth/tenant/signup, POST} route[39m[38;5;3m +1ms[39m
+[32m[Nest] 17948  - [39m06/08/2026, 3:37:29 AM [32m    LOG[39m [38;5;3m[RouterExplorer] [39m[32mMapped {/api/auth/tenant/login, POST} route[39m[38;5;3m +1ms[39m
+[32m[Nest] 17948  - [39m06/08/2026, 3:37:29 AM [32m    LOG[39m [38;5;3m[RoutesResolver] [39m[32mDomainsController {/api/domains}:[39m[38;5;3m +0ms[39m
+[32m[Nest] 17948  - [39m06/08/2026, 3:37:29 AM [32m    LOG[39m [38;5;3m[RouterExplorer] [39m[32mMapped {/api/domains, GET} route[39m[38;5;3m +2ms[39m
+[32m[Nest] 17948  - [39m06/08/2026, 3:37:29 AM [32m    LOG[39m [38;5;3m[RouterExplorer] [39m[32mMapped {/api/domains/:id, GET} route[39m[38;5;3m +1ms[39m
+[32m[Nest] 17948  - [39m06/08/2026, 3:37:29 AM [32m    LOG[39m [38;5;3m[RouterExplorer] [39m[32mMapped {/api/domains, POST} route[39m[38;5;3m +0ms[39m
+[32m[Nest] 17948  - [39m06/08/2026, 3:37:29 AM [32m    LOG[39m [38;5;3m[RouterExplorer] [39m[32mMapped {/api/domains/:id, PATCH} route[39m[38;5;3m +2ms[39m
+[32m[Nest] 17948  - [39m06/08/2026, 3:37:29 AM [32m    LOG[39m [38;5;3m[RouterExplorer] [39m[32mMapped {/api/domains/:id, DELETE} route[39m[38;5;3m +1ms[39m
+[32m[Nest] 17948  - [39m06/08/2026, 3:37:29 AM [32m    LOG[39m [38;5;3m[RoutesResolver] [39m[32mCategoriesController {/api/categories}:[39m[38;5;3m +0ms[39m
+[32m[Nest] 17948  - [39m06/08/2026, 3:37:29 AM [32m    LOG[39m [38;5;3m[RouterExplorer] [39m[32mMapped {/api/categories, GET} route[39m[38;5;3m +2ms[39m
+[32m[Nest] 17948  - [39m06/08/2026, 3:37:29 AM [32m    LOG[39m [38;5;3m[RouterExplorer] [39m[32mMapped {/api/categories/:id, GET} route[39m[38;5;3m +0ms[39m
+[32m[Nest] 17948  - [39m06/08/2026, 3:37:29 AM [32m    LOG[39m [38;5;3m[RouterExplorer] [39m[32mMapped {/api/categories, POST} route[39m[38;5;3m +1ms[39m
+[32m[Nest] 17948  - [39m06/08/2026, 3:37:29 AM [32m    LOG[39m [38;5;3m[RouterExplorer] [39m[32mMapped {/api/categories/:id, PATCH} route[39m[38;5;3m +1ms[39m
+[32m[Nest] 17948  - [39m06/08/2026, 3:37:29 AM [32m    LOG[39m [38;5;3m[RouterExplorer] [39m[32mMapped {/api/categories/:id, DELETE} route[39m[38;5;3m +1ms[39m
+[32m[Nest] 17948  - [39m06/08/2026, 3:37:29 AM [32m    LOG[39m [38;5;3m[RoutesResolver] [39m[32mProductsController {/api/products}:[39m[38;5;3m +1ms[39m
+[32m[Nest] 17948  - [39m06/08/2026, 3:37:29 AM [32m    LOG[39m [38;5;3m[RouterExplorer] [39m[32mMapped {/api/products, GET} route[39m[38;5;3m +1ms[39m
+[32m[Nest] 17948  - [39m06/08/2026, 3:37:29 AM [32m    LOG[39m [38;5;3m[RouterExplorer] [39m[32mMapped {/api/products/catalog, GET} route[39m[38;5;3m +1ms[39m
+[32m[Nest] 17948  - [39m06/08/2026, 3:37:29 AM [32m    LOG[39m [38;5;3m[RouterExplorer] [39m[32mMapped {/api/products/transfer-catalog, GET} route[39m[38;5;3m +2ms[39m
+[32m[Nest] 17948  - [39m06/08/2026, 3:37:29 AM [32m    LOG[39m [38;5;3m[RouterExplorer] [39m[32mMapped {/api/products/lookup, GET} route[39m[38;5;3m +2ms[39m
+[32m[Nest] 17948  - [39m06/08/2026, 3:37:29 AM [32m    LOG[39m [38;5;3m[RouterExplorer] [39m[32mMapped {/api/products/barcode/:barcode, GET} route[39m[38;5;3m +2ms[39m
+[32m[Nest] 17948  - [39m06/08/2026, 3:37:29 AM [32m    LOG[39m [38;5;3m[RouterExplorer] [39m[32mMapped {/api/products/:id/suppliers, GET} route[39m[38;5;3m +1ms[39m
+[32m[Nest] 17948  - [39m06/08/2026, 3:37:29 AM [32m    LOG[39m [38;5;3m[RouterExplorer] [39m[32mMapped {/api/products/:id/suppliers, POST} route[39m[38;5;3m +1ms[39m
+[32m[Nest] 17948  - [39m06/08/2026, 3:37:29 AM [32m    LOG[39m [38;5;3m[RouterExplorer] [39m[32mMapped {/api/products/:id/suppliers/:supplierId, PATCH} route[39m[38;5;3m +2ms[39m
+[32m[Nest] 17948  - [39m06/08/2026, 3:37:29 AM [32m    LOG[39m [38;5;3m[RouterExplorer] [39m[32mMapped {/api/products/:id/suppliers/:supplierId, DELETE} route[39m[38;5;3m +1ms[39m
+[32m[Nest] 17948  - [39m06/08/2026, 3:37:29 AM [32m    LOG[39m [38;5;3m[RouterExplorer] [39m[32mMapped {/api/products/:id/suppliers/:supplierId/preferred, POST} route[39m[38;5;3m +1ms[39m
+[32m[Nest] 17948  - [39m06/08/2026, 3:37:29 AM [32m    LOG[39m [38;5;3m[RouterExplorer] [39m[32mMapped {/api/products/:id, GET} route[39m[38;5;3m +1ms[39m
+[32m[Nest] 17948  - [39m06/08/2026, 3:37:29 AM [32m    LOG[39m [38;5;3m[RouterExplorer] [39m[32mMapped {/api/products, POST} route[39m[38;5;3m +1ms[39m
+[32m[Nest] 17948  - [39m06/08/2026, 3:37:29 AM [32m    LOG[39m [38;5;3m[RouterExplorer] [39m[32mMapped {/api/products/:id, PATCH} route[39m[38;5;3m +1ms[39m
+[32m[Nest] 17948  - [39m06/08/2026, 3:37:29 AM [32m    LOG[39m [38;5;3m[RouterExplorer] [39m[32mMapped {/api/products/:id, DELETE} route[39m[38;5;3m +0ms[39m
+[32m[Nest] 17948  - [39m06/08/2026, 3:37:29 AM [32m    LOG[39m [38;5;3m[RoutesResolver] [39m[32mUomsController {/api/uoms}:[39m[38;5;3m +1ms[39m
+[32m[Nest] 17948  - [39m06/08/2026, 3:37:29 AM [32m    LOG[39m [38;5;3m[RouterExplorer] [39m[32mMapped {/api/uoms, GET} route[39m[38;5;3m +1ms[39m
+[32m[Nest] 17948  - [39m06/08/2026, 3:37:29 AM [32m    LOG[39m [38;5;3m[RouterExplorer] [39m[32mMapped {/api/uoms, POST} route[39m[38;5;3m +1ms[39m
+[32m[Nest] 17948  - [39m06/08/2026, 3:37:29 AM [32m    LOG[39m [38;5;3m[RouterExplorer] [39m[32mMapped {/api/uoms/:id, PATCH} route[39m[38;5;3m +0ms[39m
+[32m[Nest] 17948  - [39m06/08/2026, 3:37:29 AM [32m    LOG[39m [38;5;3m[RoutesResolver] [39m[32mProductUomsController {/api/products/:productId/uoms}:[39m[38;5;3m +1ms[39m
+[32m[Nest] 17948  - [39m06/08/2026, 3:37:29 AM [32m    LOG[39m [38;5;3m[RouterExplorer] [39m[32mMapped {/api/products/:productId/uoms, GET} route[39m[38;5;3m +1ms[39m
+[32m[Nest] 17948  - [39m06/08/2026, 3:37:29 AM [32m    LOG[39m [38;5;3m[RouterExplorer] [39m[32mMapped {/api/products/:productId/uoms, POST} route[39m[38;5;3m +1ms[39m
+[32m[Nest] 17948  - [39m06/08/2026, 3:37:29 AM [32m    LOG[39m [38;5;3m[RouterExplorer] [39m[32mMapped {/api/products/:productId/uoms/:productUomId, PATCH} route[39m[38;5;3m +2ms[39m
+[32m[Nest] 17948  - [39m06/08/2026, 3:37:29 AM [32m    LOG[39m [38;5;3m[RoutesResolver] [39m[32mBranchesController {/api/branches}:[39m[38;5;3m +0ms[39m
+[32m[Nest] 17948  - [39m06/08/2026, 3:37:29 AM [32m    LOG[39m [38;5;3m[RouterExplorer] [39m[32mMapped {/api/branches, GET} route[39m[38;5;3m +2ms[39m
+[32m[Nest] 17948  - [39m06/08/2026, 3:37:29 AM [32m    LOG[39m [38;5;3m[RouterExplorer] [39m[32mMapped {/api/branches/:id, GET} route[39m[38;5;3m +1ms[39m
+[32m[Nest] 17948  - [39m06/08/2026, 3:37:29 AM [32m    LOG[39m [38;5;3m[RouterExplorer] [39m[32mMapped {/api/branches, POST} route[39m[38;5;3m +1ms[39m
+[32m[Nest] 17948  - [39m06/08/2026, 3:37:29 AM [32m    LOG[39m [38;5;3m[RouterExplorer] [39m[32mMapped {/api/branches/:id, PATCH} route[39m[38;5;3m +1ms[39m
+[32m[Nest] 17948  - [39m06/08/2026, 3:37:29 AM [32m    LOG[39m [38;5;3m[RouterExplorer] [39m[32mMapped {/api/branches/:id, DELETE} route[39m[38;5;3m +1ms[39m
+[32m[Nest] 17948  - [39m06/08/2026, 3:37:29 AM [32m    LOG[39m [38;5;3m[RoutesResolver] [39m[32mSuppliersController {/api/suppliers}:[39m[38;5;3m +1ms[39m
+[32m[Nest] 17948  - [39m06/08/2026, 3:37:29 AM [32m    LOG[39m [38;5;3m[RouterExplorer] [39m[32mMapped {/api/suppliers, GET} route[39m[38;5;3m +1ms[39m
+[32m[Nest] 17948  - [39m06/08/2026, 3:37:29 AM [32m    LOG[39m [38;5;3m[RouterExplorer] [39m[32mMapped {/api/suppliers/reports/products-by-supplier, GET} route[39m[38;5;3m +2ms[39m
+[32m[Nest] 17948  - [39m06/08/2026, 3:37:29 AM [32m    LOG[39m [38;5;3m[RouterExplorer] [39m[32mMapped {/api/suppliers/reports/purchases-by-supplier, GET} route[39m[38;5;3m +3ms[39m
+[32m[Nest] 17948  - [39m06/08/2026, 3:37:29 AM [32m    LOG[39m [38;5;3m[RouterExplorer] [39m[32mMapped {/api/suppliers/reports/top-by-spend, GET} route[39m[38;5;3m +1ms[39m
+[32m[Nest] 17948  - [39m06/08/2026, 3:37:29 AM [32m    LOG[39m [38;5;3m[RouterExplorer] [39m[32mMapped {/api/suppliers/:id/stats, GET} route[39m[38;5;3m +2ms[39m
+[32m[Nest] 17948  - [39m06/08/2026, 3:37:29 AM [32m    LOG[39m [38;5;3m[RouterExplorer] [39m[32mMapped {/api/suppliers/:id/products, GET} route[39m[38;5;3m +2ms[39m
+[32m[Nest] 17948  - [39m06/08/2026, 3:37:29 AM [32m    LOG[39m [38;5;3m[RouterExplorer] [39m[32mMapped {/api/suppliers/:id/purchases, GET} route[39m[38;5;3m +1ms[39m
+[32m[Nest] 17948  - [39m06/08/2026, 3:37:29 AM [32m    LOG[39m [38;5;3m[RouterExplorer] [39m[32mMapped {/api/suppliers/:id/statement, GET} route[39m[38;5;3m +2ms[39m
+[32m[Nest] 17948  - [39m06/08/2026, 3:37:29 AM [32m    LOG[39m [38;5;3m[RouterExplorer] [39m[32mMapped {/api/suppliers/:id/price-history, GET} route[39m[38;5;3m +3ms[39m
+[32m[Nest] 17948  - [39m06/08/2026, 3:37:29 AM [32m    LOG[39m [38;5;3m[RouterExplorer] [39m[32mMapped {/api/suppliers/:id, GET} route[39m[38;5;3m +1ms[39m
+[32m[Nest] 17948  - [39m06/08/2026, 3:37:29 AM [32m    LOG[39m [38;5;3m[RouterExplorer] [39m[32mMapped {/api/suppliers, POST} route[39m[38;5;3m +1ms[39m
+[32m[Nest] 17948  - [39m06/08/2026, 3:37:29 AM [32m    LOG[39m [38;5;3m[RouterExplorer] [39m[32mMapped {/api/suppliers/:id, PATCH} route[39m[38;5;3m +1ms[39m
+[32m[Nest] 17948  - [39m06/08/2026, 3:37:29 AM [32m    LOG[39m [38;5;3m[RouterExplorer] [39m[32mMapped {/api/suppliers/:id, DELETE} route[39m[38;5;3m +1ms[39m
+[32m[Nest] 17948  - [39m06/08/2026, 3:37:29 AM [32m    LOG[39m [38;5;3m[RoutesResolver] [39m[32mCustomersController {/api/customers}:[39m[38;5;3m +1ms[39m
+[32m[Nest] 17948  - [39m06/08/2026, 3:37:29 AM [32m    LOG[39m [38;5;3m[RouterExplorer] [39m[32mMapped {/api/customers, GET} route[39m[38;5;3m +1ms[39m
+[32m[Nest] 17948  - [39m06/08/2026, 3:37:29 AM [32m    LOG[39m [38;5;3m[RouterExplorer] [39m[32mMapped {/api/customers/:id, GET} route[39m[38;5;3m +1ms[39m
+[32m[Nest] 17948  - [39m06/08/2026, 3:37:29 AM [32m    LOG[39m [38;5;3m[RouterExplorer] [39m[32mMapped {/api/customers, POST} route[39m[38;5;3m +1ms[39m
+[32m[Nest] 17948  - [39m06/08/2026, 3:37:29 AM [32m    LOG[39m [38;5;3m[RouterExplorer] [39m[32mMapped {/api/customers/:id, PATCH} route[39m[38;5;3m +1ms[39m
+[32m[Nest] 17948  - [39m06/08/2026, 3:37:29 AM [32m    LOG[39m [38;5;3m[RouterExplorer] [39m[32mMapped {/api/customers/:id, DELETE} route[39m[38;5;3m +1ms[39m
+[32m[Nest] 17948  - [39m06/08/2026, 3:37:29 AM [32m    LOG[39m [38;5;3m[RoutesResolver] [39m[32mAccountingController {/api/accounting}:[39m[38;5;3m +1ms[39m
+[32m[Nest] 17948  - [39m06/08/2026, 3:37:29 AM [32m    LOG[39m [38;5;3m[RouterExplorer] [39m[32mMapped {/api/accounting/supplier-payments, GET} route[39m[38;5;3m +1ms[39m
+[32m[Nest] 17948  - [39m06/08/2026, 3:37:29 AM [32m    LOG[39m [38;5;3m[RouterExplorer] [39m[32mMapped {/api/accounting/supplier-payments, POST} route[39m[38;5;3m +2ms[39m
+[32m[Nest] 17948  - [39m06/08/2026, 3:37:29 AM [32m    LOG[39m [38;5;3m[RouterExplorer] [39m[32mMapped {/api/accounting/customer-payments, GET} route[39m[38;5;3m +1ms[39m
+[32m[Nest] 17948  - [39m06/08/2026, 3:37:29 AM [32m    LOG[39m [38;5;3m[RouterExplorer] [39m[32mMapped {/api/accounting/customer-payments, POST} route[39m[38;5;3m +1ms[39m
+[32m[Nest] 17948  - [39m06/08/2026, 3:37:29 AM [32m    LOG[39m [38;5;3m[RouterExplorer] [39m[32mMapped {/api/accounting/journal-books, GET} route[39m[38;5;3m +2ms[39m
+[32m[Nest] 17948  - [39m06/08/2026, 3:37:29 AM [32m    LOG[39m [38;5;3m[RouterExplorer] [39m[32mMapped {/api/accounting/journal-lines, GET} route[39m[38;5;3m +1ms[39m
+[32m[Nest] 17948  - [39m06/08/2026, 3:37:29 AM [32m    LOG[39m [38;5;3m[RouterExplorer] [39m[32mMapped {/api/accounting/journal-audit, GET} route[39m[38;5;3m +2ms[39m
+[32m[Nest] 17948  - [39m06/08/2026, 3:37:29 AM [32m    LOG[39m [38;5;3m[RouterExplorer] [39m[32mMapped {/api/accounting/audit-trail, GET} route[39m[38;5;3m +1ms[39m
+[32m[Nest] 17948  - [39m06/08/2026, 3:37:29 AM [32m    LOG[39m [38;5;3m[RouterExplorer] [39m[32mMapped {/api/accounting/close-readiness, GET} route[39m[38;5;3m +2ms[39m
+[32m[Nest] 17948  - [39m06/08/2026, 3:37:29 AM [32m    LOG[39m [38;5;3m[RouterExplorer] [39m[32mMapped {/api/accounting/period/approve, POST} route[39m[38;5;3m +1ms[39m
+[32m[Nest] 17948  - [39m06/08/2026, 3:37:29 AM [32m    LOG[39m [38;5;3m[RouterExplorer] [39m[32mMapped {/api/accounting/period/reopen, POST} route[39m[38;5;3m +1ms[39m
+[32m[Nest] 17948  - [39m06/08/2026, 3:37:29 AM [32m    LOG[39m [38;5;3m[RouterExplorer] [39m[32mMapped {/api/accounting/chart-of-accounts, GET} route[39m[38;5;3m +2ms[39m
+[32m[Nest] 17948  - [39m06/08/2026, 3:37:29 AM [32m    LOG[39m [38;5;3m[RouterExplorer] [39m[32mMapped {/api/accounting/reconciliation/accounts, GET} route[39m[38;5;3m +1ms[39m
+[32m[Nest] 17948  - [39m06/08/2026, 3:37:29 AM [32m    LOG[39m [38;5;3m[RouterExplorer] [39m[32mMapped {/api/accounting/accounts, GET} route[39m[38;5;3m +2ms[39m
+[32m[Nest] 17948  - [39m06/08/2026, 3:37:29 AM [32m    LOG[39m [38;5;3m[RouterExplorer] [39m[32mMapped {/api/accounting/accounts/:id, GET} route[39m[38;5;3m +2ms[39m
+[32m[Nest] 17948  - [39m06/08/2026, 3:37:29 AM [32m    LOG[39m [38;5;3m[RouterExplorer] [39m[32mMapped {/api/accounting/accounts, POST} route[39m[38;5;3m +1ms[39m
+[32m[Nest] 17948  - [39m06/08/2026, 3:37:29 AM [32m    LOG[39m [38;5;3m[RouterExplorer] [39m[32mMapped {/api/accounting/accounts/:id, PATCH} route[39m[38;5;3m +1ms[39m
+[32m[Nest] 17948  - [39m06/08/2026, 3:37:29 AM [32m    LOG[39m [38;5;3m[RouterExplorer] [39m[32mMapped {/api/accounting/accounts/:id, DELETE} route[39m[38;5;3m +1ms[39m
+[32m[Nest] 17948  - [39m06/08/2026, 3:37:29 AM [32m    LOG[39m [38;5;3m[RouterExplorer] [39m[32mMapped {/api/accounting/chart-of-accounts/:id/allow-reconciliation, PATCH} route[39m[38;5;3m +2ms[39m
+[32m[Nest] 17948  - [39m06/08/2026, 3:37:29 AM [32m    LOG[39m [38;5;3m[RouterExplorer] [39m[32mMapped {/api/accounting/journal-entries/:id, GET} route[39m[38;5;3m +2ms[39m
+[32m[Nest] 17948  - [39m06/08/2026, 3:37:29 AM [32m    LOG[39m [38;5;3m[RouterExplorer] [39m[32mMapped {/api/accounting/journal-entries, GET} route[39m[38;5;3m +1ms[39m
+[32m[Nest] 17948  - [39m06/08/2026, 3:37:30 AM [32m    LOG[39m [38;5;3m[RouterExplorer] [39m[32mMapped {/api/accounting/chart-of-accounts/merge, POST} route[39m[38;5;3m +10ms[39m
+[32m[Nest] 17948  - [39m06/08/2026, 3:37:30 AM [32m    LOG[39m [38;5;3m[RouterExplorer] [39m[32mMapped {/api/accounting/journal-entries, POST} route[39m[38;5;3m +2ms[39m
+[32m[Nest] 17948  - [39m06/08/2026, 3:37:30 AM [32m    LOG[39m [38;5;3m[RouterExplorer] [39m[32mMapped {/api/accounting/payment-terms, GET} route[39m[38;5;3m +1ms[39m
+[32m[Nest] 17948  - [39m06/08/2026, 3:37:30 AM [32m    LOG[39m [38;5;3m[RouterExplorer] [39m[32mMapped {/api/accounting/payment-terms, POST} route[39m[38;5;3m +1ms[39m
+[32m[Nest] 17948  - [39m06/08/2026, 3:37:30 AM [32m    LOG[39m [38;5;3m[RouterExplorer] [39m[32mMapped {/api/accounting/follow-up-levels, GET} route[39m[38;5;3m +1ms[39m
+[32m[Nest] 17948  - [39m06/08/2026, 3:37:30 AM [32m    LOG[39m [38;5;3m[RouterExplorer] [39m[32mMapped {/api/accounting/follow-up-levels, POST} route[39m[38;5;3m +1ms[39m
+[32m[Nest] 17948  - [39m06/08/2026, 3:37:30 AM [32m    LOG[39m [38;5;3m[RouterExplorer] [39m[32mMapped {/api/accounting/configuration/summary, GET} route[39m[38;5;3m +2ms[39m
+[32m[Nest] 17948  - [39m06/08/2026, 3:37:30 AM [32m    LOG[39m [38;5;3m[RouterExplorer] [39m[32mMapped {/api/accounting/security/branch-access-metrics, GET} route[39m[38;5;3m +1ms[39m
+[32m[Nest] 17948  - [39m06/08/2026, 3:37:30 AM [32m    LOG[39m [38;5;3m[RoutesResolver] [39m[32mFinancialReportsController {/api/reports}:[39m[38;5;3m +1ms[39m
+[32m[Nest] 17948  - [39m06/08/2026, 3:37:30 AM [32m    LOG[39m [38;5;3m[RouterExplorer] [39m[32mMapped {/api/reports/income-statement, GET} route[39m[38;5;3m +1ms[39m
+[32m[Nest] 17948  - [39m06/08/2026, 3:37:30 AM [32m    LOG[39m [38;5;3m[RouterExplorer] [39m[32mMapped {/api/reports/profit-loss, GET} route[39m[38;5;3m +2ms[39m
+[32m[Nest] 17948  - [39m06/08/2026, 3:37:30 AM [32m    LOG[39m [38;5;3m[RouterExplorer] [39m[32mMapped {/api/reports/pnl, GET} route[39m[38;5;3m +1ms[39m
+[32m[Nest] 17948  - [39m06/08/2026, 3:37:30 AM [32m    LOG[39m [38;5;3m[RouterExplorer] [39m[32mMapped {/api/reports/balance-sheet, GET} route[39m[38;5;3m +2ms[39m
+[32m[Nest] 17948  - [39m06/08/2026, 3:37:30 AM [32m    LOG[39m [38;5;3m[RouterExplorer] [39m[32mMapped {/api/reports/interbranch-mismatches, GET} route[39m[38;5;3m +2ms[39m
+[32m[Nest] 17948  - [39m06/08/2026, 3:37:30 AM [32m    LOG[39m [38;5;3m[RouterExplorer] [39m[32mMapped {/api/reports/stuck-transfers, GET} route[39m[38;5;3m +1ms[39m
+[32m[Nest] 17948  - [39m06/08/2026, 3:37:30 AM [32m    LOG[39m [38;5;3m[RouterExplorer] [39m[32mMapped {/api/reports/consolidation-preview, GET} route[39m[38;5;3m +2ms[39m
+[32m[Nest] 17948  - [39m06/08/2026, 3:37:30 AM [32m    LOG[39m [38;5;3m[RouterExplorer] [39m[32mMapped {/api/reports/consolidation/run, POST} route[39m[38;5;3m +1ms[39m
+[32m[Nest] 17948  - [39m06/08/2026, 3:37:30 AM [32m    LOG[39m [38;5;3m[RouterExplorer] [39m[32mMapped {/api/reports/consolidation/runs/:runId/reverse, POST} route[39m[38;5;3m +1ms[39m
+[32m[Nest] 17948  - [39m06/08/2026, 3:37:30 AM [32m    LOG[39m [38;5;3m[RouterExplorer] [39m[32mMapped {/api/reports/consolidation/runs/:runId/finalize, POST} route[39m[38;5;3m +1ms[39m
+[32m[Nest] 17948  - [39m06/08/2026, 3:37:30 AM [32m    LOG[39m [38;5;3m[RouterExplorer] [39m[32mMapped {/api/reports/consolidation/runs, GET} route[39m[38;5;3m +2ms[39m
+[32m[Nest] 17948  - [39m06/08/2026, 3:37:30 AM [32m    LOG[39m [38;5;3m[RouterExplorer] [39m[32mMapped {/api/reports/entities, GET} route[39m[38;5;3m +2ms[39m
+[32m[Nest] 17948  - [39m06/08/2026, 3:37:30 AM [32m    LOG[39m [38;5;3m[RouterExplorer] [39m[32mMapped {/api/reports/consolidation/runs/:runId, GET} route[39m[38;5;3m +1ms[39m
+[32m[Nest] 17948  - [39m06/08/2026, 3:37:30 AM [32m    LOG[39m [38;5;3m[RouterExplorer] [39m[32mMapped {/api/reports/disclosure/nci, GET} route[39m[38;5;3m +1ms[39m
+[32m[Nest] 17948  - [39m06/08/2026, 3:37:30 AM [32m    LOG[39m [38;5;3m[RouterExplorer] [39m[32mMapped {/api/reports/disclosure/fx-impact, GET} route[39m[38;5;3m +2ms[39m
+[32m[Nest] 17948  - [39m06/08/2026, 3:37:30 AM [32m    LOG[39m [38;5;3m[RouterExplorer] [39m[32mMapped {/api/reports/disclosure/consolidation-adjustments, GET} route[39m[38;5;3m +1ms[39m
+[32m[Nest] 17948  - [39m06/08/2026, 3:37:30 AM [32m    LOG[39m [38;5;3m[RouterExplorer] [39m[32mMapped {/api/reports/disclosure/intercompany-elimination, GET} route[39m[38;5;3m +2ms[39m
+[32m[Nest] 17948  - [39m06/08/2026, 3:37:30 AM [32m    LOG[39m [38;5;3m[RouterExplorer] [39m[32mMapped {/api/reports/audit-package, GET} route[39m[38;5;3m +2ms[39m
+[32m[Nest] 17948  - [39m06/08/2026, 3:37:30 AM [32m    LOG[39m [38;5;3m[RouterExplorer] [39m[32mMapped {/api/reports/fx-rates, GET} route[39m[38;5;3m +1ms[39m
+[32m[Nest] 17948  - [39m06/08/2026, 3:37:30 AM [32m    LOG[39m [38;5;3m[RouterExplorer] [39m[32mMapped {/api/reports/fx-rates, POST} route[39m[38;5;3m +0ms[39m
+[32m[Nest] 17948  - [39m06/08/2026, 3:37:30 AM [32m    LOG[39m [38;5;3m[RouterExplorer] [39m[32mMapped {/api/reports/consolidation-adjustments, GET} route[39m[38;5;3m +2ms[39m
+[32m[Nest] 17948  - [39m06/08/2026, 3:37:30 AM [32m    LOG[39m [38;5;3m[RouterExplorer] [39m[32mMapped {/api/reports/consolidation-adjustments, POST} route[39m[38;5;3m +1ms[39m
+[32m[Nest] 17948  - [39m06/08/2026, 3:37:30 AM [32m    LOG[39m [38;5;3m[RouterExplorer] [39m[32mMapped {/api/reports/consolidation-adjustments/:id/approve, POST} route[39m[38;5;3m +1ms[39m
+[32m[Nest] 17948  - [39m06/08/2026, 3:37:30 AM [32m    LOG[39m [38;5;3m[RouterExplorer] [39m[32mMapped {/api/reports/trial-balance, GET} route[39m[38;5;3m +1ms[39m
+[32m[Nest] 17948  - [39m06/08/2026, 3:37:30 AM [32m    LOG[39m [38;5;3m[RouterExplorer] [39m[32mMapped {/api/reports/dashboard-series, GET} route[39m[38;5;3m +2ms[39m
+[32m[Nest] 17948  - [39m06/08/2026, 3:37:30 AM [32m    LOG[39m [38;5;3m[RouterExplorer] [39m[32mMapped {/api/reports/inventory-valuation, GET} route[39m[38;5;3m +1ms[39m
+[32m[Nest] 17948  - [39m06/08/2026, 3:37:30 AM [32m    LOG[39m [38;5;3m[RouterExplorer] [39m[32mMapped {/api/reports/inventory-gl-sync, GET} route[39m[38;5;3m +1ms[39m
+[32m[Nest] 17948  - [39m06/08/2026, 3:37:30 AM [32m    LOG[39m [38;5;3m[RouterExplorer] [39m[32mMapped {/api/reports/alerts, GET} route[39m[38;5;3m +1ms[39m
+[32m[Nest] 17948  - [39m06/08/2026, 3:37:30 AM [32m    LOG[39m [38;5;3m[RouterExplorer] [39m[32mMapped {/api/reports/variance-analysis, GET} route[39m[38;5;3m +1ms[39m
+[32m[Nest] 17948  - [39m06/08/2026, 3:37:30 AM [32m    LOG[39m [38;5;3m[RouterExplorer] [39m[32mMapped {/api/reports/explain, GET} route[39m[38;5;3m +2ms[39m
+[32m[Nest] 17948  - [39m06/08/2026, 3:37:30 AM [32m    LOG[39m [38;5;3m[RouterExplorer] [39m[32mMapped {/api/reports/top-products, GET} route[39m[38;5;3m +1ms[39m
+[32m[Nest] 17948  - [39m06/08/2026, 3:37:30 AM [32m    LOG[39m [38;5;3m[RouterExplorer] [39m[32mMapped {/api/reports/cash-flow, GET} route[39m[38;5;3m +1ms[39m
+[32m[Nest] 17948  - [39m06/08/2026, 3:37:30 AM [32m    LOG[39m [38;5;3m[RouterExplorer] [39m[32mMapped {/api/reports/partner-ledger, GET} route[39m[38;5;3m +1ms[39m
+[32m[Nest] 17948  - [39m06/08/2026, 3:37:30 AM [32m    LOG[39m [38;5;3m[RouterExplorer] [39m[32mMapped {/api/reports/aged-receivable, GET} route[39m[38;5;3m +2ms[39m
+[32m[Nest] 17948  - [39m06/08/2026, 3:37:30 AM [32m    LOG[39m [38;5;3m[RouterExplorer] [39m[32mMapped {/api/reports/aged-payable, GET} route[39m[38;5;3m +1ms[39m
+[32m[Nest] 17948  - [39m06/08/2026, 3:37:30 AM [32m    LOG[39m [38;5;3m[RouterExplorer] [39m[32mMapped {/api/reports/tax, GET} route[39m[38;5;3m +1ms[39m
+[32m[Nest] 17948  - [39m06/08/2026, 3:37:30 AM [32m    LOG[39m [38;5;3m[RouterExplorer] [39m[32mMapped {/api/reports/fiscal, GET} route[39m[38;5;3m +2ms[39m
+[32m[Nest] 17948  - [39m06/08/2026, 3:37:30 AM [32m    LOG[39m [38;5;3m[RouterExplorer] [39m[32mMapped {/api/reports/executive-summary, GET} route[39m[38;5;3m +1ms[39m
+[32m[Nest] 17948  - [39m06/08/2026, 3:37:30 AM [32m    LOG[39m [38;5;3m[RouterExplorer] [39m[32mMapped {/api/reports/invoice-analysis, GET} route[39m[38;5;3m +2ms[39m
+[32m[Nest] 17948  - [39m06/08/2026, 3:37:30 AM [32m    LOG[39m [38;5;3m[RouterExplorer] [39m[32mMapped {/api/reports/analytic, GET} route[39m[38;5;3m +1ms[39m
+[32m[Nest] 17948  - [39m06/08/2026, 3:37:30 AM [32m    LOG[39m [38;5;3m[RouterExplorer] [39m[32mMapped {/api/reports/journal-audit, GET} route[39m[38;5;3m +1ms[39m
+[32m[Nest] 17948  - [39m06/08/2026, 3:37:30 AM [32m    LOG[39m [38;5;3m[RouterExplorer] [39m[32mMapped {/api/reports/exports, POST} route[39m[38;5;3m +1ms[39m
+[32m[Nest] 17948  - [39m06/08/2026, 3:37:30 AM [32m    LOG[39m [38;5;3m[RouterExplorer] [39m[32mMapped {/api/reports/exports/:jobId, GET} route[39m[38;5;3m +2ms[39m
+[32m[Nest] 17948  - [39m06/08/2026, 3:37:30 AM [32m    LOG[39m [38;5;3m[RouterExplorer] [39m[32mMapped {/api/reports/exports/:jobId/download, GET} route[39m[38;5;3m +1ms[39m
+[32m[Nest] 17948  - [39m06/08/2026, 3:37:30 AM [32m    LOG[39m [38;5;3m[RoutesResolver] [39m[32mReportsV1Controller {/api/v1/reports}:[39m[38;5;3m +1ms[39m
+[32m[Nest] 17948  - [39m06/08/2026, 3:37:30 AM [32m    LOG[39m [38;5;3m[RouterExplorer] [39m[32mMapped {/api/v1/reports/consolidation/run, POST} route[39m[38;5;3m +1ms[39m
+[32m[Nest] 17948  - [39m06/08/2026, 3:37:30 AM [32m    LOG[39m [38;5;3m[RouterExplorer] [39m[32mMapped {/api/v1/reports/consolidation/runs/:runId/reverse, POST} route[39m[38;5;3m +1ms[39m
+[32m[Nest] 17948  - [39m06/08/2026, 3:37:30 AM [32m    LOG[39m [38;5;3m[RouterExplorer] [39m[32mMapped {/api/v1/reports/consolidation/runs/:runId/finalize, POST} route[39m[38;5;3m +1ms[39m
+[32m[Nest] 17948  - [39m06/08/2026, 3:37:30 AM [32m    LOG[39m [38;5;3m[RouterExplorer] [39m[32mMapped {/api/v1/reports/consolidation/runs, GET} route[39m[38;5;3m +1ms[39m
+[32m[Nest] 17948  - [39m06/08/2026, 3:37:30 AM [32m    LOG[39m [38;5;3m[RouterExplorer] [39m[32mMapped {/api/v1/reports/consolidation/runs/:runId, GET} route[39m[38;5;3m +2ms[39m
+[32m[Nest] 17948  - [39m06/08/2026, 3:37:30 AM [32m    LOG[39m [38;5;3m[RoutesResolver] [39m[32mAuditController {/api/audit}:[39m[38;5;3m +0ms[39m
+[32m[Nest] 17948  - [39m06/08/2026, 3:37:30 AM [32m    LOG[39m [38;5;3m[RouterExplorer] [39m[32mMapped {/api/audit/verify, GET} route[39m[38;5;3m +1ms[39m
+[32m[Nest] 17948  - [39m06/08/2026, 3:37:30 AM [32m    LOG[39m [38;5;3m[RouterExplorer] [39m[32mMapped {/api/audit/export, GET} route[39m[38;5;3m +2ms[39m
+[32m[Nest] 17948  - [39m06/08/2026, 3:37:30 AM [32m    LOG[39m [38;5;3m[RoutesResolver] [39m[32mNotificationsController {/api/notifications}:[39m[38;5;3m +0ms[39m
+[32m[Nest] 17948  - [39m06/08/2026, 3:37:30 AM [32m    LOG[39m [38;5;3m[RouterExplorer] [39m[32mMapped {/api/notifications, GET} route[39m[38;5;3m +1ms[39m
+[32m[Nest] 17948  - [39m06/08/2026, 3:37:30 AM [32m    LOG[39m [38;5;3m[RouterExplorer] [39m[32mMapped {/api/notifications/:id, GET} route[39m[38;5;3m +1ms[39m
+[32m[Nest] 17948  - [39m06/08/2026, 3:37:30 AM [32m    LOG[39m [38;5;3m[RouterExplorer] [39m[32mMapped {/api/notifications, POST} route[39m[38;5;3m +1ms[39m
+[32m[Nest] 17948  - [39m06/08/2026, 3:37:30 AM [32m    LOG[39m [38;5;3m[RouterExplorer] [39m[32mMapped {/api/notifications/:id, PATCH} route[39m[38;5;3m +2ms[39m
+[32m[Nest] 17948  - [39m06/08/2026, 3:37:30 AM [32m    LOG[39m [38;5;3m[RouterExplorer] [39m[32mMapped {/api/notifications/:id, DELETE} route[39m[38;5;3m +1ms[39m
+[32m[Nest] 17948  - [39m06/08/2026, 3:37:30 AM [32m    LOG[39m [38;5;3m[RoutesResolver] [39m[32mStaffController {/api/staff}:[39m[38;5;3m +0ms[39m
+[32m[Nest] 17948  - [39m06/08/2026, 3:37:30 AM [32m    LOG[39m [38;5;3m[RouterExplorer] [39m[32mMapped {/api/staff, GET} route[39m[38;5;3m +1ms[39m
+[32m[Nest] 17948  - [39m06/08/2026, 3:37:30 AM [32m    LOG[39m [38;5;3m[RouterExplorer] [39m[32mMapped {/api/staff/:id, GET} route[39m[38;5;3m +2ms[39m
+[32m[Nest] 17948  - [39m06/08/2026, 3:37:30 AM [32m    LOG[39m [38;5;3m[RouterExplorer] [39m[32mMapped {/api/staff, POST} route[39m[38;5;3m +1ms[39m
+[32m[Nest] 17948  - [39m06/08/2026, 3:37:30 AM [32m    LOG[39m [38;5;3m[RouterExplorer] [39m[32mMapped {/api/staff/:id, PATCH} route[39m[38;5;3m +3ms[39m
+[32m[Nest] 17948  - [39m06/08/2026, 3:37:30 AM [32m    LOG[39m [38;5;3m[RouterExplorer] [39m[32mMapped {/api/staff/:id, DELETE} route[39m[38;5;3m +1ms[39m
+[32m[Nest] 17948  - [39m06/08/2026, 3:37:30 AM [32m    LOG[39m [38;5;3m[RoutesResolver] [39m[32mSystemUsersController {/api/system-users}:[39m[38;5;3m +0ms[39m
+[32m[Nest] 17948  - [39m06/08/2026, 3:37:30 AM [32m    LOG[39m [38;5;3m[RouterExplorer] [39m[32mMapped {/api/system-users, GET} route[39m[38;5;3m +1ms[39m
+[32m[Nest] 17948  - [39m06/08/2026, 3:37:30 AM [32m    LOG[39m [38;5;3m[RouterExplorer] [39m[32mMapped {/api/system-users/:id, GET} route[39m[38;5;3m +1ms[39m
+[32m[Nest] 17948  - [39m06/08/2026, 3:37:30 AM [32m    LOG[39m [38;5;3m[RouterExplorer] [39m[32mMapped {/api/system-users, POST} route[39m[38;5;3m +1ms[39m
+[32m[Nest] 17948  - [39m06/08/2026, 3:37:30 AM [32m    LOG[39m [38;5;3m[RouterExplorer] [39m[32mMapped {/api/system-users/:id, PATCH} route[39m[38;5;3m +0ms[39m
+[32m[Nest] 17948  - [39m06/08/2026, 3:37:30 AM [32m    LOG[39m [38;5;3m[RouterExplorer] [39m[32mMapped {/api/system-users/:id, DELETE} route[39m[38;5;3m +2ms[39m
+[32m[Nest] 17948  - [39m06/08/2026, 3:37:30 AM [32m    LOG[39m [38;5;3m[RoutesResolver] [39m[32mExpenseCategoriesController {/api/expense-categories}:[39m[38;5;3m +0ms[39m
+[32m[Nest] 17948  - [39m06/08/2026, 3:37:30 AM [32m    LOG[39m [38;5;3m[RouterExplorer] [39m[32mMapped {/api/expense-categories, GET} route[39m[38;5;3m +1ms[39m
+[32m[Nest] 17948  - [39m06/08/2026, 3:37:30 AM [32m    LOG[39m [38;5;3m[RouterExplorer] [39m[32mMapped {/api/expense-categories/:id, GET} route[39m[38;5;3m +1ms[39m
+[32m[Nest] 17948  - [39m06/08/2026, 3:37:30 AM [32m    LOG[39m [38;5;3m[RouterExplorer] [39m[32mMapped {/api/expense-categories, POST} route[39m[38;5;3m +1ms[39m
+[32m[Nest] 17948  - [39m06/08/2026, 3:37:30 AM [32m    LOG[39m [38;5;3m[RouterExplorer] [39m[32mMapped {/api/expense-categories/:id, PATCH} route[39m[38;5;3m +1ms[39m
+[32m[Nest] 17948  - [39m06/08/2026, 3:37:30 AM [32m    LOG[39m [38;5;3m[RouterExplorer] [39m[32mMapped {/api/expense-categories/:id, DELETE} route[39m[38;5;3m +1ms[39m
+[32m[Nest] 17948  - [39m06/08/2026, 3:37:30 AM [32m    LOG[39m [38;5;3m[RoutesResolver] [39m[32mExpensesController {/api/expenses}:[39m[38;5;3m +0ms[39m
+[32m[Nest] 17948  - [39m06/08/2026, 3:37:30 AM [32m    LOG[39m [38;5;3m[RouterExplorer] [39m[32mMapped {/api/expenses, GET} route[39m[38;5;3m +2ms[39m
+[32m[Nest] 17948  - [39m06/08/2026, 3:37:30 AM [32m    LOG[39m [38;5;3m[RouterExplorer] [39m[32mMapped {/api/expenses/:id, GET} route[39m[38;5;3m +1ms[39m
+[32m[Nest] 17948  - [39m06/08/2026, 3:37:30 AM [32m    LOG[39m [38;5;3m[RouterExplorer] [39m[32mMapped {/api/expenses, POST} route[39m[38;5;3m +1ms[39m
+[32m[Nest] 17948  - [39m06/08/2026, 3:37:30 AM [32m    LOG[39m [38;5;3m[RouterExplorer] [39m[32mMapped {/api/expenses/:id, PATCH} route[39m[38;5;3m +1ms[39m
+[32m[Nest] 17948  - [39m06/08/2026, 3:37:30 AM [32m    LOG[39m [38;5;3m[RouterExplorer] [39m[32mMapped {/api/expenses/:id, DELETE} route[39m[38;5;3m +1ms[39m
+[32m[Nest] 17948  - [39m06/08/2026, 3:37:30 AM [32m    LOG[39m [38;5;3m[RoutesResolver] [39m[32mBatchesController {/api/batches}:[39m[38;5;3m +1ms[39m
+[32m[Nest] 17948  - [39m06/08/2026, 3:37:30 AM [32m    LOG[39m [38;5;3m[RouterExplorer] [39m[32mMapped {/api/batches, GET} route[39m[38;5;3m +1ms[39m
+[32m[Nest] 17948  - [39m06/08/2026, 3:37:30 AM [32m    LOG[39m [38;5;3m[RouterExplorer] [39m[32mMapped {/api/batches/:id, GET} route[39m[38;5;3m +1ms[39m
+[32m[Nest] 17948  - [39m06/08/2026, 3:37:30 AM [32m    LOG[39m [38;5;3m[RoutesResolver] [39m[32mPurchasesController {/api/purchases}:[39m[38;5;3m +0ms[39m
+[32m[Nest] 17948  - [39m06/08/2026, 3:37:30 AM [32m    LOG[39m [38;5;3m[RouterExplorer] [39m[32mMapped {/api/purchases, GET} route[39m[38;5;3m +2ms[39m
+[32m[Nest] 17948  - [39m06/08/2026, 3:37:30 AM [32m    LOG[39m [38;5;3m[RouterExplorer] [39m[32mMapped {/api/purchases/line-pricing-by-product, GET} route[39m[38;5;3m +2ms[39m
+[32m[Nest] 17948  - [39m06/08/2026, 3:37:30 AM [32m    LOG[39m [38;5;3m[RouterExplorer] [39m[32mMapped {/api/purchases/:id/release, POST} route[39m[38;5;3m +1ms[39m
+[32m[Nest] 17948  - [39m06/08/2026, 3:37:30 AM [32m    LOG[39m [38;5;3m[RouterExplorer] [39m[32mMapped {/api/purchases/:id/receive, POST} route[39m[38;5;3m +2ms[39m
+[32m[Nest] 17948  - [39m06/08/2026, 3:37:30 AM [32m    LOG[39m [38;5;3m[RouterExplorer] [39m[32mMapped {/api/purchases/:id/post-invoice, POST} route[39m[38;5;3m +1ms[39m
+[32m[Nest] 17948  - [39m06/08/2026, 3:37:30 AM [32m    LOG[39m [38;5;3m[RouterExplorer] [39m[32mMapped {/api/purchases/:id/close, POST} route[39m[38;5;3m +1ms[39m
+[32m[Nest] 17948  - [39m06/08/2026, 3:37:30 AM [32m    LOG[39m [38;5;3m[RouterExplorer] [39m[32mMapped {/api/purchases/:id/cancel, POST} route[39m[38;5;3m +1ms[39m
+[32m[Nest] 17948  - [39m06/08/2026, 3:37:30 AM [32m    LOG[39m [38;5;3m[RouterExplorer] [39m[32mMapped {/api/purchases/:id/refunds, POST} route[39m[38;5;3m +2ms[39m
+[32m[Nest] 17948  - [39m06/08/2026, 3:37:30 AM [32m    LOG[39m [38;5;3m[RouterExplorer] [39m[32mMapped {/api/purchases/:id, GET} route[39m[38;5;3m +2ms[39m
+[32m[Nest] 17948  - [39m06/08/2026, 3:37:30 AM [32m    LOG[39m [38;5;3m[RouterExplorer] [39m[32mMapped {/api/purchases, POST} route[39m[38;5;3m +1ms[39m
+[32m[Nest] 17948  - [39m06/08/2026, 3:37:30 AM [32m    LOG[39m [38;5;3m[RouterExplorer] [39m[32mMapped {/api/purchases/:id, PATCH} route[39m[38;5;3m +1ms[39m
+[32m[Nest] 17948  - [39m06/08/2026, 3:37:30 AM [32m    LOG[39m [38;5;3m[RouterExplorer] [39m[32mMapped {/api/purchases/:id, DELETE} route[39m[38;5;3m +1ms[39m
+[32m[Nest] 17948  - [39m06/08/2026, 3:37:30 AM [32m    LOG[39m [38;5;3m[RouterExplorer] [39m[32mMapped {/api/purchases/:id/items, DELETE} route[39m[38;5;3m +0ms[39m
+[32m[Nest] 17948  - [39m06/08/2026, 3:37:30 AM [32m    LOG[39m [38;5;3m[RoutesResolver] [39m[32mInventoryController {/api/inventory}:[39m[38;5;3m +1ms[39m
+[32m[Nest] 17948  - [39m06/08/2026, 3:37:30 AM [32m    LOG[39m [38;5;3m[RouterExplorer] [39m[32mMapped {/api/inventory/stream, GET} route[39m[38;5;3m +1ms[39m
+[32m[Nest] 17948  - [39m06/08/2026, 3:37:30 AM [32m    LOG[39m [38;5;3m[RouterExplorer] [39m[32mMapped {/api/inventory, GET} route[39m[38;5;3m +2ms[39m
+[32m[Nest] 17948  - [39m06/08/2026, 3:37:30 AM [32m    LOG[39m [38;5;3m[RouterExplorer] [39m[32mMapped {/api/inventory/history, GET} route[39m[38;5;3m +1ms[39m
+[32m[Nest] 17948  - [39m06/08/2026, 3:37:30 AM [32m    LOG[39m [38;5;3m[RouterExplorer] [39m[32mMapped {/api/inventory/product/:productId/stock, GET} route[39m[38;5;3m +1ms[39m
+[32m[Nest] 17948  - [39m06/08/2026, 3:37:30 AM [32m    LOG[39m [38;5;3m[RouterExplorer] [39m[32mMapped {/api/inventory/:id, GET} route[39m[38;5;3m +1ms[39m
+[32m[Nest] 17948  - [39m06/08/2026, 3:37:30 AM [32m    LOG[39m [38;5;3m[RoutesResolver] [39m[32mSaleReturnsController {/api/sale-returns}:[39m[38;5;3m +1ms[39m
+[32m[Nest] 17948  - [39m06/08/2026, 3:37:30 AM [32m    LOG[39m [38;5;3m[RouterExplorer] [39m[32mMapped {/api/sale-returns, GET} route[39m[38;5;3m +1ms[39m
+[32m[Nest] 17948  - [39m06/08/2026, 3:37:30 AM [32m    LOG[39m [38;5;3m[RouterExplorer] [39m[32mMapped {/api/sale-returns/:id, GET} route[39m[38;5;3m +1ms[39m
+[32m[Nest] 17948  - [39m06/08/2026, 3:37:30 AM [32m    LOG[39m [38;5;3m[RouterExplorer] [39m[32mMapped {/api/sale-returns, POST} route[39m[38;5;3m +0ms[39m
+[32m[Nest] 17948  - [39m06/08/2026, 3:37:30 AM [32m    LOG[39m [38;5;3m[RouterExplorer] [39m[32mMapped {/api/sale-returns/:id, PATCH} route[39m[38;5;3m +1ms[39m
+[32m[Nest] 17948  - [39m06/08/2026, 3:37:30 AM [32m    LOG[39m [38;5;3m[RouterExplorer] [39m[32mMapped {/api/sale-returns/:id, DELETE} route[39m[38;5;3m +2ms[39m
+[32m[Nest] 17948  - [39m06/08/2026, 3:37:30 AM [32m    LOG[39m [38;5;3m[RoutesResolver] [39m[32mReturnVouchersController {/api/return-vouchers}:[39m[38;5;3m +0ms[39m
+[32m[Nest] 17948  - [39m06/08/2026, 3:37:30 AM [32m    LOG[39m [38;5;3m[RouterExplorer] [39m[32mMapped {/api/return-vouchers/by-token/:token, GET} route[39m[38;5;3m +2ms[39m
+[32m[Nest] 17948  - [39m06/08/2026, 3:37:30 AM [32m    LOG[39m [38;5;3m[RouterExplorer] [39m[32mMapped {/api/return-vouchers, POST} route[39m[38;5;3m +2ms[39m
+[32m[Nest] 17948  - [39m06/08/2026, 3:37:30 AM [32m    LOG[39m [38;5;3m[RouterExplorer] [39m[32mMapped {/api/return-vouchers/:id/finalize, POST} route[39m[38;5;3m +1ms[39m
+[32m[Nest] 17948  - [39m06/08/2026, 3:37:30 AM [32m    LOG[39m [38;5;3m[RoutesResolver] [39m[32mReturnVouchersController {/api/vouchers}:[39m[38;5;3m +0ms[39m
+[32m[Nest] 17948  - [39m06/08/2026, 3:37:30 AM [32m    LOG[39m [38;5;3m[RouterExplorer] [39m[32mMapped {/api/vouchers/by-token/:token, GET} route[39m[38;5;3m +1ms[39m
+[32m[Nest] 17948  - [39m06/08/2026, 3:37:30 AM [32m    LOG[39m [38;5;3m[RouterExplorer] [39m[32mMapped {/api/vouchers, POST} route[39m[38;5;3m +1ms[39m
+[32m[Nest] 17948  - [39m06/08/2026, 3:37:30 AM [32m    LOG[39m [38;5;3m[RouterExplorer] [39m[32mMapped {/api/vouchers/:id/finalize, POST} route[39m[38;5;3m +1ms[39m
+[32m[Nest] 17948  - [39m06/08/2026, 3:37:30 AM [32m    LOG[39m [38;5;3m[RoutesResolver] [39m[32mSalesController {/api/sales}:[39m[38;5;3m +1ms[39m
+[32m[Nest] 17948  - [39m06/08/2026, 3:37:30 AM [32m    LOG[39m [38;5;3m[RouterExplorer] [39m[32mMapped {/api/sales, GET} route[39m[38;5;3m +1ms[39m
+[32m[Nest] 17948  - [39m06/08/2026, 3:37:30 AM [32m    LOG[39m [38;5;3m[RouterExplorer] [39m[32mMapped {/api/sales/by-receipt, GET} route[39m[38;5;3m +2ms[39m
+[32m[Nest] 17948  - [39m06/08/2026, 3:37:30 AM [32m    LOG[39m [38;5;3m[RouterExplorer] [39m[32mMapped {/api/sales/:id, GET} route[39m[38;5;3m +1ms[39m
+[32m[Nest] 17948  - [39m06/08/2026, 3:37:30 AM [32m    LOG[39m [38;5;3m[RouterExplorer] [39m[32mMapped {/api/sales, POST} route[39m[38;5;3m +3ms[39m
+[32m[Nest] 17948  - [39m06/08/2026, 3:37:30 AM [32m    LOG[39m [38;5;3m[RouterExplorer] [39m[32mMapped {/api/sales/:id, PATCH} route[39m[38;5;3m +1ms[39m
+[32m[Nest] 17948  - [39m06/08/2026, 3:37:30 AM [32m    LOG[39m [38;5;3m[RouterExplorer] [39m[32mMapped {/api/sales/:id, DELETE} route[39m[38;5;3m +1ms[39m
+[32m[Nest] 17948  - [39m06/08/2026, 3:37:30 AM [32m    LOG[39m [38;5;3m[RoutesResolver] [39m[32mTransactionsController {/api/transactions}:[39m[38;5;3m +1ms[39m
+[32m[Nest] 17948  - [39m06/08/2026, 3:37:30 AM [32m    LOG[39m [38;5;3m[RouterExplorer] [39m[32mMapped {/api/transactions, POST} route[39m[38;5;3m +1ms[39m
+[32m[Nest] 17948  - [39m06/08/2026, 3:37:30 AM [32m    LOG[39m [38;5;3m[RouterExplorer] [39m[32mMapped {/api/transactions/:id, GET} route[39m[38;5;3m +1ms[39m
+[32m[Nest] 17948  - [39m06/08/2026, 3:37:30 AM [32m    LOG[39m [38;5;3m[RoutesResolver] [39m[32mReturnsController {/api/returns}:[39m[38;5;3m +1ms[39m
+[32m[Nest] 17948  - [39m06/08/2026, 3:37:30 AM [32m    LOG[39m [38;5;3m[RouterExplorer] [39m[32mMapped {/api/returns, POST} route[39m[38;5;3m +1ms[39m
+[32m[Nest] 17948  - [39m06/08/2026, 3:37:30 AM [32m    LOG[39m [38;5;3m[RoutesResolver] [39m[32mRolesController {/api/roles}:[39m[38;5;3m +1ms[39m
+[32m[Nest] 17948  - [39m06/08/2026, 3:37:30 AM [32m    LOG[39m [38;5;3m[RouterExplorer] [39m[32mMapped {/api/roles, GET} route[39m[38;5;3m +1ms[39m
+[32m[Nest] 17948  - [39m06/08/2026, 3:37:30 AM [32m    LOG[39m [38;5;3m[RouterExplorer] [39m[32mMapped {/api/roles, POST} route[39m[38;5;3m +1ms[39m
+[32m[Nest] 17948  - [39m06/08/2026, 3:37:30 AM [32m    LOG[39m [38;5;3m[RouterExplorer] [39m[32mMapped {/api/roles/:id, PATCH} route[39m[38;5;3m +1ms[39m
+[32m[Nest] 17948  - [39m06/08/2026, 3:37:30 AM [32m    LOG[39m [38;5;3m[RouterExplorer] [39m[32mMapped {/api/roles/:id, DELETE} route[39m[38;5;3m +1ms[39m
+[32m[Nest] 17948  - [39m06/08/2026, 3:37:30 AM [32m    LOG[39m [38;5;3m[RoutesResolver] [39m[32mPatientLoansController {/api/patient-loans}:[39m[38;5;3m +1ms[39m
+[32m[Nest] 17948  - [39m06/08/2026, 3:37:30 AM [32m    LOG[39m [38;5;3m[RouterExplorer] [39m[32mMapped {/api/patient-loans, GET} route[39m[38;5;3m +1ms[39m
+[32m[Nest] 17948  - [39m06/08/2026, 3:37:30 AM [32m    LOG[39m [38;5;3m[RouterExplorer] [39m[32mMapped {/api/patient-loans/outstanding, GET} route[39m[38;5;3m +1ms[39m
+[32m[Nest] 17948  - [39m06/08/2026, 3:37:30 AM [32m    LOG[39m [38;5;3m[RouterExplorer] [39m[32mMapped {/api/patient-loans/:id, GET} route[39m[38;5;3m +2ms[39m
+[32m[Nest] 17948  - [39m06/08/2026, 3:37:30 AM [32m    LOG[39m [38;5;3m[RouterExplorer] [39m[32mMapped {/api/patient-loans/:id/payments, GET} route[39m[38;5;3m +2ms[39m
+[32m[Nest] 17948  - [39m06/08/2026, 3:37:30 AM [32m    LOG[39m [38;5;3m[RouterExplorer] [39m[32mMapped {/api/patient-loans, POST} route[39m[38;5;3m +1ms[39m
+[32m[Nest] 17948  - [39m06/08/2026, 3:37:30 AM [32m    LOG[39m [38;5;3m[RouterExplorer] [39m[32mMapped {/api/patient-loans/:id, PATCH} route[39m[38;5;3m +1ms[39m
+[32m[Nest] 17948  - [39m06/08/2026, 3:37:30 AM [32m    LOG[39m [38;5;3m[RouterExplorer] [39m[32mMapped {/api/patient-loans/:id/payments, POST} route[39m[38;5;3m +2ms[39m
+[32m[Nest] 17948  - [39m06/08/2026, 3:37:30 AM [32m    LOG[39m [38;5;3m[RouterExplorer] [39m[32mMapped {/api/patient-loans/:id, DELETE} route[39m[38;5;3m +1ms[39m
+[32m[Nest] 17948  - [39m06/08/2026, 3:37:30 AM [32m    LOG[39m [38;5;3m[RoutesResolver] [39m[32mTransfersController {/api/transfers}:[39m[38;5;3m +0ms[39m
+[32m[Nest] 17948  - [39m06/08/2026, 3:37:30 AM [32m    LOG[39m [38;5;3m[RouterExplorer] [39m[32mMapped {/api/transfers, GET} route[39m[38;5;3m +2ms[39m
+[32m[Nest] 17948  - [39m06/08/2026, 3:37:30 AM [32m    LOG[39m [38;5;3m[RouterExplorer] [39m[32mMapped {/api/transfers/monitoring/overview, GET} route[39m[38;5;3m +1ms[39m
+[32m[Nest] 17948  - [39m06/08/2026, 3:37:30 AM [32m    LOG[39m [38;5;3m[RouterExplorer] [39m[32mMapped {/api/transfers/summary/status-counts, GET} route[39m[38;5;3m +2ms[39m
+[32m[Nest] 17948  - [39m06/08/2026, 3:37:30 AM [32m    LOG[39m [38;5;3m[RouterExplorer] [39m[32mMapped {/api/transfers/:id/events, GET} route[39m[38;5;3m +2ms[39m
+[32m[Nest] 17948  - [39m06/08/2026, 3:37:30 AM [32m    LOG[39m [38;5;3m[RouterExplorer] [39m[32mMapped {/api/transfers/:id, GET} route[39m[38;5;3m +1ms[39m
+[32m[Nest] 17948  - [39m06/08/2026, 3:37:30 AM [32m    LOG[39m [38;5;3m[RouterExplorer] [39m[32mMapped {/api/transfers, POST} route[39m[38;5;3m +1ms[39m
+[32m[Nest] 17948  - [39m06/08/2026, 3:37:30 AM [32m    LOG[39m [38;5;3m[RouterExplorer] [39m[32mMapped {/api/transfers/:id, PATCH} route[39m[38;5;3m +1ms[39m
+[32m[Nest] 17948  - [39m06/08/2026, 3:37:30 AM [32m    LOG[39m [38;5;3m[RouterExplorer] [39m[32mMapped {/api/transfers/:id/confirm, POST} route[39m[38;5;3m +1ms[39m
+[32m[Nest] 17948  - [39m06/08/2026, 3:37:30 AM [32m    LOG[39m [38;5;3m[RouterExplorer] [39m[32mMapped {/api/transfers/:id/request-approval, POST} route[39m[38;5;3m +2ms[39m
+[32m[Nest] 17948  - [39m06/08/2026, 3:37:30 AM [32m    LOG[39m [38;5;3m[RouterExplorer] [39m[32mMapped {/api/transfers/:id/approve, POST} route[39m[38;5;3m +1ms[39m
+[32m[Nest] 17948  - [39m06/08/2026, 3:37:30 AM [32m    LOG[39m [38;5;3m[RouterExplorer] [39m[32mMapped {/api/transfers/:id/reject, POST} route[39m[38;5;3m +2ms[39m
+[32m[Nest] 17948  - [39m06/08/2026, 3:37:30 AM [32m    LOG[39m [38;5;3m[RouterExplorer] [39m[32mMapped {/api/transfers/:id/ship, POST} route[39m[38;5;3m +1ms[39m
+[32m[Nest] 17948  - [39m06/08/2026, 3:37:30 AM [32m    LOG[39m [38;5;3m[RouterExplorer] [39m[32mMapped {/api/transfers/:id/receive, POST} route[39m[38;5;3m +1ms[39m
+[32m[Nest] 17948  - [39m06/08/2026, 3:37:30 AM [32m    LOG[39m [38;5;3m[RouterExplorer] [39m[32mMapped {/api/transfers/:id/close, POST} route[39m[38;5;3m +1ms[39m
+[32m[Nest] 17948  - [39m06/08/2026, 3:37:30 AM [32m    LOG[39m [38;5;3m[RouterExplorer] [39m[32mMapped {/api/transfers/:id/reverse, POST} route[39m[38;5;3m +2ms[39m
+[32m[Nest] 17948  - [39m06/08/2026, 3:37:30 AM [32m    LOG[39m [38;5;3m[RoutesResolver] [39m[32mTransferRepairController {/api/transfers}:[39m[38;5;3m +0ms[39m
+[32m[Nest] 17948  - [39m06/08/2026, 3:37:30 AM [32m    LOG[39m [38;5;3m[RouterExplorer] [39m[32mMapped {/api/transfers/:id/repair/journal-links, POST} route[39m[38;5;3m +2ms[39m
+[32m[Nest] 17948  - [39m06/08/2026, 3:37:30 AM [32m    LOG[39m [38;5;3m[RouterExplorer] [39m[32mMapped {/api/transfers/:id/repair/approval-from-replay, POST} route[39m[38;5;3m +1ms[39m
+[32m[Nest] 17948  - [39m06/08/2026, 3:37:30 AM [32m    LOG[39m [38;5;3m[RouterExplorer] [39m[32mMapped {/api/transfers/:id/repair/recreate-missing-journals, POST} route[39m[38;5;3m +1ms[39m
+[32m[Nest] 17948  - [39m06/08/2026, 3:37:30 AM [32m    LOG[39m [38;5;3m[RouterExplorer] [39m[32mMapped {/api/transfers/repairs/auto-fix, POST} route[39m[38;5;3m +1ms[39m
+[32m[Nest] 17948  - [39m06/08/2026, 3:37:30 AM [32m    LOG[39m [38;5;3m[RoutesResolver] [39m[32mReconciliationController {/api/reconciliation}:[39m[38;5;3m +0ms[39m
+[32m[Nest] 17948  - [39m06/08/2026, 3:37:30 AM [32m    LOG[39m [38;5;3m[RouterExplorer] [39m[32mMapped {/api/reconciliation/run, POST} route[39m[38;5;3m +1ms[39m
+[32m[Nest] 17948  - [39m06/08/2026, 3:37:30 AM [32m    LOG[39m [38;5;3m[RouterExplorer] [39m[32mMapped {/api/reconciliation/logs, GET} route[39m[38;5;3m +2ms[39m
+[32m[Nest] 17948  - [39m06/08/2026, 3:37:30 AM [32m    LOG[39m [38;5;3m[RouterExplorer] [39m[32mMapped {/api/reconciliation/runs/latest, GET} route[39m[38;5;3m +1ms[39m
+[32m[Nest] 17948  - [39m06/08/2026, 3:37:30 AM [32m    LOG[39m [38;5;3m[RouterExplorer] [39m[32mMapped {/api/reconciliation/health-snapshots, GET} route[39m[38;5;3m +2ms[39m
+[32m[Nest] 17948  - [39m06/08/2026, 3:37:30 AM [32m    LOG[39m [38;5;3m[RoutesResolver] [39m[32mPosSessionsController {/api/pos}:[39m[38;5;3m +0ms[39m
+[32m[Nest] 17948  - [39m06/08/2026, 3:37:30 AM [32m    LOG[39m [38;5;3m[RouterExplorer] [39m[32mMapped {/api/pos/register-catalog, GET} route[39m[38;5;3m +1ms[39m
+[32m[Nest] 17948  - [39m06/08/2026, 3:37:30 AM [32m    LOG[39m [38;5;3m[RouterExplorer] [39m[32mMapped {/api/pos/sessions/open, POST} route[39m[38;5;3m +1ms[39m
+[32m[Nest] 17948  - [39m06/08/2026, 3:37:30 AM [32m    LOG[39m [38;5;3m[RouterExplorer] [39m[32mMapped {/api/pos/sessions/current, GET} route[39m[38;5;3m +2ms[39m
+[32m[Nest] 17948  - [39m06/08/2026, 3:37:30 AM [32m    LOG[39m [38;5;3m[RouterExplorer] [39m[32mMapped {/api/pos/sessions/:sessionId/open-statement, POST} route[39m[38;5;3m +1ms[39m
+[32m[Nest] 17948  - [39m06/08/2026, 3:37:30 AM [32m    LOG[39m [38;5;3m[RouterExplorer] [39m[32mMapped {/api/pos/sessions/:sessionId/x-report, GET} route[39m[38;5;3m +1ms[39m
+[32m[Nest] 17948  - [39m06/08/2026, 3:37:30 AM [32m    LOG[39m [38;5;3m[RouterExplorer] [39m[32mMapped {/api/pos/sessions/:sessionId/z-report, GET} route[39m[38;5;3m +2ms[39m
+[32m[Nest] 17948  - [39m06/08/2026, 3:37:30 AM [32m    LOG[39m [38;5;3m[RouterExplorer] [39m[32mMapped {/api/pos/sessions/:sessionId/close, POST} route[39m[38;5;3m +1ms[39m
+[32m[Nest] 17948  - [39m06/08/2026, 3:37:30 AM [32m    LOG[39m [38;5;3m[RouterExplorer] [39m[32mMapped {/api/pos/statements/:statementId/lines/:lineId, PATCH} route[39m[38;5;3m +1ms[39m
+[32m[Nest] 17948  - [39m06/08/2026, 3:37:30 AM [32m    LOG[39m [38;5;3m[RouterExplorer] [39m[32mMapped {/api/pos/statements/:statementId, GET} route[39m[38;5;3m +2ms[39m
+[32m[Nest] 17948  - [39m06/08/2026, 3:37:30 AM [32m    LOG[39m [38;5;3m[RouterExplorer] [39m[32mMapped {/api/pos/statements/:statementId/post, POST} route[39m[38;5;3m +2ms[39m
+[32m[Nest] 17948  - [39m06/08/2026, 3:37:30 AM [32m    LOG[39m [38;5;3m[RoutesResolver] [39m[32mImportController {/api/imports}:[39m[38;5;3m +0ms[39m
+[32m[Nest] 17948  - [39m06/08/2026, 3:37:30 AM [32m    LOG[39m [38;5;3m[RouterExplorer] [39m[32mMapped {/api/imports/product-import/template, GET} route[39m[38;5;3m +3ms[39m
+[32m[Nest] 17948  - [39m06/08/2026, 3:37:30 AM [32m    LOG[39m [38;5;3m[RouterExplorer] [39m[32mMapped {/api/imports/opening-stock-import/template, GET} route[39m[38;5;3m +3ms[39m
+[32m[Nest] 17948  - [39m06/08/2026, 3:37:30 AM [32m    LOG[39m [38;5;3m[RouterExplorer] [39m[32mMapped {/api/imports/product-import/jobs, POST} route[39m[38;5;3m +2ms[39m
+[32m[Nest] 17948  - [39m06/08/2026, 3:37:30 AM [32m    LOG[39m [38;5;3m[RouterExplorer] [39m[32mMapped {/api/imports/opening-stock-import/jobs, POST} route[39m[38;5;3m +1ms[39m
+[32m[Nest] 17948  - [39m06/08/2026, 3:37:30 AM [32m    LOG[39m [38;5;3m[RouterExplorer] [39m[32mMapped {/api/imports/history, GET} route[39m[38;5;3m +2ms[39m
+[32m[Nest] 17948  - [39m06/08/2026, 3:37:30 AM [32m    LOG[39m [38;5;3m[RouterExplorer] [39m[32mMapped {/api/imports, GET} route[39m[38;5;3m +1ms[39m
+[32m[Nest] 17948  - [39m06/08/2026, 3:37:30 AM [32m    LOG[39m [38;5;3m[RouterExplorer] [39m[32mMapped {/api/imports/diagnostics/schema-health, GET} route[39m[38;5;3m +2ms[39m
+[32m[Nest] 17948  - [39m06/08/2026, 3:37:30 AM [32m    LOG[39m [38;5;3m[RouterExplorer] [39m[32mMapped {/api/imports/center/dashboard, GET} route[39m[38;5;3m +1ms[39m
+[32m[Nest] 17948  - [39m06/08/2026, 3:37:30 AM [32m    LOG[39m [38;5;3m[RouterExplorer] [39m[32mMapped {/api/imports/center/jobs, GET} route[39m[38;5;3m +2ms[39m
+[32m[Nest] 17948  - [39m06/08/2026, 3:37:30 AM [32m    LOG[39m [38;5;3m[RouterExplorer] [39m[32mMapped {/api/imports/center/running, GET} route[39m[38;5;3m +1ms[39m
+[32m[Nest] 17948  - [39m06/08/2026, 3:37:30 AM [32m    LOG[39m [38;5;3m[RouterExplorer] [39m[32mMapped {/api/imports/center/failed, GET} route[39m[38;5;3m +1ms[39m
+[32m[Nest] 17948  - [39m06/08/2026, 3:37:30 AM [32m    LOG[39m [38;5;3m[RouterExplorer] [39m[32mMapped {/api/imports/:jobId, GET} route[39m[38;5;3m +1ms[39m
+[32m[Nest] 17948  - [39m06/08/2026, 3:37:30 AM [32m    LOG[39m [38;5;3m[RouterExplorer] [39m[32mMapped {/api/imports/:jobId/validate, POST} route[39m[38;5;3m +0ms[39m
+[32m[Nest] 17948  - [39m06/08/2026, 3:37:30 AM [32m    LOG[39m [38;5;3m[RouterExplorer] [39m[32mMapped {/api/imports/:jobId/preview, GET} route[39m[38;5;3m +1ms[39m
+[32m[Nest] 17948  - [39m06/08/2026, 3:37:30 AM [32m    LOG[39m [38;5;3m[RouterExplorer] [39m[32mMapped {/api/imports/:jobId/preview-rows, PATCH} route[39m[38;5;3m +1ms[39m
+[32m[Nest] 17948  - [39m06/08/2026, 3:37:30 AM [32m    LOG[39m [38;5;3m[RouterExplorer] [39m[32mMapped {/api/imports/:jobId/confirm, POST} route[39m[38;5;3m +1ms[39m
+[32m[Nest] 17948  - [39m06/08/2026, 3:37:30 AM [32m    LOG[39m [38;5;3m[RouterExplorer] [39m[32mMapped {/api/imports/:jobId/confirm-and-commit, POST} route[39m[38;5;3m +1ms[39m
+[32m[Nest] 17948  - [39m06/08/2026, 3:37:30 AM [32m    LOG[39m [38;5;3m[RouterExplorer] [39m[32mMapped {/api/imports/:jobId/commit, POST} route[39m[38;5;3m +1ms[39m
+[32m[Nest] 17948  - [39m06/08/2026, 3:37:30 AM [32m    LOG[39m [38;5;3m[RouterExplorer] [39m[32mMapped {/api/imports/:jobId/retry, POST} route[39m[38;5;3m +1ms[39m
+[32m[Nest] 17948  - [39m06/08/2026, 3:37:30 AM [32m    LOG[39m [38;5;3m[RouterExplorer] [39m[32mMapped {/api/imports/:jobId/detail, GET} route[39m[38;5;3m +1ms[39m
+[32m[Nest] 17948  - [39m06/08/2026, 3:37:30 AM [32m    LOG[39m [38;5;3m[RouterExplorer] [39m[32mMapped {/api/imports/:jobId/reverse, POST} route[39m[38;5;3m +1ms[39m
+[32m[Nest] 17948  - [39m06/08/2026, 3:37:30 AM [32m    LOG[39m [38;5;3m[RouterExplorer] [39m[32mMapped {/api/imports/:jobId/cleanup-preview, GET} route[39m[38;5;3m +1ms[39m
+[32m[Nest] 17948  - [39m06/08/2026, 3:37:30 AM [32m    LOG[39m [38;5;3m[RouterExplorer] [39m[32mMapped {/api/imports/:jobId/cleanup-products, POST} route[39m[38;5;3m +0ms[39m
+[32m[Nest] 17948  - [39m06/08/2026, 3:37:30 AM [32m    LOG[39m [38;5;3m[RouterExplorer] [39m[32mMapped {/api/imports/:jobId/errors/export, GET} route[39m[38;5;3m +2ms[39m
+[32m[Nest] 17948  - [39m06/08/2026, 3:37:30 AM [32m    LOG[39m [38;5;3m[RoutesResolver] [39m[32mPricingController {/api/pricing}:[39m[38;5;3m +0ms[39m
+[32m[Nest] 17948  - [39m06/08/2026, 3:37:30 AM [32m    LOG[39m [38;5;3m[RouterExplorer] [39m[32mMapped {/api/pricing/products, GET} route[39m[38;5;3m +2ms[39m
+[32m[Nest] 17948  - [39m06/08/2026, 3:37:30 AM [32m    LOG[39m [38;5;3m[RouterExplorer] [39m[32mMapped {/api/pricing/products/:productId, PATCH} route[39m[38;5;3m +1ms[39m
+[32m[Nest] 17948  - [39m06/08/2026, 3:37:30 AM [32m    LOG[39m [38;5;3m[RouterExplorer] [39m[32mMapped {/api/pricing/bulk-update, POST} route[39m[38;5;3m +1ms[39m
+[32m[Nest] 17948  - [39m06/08/2026, 3:37:30 AM [32m    LOG[39m [38;5;3m[RouterExplorer] [39m[32mMapped {/api/pricing/history, GET} route[39m[38;5;3m +2ms[39m
+[32m[Nest] 17948  - [39m06/08/2026, 3:37:30 AM [32m    LOG[39m [38;5;3m[RoutesResolver] [39m[32mPriceGroupsController {/api/price-groups}:[39m[38;5;3m +0ms[39m
+[32m[Nest] 17948  - [39m06/08/2026, 3:37:30 AM [32m    LOG[39m [38;5;3m[RouterExplorer] [39m[32mMapped {/api/price-groups, GET} route[39m[38;5;3m +3ms[39m
+[32m[Nest] 17948  - [39m06/08/2026, 3:37:30 AM [32m    LOG[39m [38;5;3m[RouterExplorer] [39m[32mMapped {/api/price-groups, POST} route[39m[38;5;3m +1ms[39m
+[32m[Nest] 17948  - [39m06/08/2026, 3:37:30 AM [32m    LOG[39m [38;5;3m[RouterExplorer] [39m[32mMapped {/api/price-groups/:id, PATCH} route[39m[38;5;3m +1ms[39m
+[32m[Nest] 17948  - [39m06/08/2026, 3:37:30 AM [32m    LOG[39m [38;5;3m[RoutesResolver] [39m[32mOffersController {/api/offers}:[39m[38;5;3m +0ms[39m
+[32m[Nest] 17948  - [39m06/08/2026, 3:37:30 AM [32m    LOG[39m [38;5;3m[RouterExplorer] [39m[32mMapped {/api/offers, GET} route[39m[38;5;3m +1ms[39m
+[32m[Nest] 17948  - [39m06/08/2026, 3:37:30 AM [32m    LOG[39m [38;5;3m[RouterExplorer] [39m[32mMapped {/api/offers/resolve, POST} route[39m[38;5;3m +2ms[39m
+[32m[Nest] 17948  - [39m06/08/2026, 3:37:30 AM [32m    LOG[39m [38;5;3m[RouterExplorer] [39m[32mMapped {/api/offers, POST} route[39m[38;5;3m +2ms[39m
+[32m[Nest] 17948  - [39m06/08/2026, 3:37:30 AM [32m    LOG[39m [38;5;3m[RouterExplorer] [39m[32mMapped {/api/offers/:id, GET} route[39m[38;5;3m +1ms[39m
+[32m[Nest] 17948  - [39m06/08/2026, 3:37:30 AM [32m    LOG[39m [38;5;3m[RouterExplorer] [39m[32mMapped {/api/offers/:id, PATCH} route[39m[38;5;3m +1ms[39m
+[32m[Nest] 17948  - [39m06/08/2026, 3:37:30 AM [32m    LOG[39m [38;5;3m[RouterExplorer] [39m[32mMapped {/api/offers/:id/enable, POST} route[39m[38;5;3m +2ms[39m
+[32m[Nest] 17948  - [39m06/08/2026, 3:37:30 AM [32m    LOG[39m [38;5;3m[RouterExplorer] [39m[32mMapped {/api/offers/:id/disable, POST} route[39m[38;5;3m +1ms[39m
+[32m[Nest] 17948  - [39m06/08/2026, 3:37:30 AM [32m    LOG[39m [38;5;3m[PrismaService] [39m[32mDatabase connected[39m
+[32m[Nest] 17948  - [39m06/08/2026, 3:37:30 AM [32m    LOG[39m [38;5;3m[ReconciliationService] [39m[32mPublic reconciliation tables are present[39m
+[32m[Nest] 17948  - [39m06/08/2026, 3:37:30 AM [32m    LOG[39m [38;5;3m[TenantSchemaBootstrapService] [39m[32mApplying schema patches to 2 active tenant(s)...[39m
+[32m[Nest] 17948  - [39m06/08/2026, 3:37:32 AM [32m    LOG[39m [38;5;3m[TenantSchemaBootstrapService] [39m[32mTenant schema sync finished: 2 succeeded, 0 failed[39m
+[32m[Nest] 17948  - [39m06/08/2026, 3:37:32 AM [32m    LOG[39m [38;5;3m[NestApplication] [39m[32mNest application successfully started[39m[38;5;3m +2ms[39m
+🚀 Server running on port 5555
+[32m[Nest] 17948  - [39m06/08/2026, 3:40:52 AM [32m    LOG[39m [38;5;3m[BranchScope] [39m[32mBRANCH_SCOPE_RESOLVED {"actorUserId":"d317a2e3-686a-4e66-b70b-a58ef9f9ba56","correlationId":null,"branchIds":["33511c3c-545e-4dd0-b9cd-1bc1b4eeb896"],"aggregateAll":false,"scopeHash":"cab1d8c1ad275f1f"}[39m
+[32m[Nest] 17948  - [39m06/08/2026, 3:40:52 AM [32m    LOG[39m [38;5;3m[Http] [39m[32m{
+  "kind": "http_request",
+  "requestId": "cf3b7636-8860-49a6-8ef0-d75782905dd9",
+  "method": "GET",
+  "path": "/api/reports/alerts",
+  "statusCode": 200,
+  "durationMs": 115,
+  "tenantId": null,
+  "branchId": "33511c3c-545e-4dd0-b9cd-1bc1b4eeb896",
+  "userId": "d317a2e3-686a-4e66-b70b-a58ef9f9ba56",
+  "ts": "2026-06-08T00:40:52.476Z"
+}[39m
+[32m[Nest] 17948  - [39m06/08/2026, 3:40:52 AM [32m    LOG[39m [38;5;3m[ProductsService] [39m[32m[barcode-validation] search {"schemaName":"wakiil","barcode":"12123","table":"products","column":"barcode","excludeProductId":null}[39m
+[32m[Nest] 17948  - [39m06/08/2026, 3:40:52 AM [32m    LOG[39m [38;5;3m[ProductsService] [39m[32m[barcode-validation] no-match {"schemaName":"wakiil","barcode":"12123","searchedTables":["products"],"matchingRecordId":null,"matchingProductName":null}[39m
+[32m[Nest] 17948  - [39m06/08/2026, 3:40:52 AM [32m    LOG[39m [38;5;3m[Http] [39m[32m{
+  "kind": "http_request",
+  "requestId": "e04b049f-f5d0-423d-8f2a-38b731a07a0a",
+  "method": "POST",
+  "path": "/api/products",
+  "statusCode": 201,
+  "durationMs": 100,
+  "tenantId": null,
+  "branchId": "33511c3c-545e-4dd0-b9cd-1bc1b4eeb896",
+  "userId": "d317a2e3-686a-4e66-b70b-a58ef9f9ba56",
+  "ts": "2026-06-08T00:40:52.855Z"
+}[39m
+[32m[Nest] 17948  - [39m06/08/2026, 3:40:52 AM [32m    LOG[39m [38;5;3m[Http] [39m[32m{
+  "kind": "http_request",
+  "requestId": "eb500a54-a618-4d53-8e4c-9736f20581f8",
+  "method": "GET",
+  "path": "/api/products/catalog",
+  "statusCode": 200,
+  "durationMs": 25,
+  "tenantId": null,
+  "branchId": "33511c3c-545e-4dd0-b9cd-1bc1b4eeb896",
+  "userId": "d317a2e3-686a-4e66-b70b-a58ef9f9ba56",
+  "ts": "2026-06-08T00:40:52.924Z"
+}[39m
+[32m[Nest] 17948  - [39m06/08/2026, 3:40:57 AM [32m    LOG[39m [38;5;3m[Http] [39m[32m{
+  "kind": "http_request",
+  "requestId": "27a74f63-ec54-4643-a526-4f234d97123e",
+  "method": "GET",
+  "path": "/api/products/148ee0bb-4996-45b1-84f5-e689c6ba8796/suppliers",
+  "statusCode": 200,
+  "durationMs": 13,
+  "tenantId": null,
+  "branchId": "33511c3c-545e-4dd0-b9cd-1bc1b4eeb896",
+  "userId": "d317a2e3-686a-4e66-b70b-a58ef9f9ba56",
+  "ts": "2026-06-08T00:40:57.356Z"
+}[39m
+[32m[Nest] 17948  - [39m06/08/2026, 3:40:57 AM [32m    LOG[39m [38;5;3m[Http] [39m[32m{
+  "kind": "http_request",
+  "requestId": "be149c5f-821a-4c20-8119-0e273b45a746",
+  "method": "GET",
+  "path": "/api/suppliers",
+  "statusCode": 200,
+  "durationMs": 7,
+  "tenantId": null,
+  "branchId": "33511c3c-545e-4dd0-b9cd-1bc1b4eeb896",
+  "userId": "d317a2e3-686a-4e66-b70b-a58ef9f9ba56",
+  "ts": "2026-06-08T00:40:57.381Z"
+}[39m
+[32m[Nest] 17948  - [39m06/08/2026, 3:40:57 AM [32m    LOG[39m [38;5;3m[Http] [39m[32m{
+  "kind": "http_request",
+  "requestId": "b4259fd5-32ea-4b70-851c-778fa3356d02",
+  "method": "GET",
+  "path": "/api/products/148ee0bb-4996-45b1-84f5-e689c6ba8796/uoms",
+  "statusCode": 200,
+  "durationMs": 45,
+  "tenantId": null,
+  "branchId": "33511c3c-545e-4dd0-b9cd-1bc1b4eeb896",
+  "userId": "d317a2e3-686a-4e66-b70b-a58ef9f9ba56",
+  "ts": "2026-06-08T00:40:57.397Z"
+}[39m
+[32m[Nest] 17948  - [39m06/08/2026, 3:40:57 AM [32m    LOG[39m [38;5;3m[Http] [39m[32m{
+  "kind": "http_request",
+  "requestId": "dd4cf065-d30f-4306-bf22-cfeaab634417",
+  "method": "GET",
+  "path": "/api/uoms",
+  "statusCode": 200,
+  "durationMs": 4,
+  "tenantId": null,
+  "branchId": "33511c3c-545e-4dd0-b9cd-1bc1b4eeb896",
+  "userId": "d317a2e3-686a-4e66-b70b-a58ef9f9ba56",
+  "ts": "2026-06-08T00:40:57.404Z"
+}[39m
+[32m[Nest] 17948  - [39m06/08/2026, 3:41:34 AM [32m    LOG[39m [38;5;3m[Http] [39m[32m{
+  "kind": "http_request",
+  "requestId": "81675c1e-3ed9-43d1-a0d8-fc049b4aaab4",
+  "method": "POST",
+  "path": "/api/products/148ee0bb-4996-45b1-84f5-e689c6ba8796/uoms",
+  "statusCode": 201,
+  "durationMs": 19,
+  "tenantId": null,
+  "branchId": "33511c3c-545e-4dd0-b9cd-1bc1b4eeb896",
+  "userId": "d317a2e3-686a-4e66-b70b-a58ef9f9ba56",
+  "ts": "2026-06-08T00:41:34.954Z"
+}[39m
+[32m[Nest] 17948  - [39m06/08/2026, 3:41:35 AM [32m    LOG[39m [38;5;3m[Http] [39m[32m{
+  "kind": "http_request",
+  "requestId": "f8b0f4e6-d085-4fd9-97bf-2e733acb78f4",
+  "method": "GET",
+  "path": "/api/products/148ee0bb-4996-45b1-84f5-e689c6ba8796/uoms",
+  "statusCode": 200,
+  "durationMs": 7,
+  "tenantId": null,
+  "branchId": "33511c3c-545e-4dd0-b9cd-1bc1b4eeb896",
+  "userId": "d317a2e3-686a-4e66-b70b-a58ef9f9ba56",
+  "ts": "2026-06-08T00:41:35.059Z"
+}[39m
+[32m[Nest] 17948  - [39m06/08/2026, 3:41:35 AM [32m    LOG[39m [38;5;3m[Http] [39m[32m{
+  "kind": "http_request",
+  "requestId": "bbbc2f0b-4c00-4c71-bf9c-54b8e35c964f",
+  "method": "GET",
+  "path": "/api/products/catalog",
+  "statusCode": 200,
+  "durationMs": 0,
+  "tenantId": null,
+  "branchId": "33511c3c-545e-4dd0-b9cd-1bc1b4eeb896",
+  "userId": "d317a2e3-686a-4e66-b70b-a58ef9f9ba56",
+  "ts": "2026-06-08T00:41:35.189Z"
+}[39m
+[32m[Nest] 17948  - [39m06/08/2026, 3:41:37 AM [32m    LOG[39m [38;5;3m[BranchScope] [39m[32mBRANCH_SCOPE_RESOLVED {"actorUserId":"d317a2e3-686a-4e66-b70b-a58ef9f9ba56","correlationId":null,"branchIds":["33511c3c-545e-4dd0-b9cd-1bc1b4eeb896"],"aggregateAll":false,"scopeHash":"cab1d8c1ad275f1f"}[39m
+[32m[Nest] 17948  - [39m06/08/2026, 3:41:37 AM [32m    LOG[39m [38;5;3m[Http] [39m[32m{
+  "kind": "http_request",
+  "requestId": "711f3629-0c41-41ad-947e-b2572746bd15",
+  "method": "GET",
+  "path": "/api/reports/alerts",
+  "statusCode": 200,
+  "durationMs": 188,
+  "tenantId": null,
+  "branchId": "33511c3c-545e-4dd0-b9cd-1bc1b4eeb896",
+  "userId": "d317a2e3-686a-4e66-b70b-a58ef9f9ba56",
+  "ts": "2026-06-08T00:41:37.713Z"
+}[39m
+[32m[Nest] 17948  - [39m06/08/2026, 3:42:03 AM [32m    LOG[39m [38;5;3m[Http] [39m[32m{
+  "kind": "http_request",
+  "requestId": "4f4ac440-fdb0-4f82-b80d-904320cbbb52",
+  "method": "POST",
+  "path": "/api/products/148ee0bb-4996-45b1-84f5-e689c6ba8796/uoms",
+  "statusCode": 201,
+  "durationMs": 20,
+  "tenantId": null,
+  "branchId": "33511c3c-545e-4dd0-b9cd-1bc1b4eeb896",
+  "userId": "d317a2e3-686a-4e66-b70b-a58ef9f9ba56",
+  "ts": "2026-06-08T00:42:03.602Z"
+}[39m
+[32m[Nest] 17948  - [39m06/08/2026, 3:42:03 AM [32m    LOG[39m [38;5;3m[Http] [39m[32m{
+  "kind": "http_request",
+  "requestId": "5b675f63-47c7-4d49-86d1-57048e5ddc98",
+  "method": "GET",
+  "path": "/api/products/148ee0bb-4996-45b1-84f5-e689c6ba8796/uoms",
+  "statusCode": 200,
+  "durationMs": 7,
+  "tenantId": null,
+  "branchId": "33511c3c-545e-4dd0-b9cd-1bc1b4eeb896",
+  "userId": "d317a2e3-686a-4e66-b70b-a58ef9f9ba56",
+  "ts": "2026-06-08T00:42:03.703Z"
+}[39m
+[32m[Nest] 17948  - [39m06/08/2026, 3:42:03 AM [32m    LOG[39m [38;5;3m[Http] [39m[32m{
+  "kind": "http_request",
+  "requestId": "1376aa0e-f4f7-498f-a9a8-dfd6fbe20c65",
+  "method": "GET",
+  "path": "/api/products/catalog",
+  "statusCode": 200,
+  "durationMs": 86,
+  "tenantId": null,
+  "branchId": "33511c3c-545e-4dd0-b9cd-1bc1b4eeb896",
+  "userId": "d317a2e3-686a-4e66-b70b-a58ef9f9ba56",
+  "ts": "2026-06-08T00:42:03.893Z"
+}[39m
+[32m[Nest] 17948  - [39m06/08/2026, 3:42:22 AM [32m    LOG[39m [38;5;3m[BranchScope] [39m[32mBRANCH_SCOPE_RESOLVED {"actorUserId":"d317a2e3-686a-4e66-b70b-a58ef9f9ba56","correlationId":null,"branchIds":["33511c3c-545e-4dd0-b9cd-1bc1b4eeb896"],"aggregateAll":false,"scopeHash":"cab1d8c1ad275f1f"}[39m
+[32m[Nest] 17948  - [39m06/08/2026, 3:42:22 AM [32m    LOG[39m [38;5;3m[Http] [39m[32m{
+  "kind": "http_request",
+  "requestId": "2b1a6f11-b197-4d45-9b27-abfc6b6eaf73",
+  "method": "GET",
+  "path": "/api/reports/alerts",
+  "statusCode": 200,
+  "durationMs": 158,
+  "tenantId": null,
+  "branchId": "33511c3c-545e-4dd0-b9cd-1bc1b4eeb896",
+  "userId": "d317a2e3-686a-4e66-b70b-a58ef9f9ba56",
+  "ts": "2026-06-08T00:42:22.901Z"
+}[39m
+[32m[Nest] 17948  - [39m06/08/2026, 3:43:07 AM [32m    LOG[39m [38;5;3m[BranchScope] [39m[32mBRANCH_SCOPE_RESOLVED {"actorUserId":"d317a2e3-686a-4e66-b70b-a58ef9f9ba56","correlationId":null,"branchIds":["33511c3c-545e-4dd0-b9cd-1bc1b4eeb896"],"aggregateAll":false,"scopeHash":"cab1d8c1ad275f1f"}[39m
+[32m[Nest] 17948  - [39m06/08/2026, 3:43:08 AM [32m    LOG[39m [38;5;3m[Http] [39m[32m{
+  "kind": "http_request",
+  "requestId": "6807109b-bf0a-4dac-9ec3-671ba91be20b",
+  "method": "GET",
+  "path": "/api/reports/alerts",
+  "statusCode": 200,
+  "durationMs": 117,
+  "tenantId": null,
+  "branchId": "33511c3c-545e-4dd0-b9cd-1bc1b4eeb896",
+  "userId": "d317a2e3-686a-4e66-b70b-a58ef9f9ba56",
+  "ts": "2026-06-08T00:43:08.047Z"
+}[39m
+[32m[Nest] 17948  - [39m06/08/2026, 3:43:11 AM [32m    LOG[39m [38;5;3m[Http] [39m[32m{
+  "kind": "http_request",
+  "requestId": "875a2f9d-145b-40ba-b598-82c9c48ef88f",
+  "method": "GET",
+  "path": "/api/products/148ee0bb-4996-45b1-84f5-e689c6ba8796/suppliers",
+  "statusCode": 200,
+  "durationMs": 26,
+  "tenantId": null,
+  "branchId": "33511c3c-545e-4dd0-b9cd-1bc1b4eeb896",
+  "userId": "d317a2e3-686a-4e66-b70b-a58ef9f9ba56",
+  "ts": "2026-06-08T00:43:11.291Z"
+}[39m
+[32m[Nest] 17948  - [39m06/08/2026, 3:43:11 AM [32m    LOG[39m [38;5;3m[Http] [39m[32m{
+  "kind": "http_request",
+  "requestId": "e521ecc8-081e-4c3b-879d-b5b08a4f9d15",
+  "method": "GET",
+  "path": "/api/products/148ee0bb-4996-45b1-84f5-e689c6ba8796/uoms",
+  "statusCode": 200,
+  "durationMs": 20,
+  "tenantId": null,
+  "branchId": "33511c3c-545e-4dd0-b9cd-1bc1b4eeb896",
+  "userId": "d317a2e3-686a-4e66-b70b-a58ef9f9ba56",
+  "ts": "2026-06-08T00:43:11.324Z"
+}[39m
+[32m[Nest] 17948  - [39m06/08/2026, 3:43:11 AM [32m    LOG[39m [38;5;3m[Http] [39m[32m{
+  "kind": "http_request",
+  "requestId": "7611f814-e268-4907-95aa-89c811269899",
+  "method": "GET",
+  "path": "/api/suppliers",
+  "statusCode": 200,
+  "durationMs": 3,
+  "tenantId": null,
+  "branchId": "33511c3c-545e-4dd0-b9cd-1bc1b4eeb896",
+  "userId": "d317a2e3-686a-4e66-b70b-a58ef9f9ba56",
+  "ts": "2026-06-08T00:43:11.344Z"
+}[39m
+[32m[Nest] 17948  - [39m06/08/2026, 3:43:11 AM [32m    LOG[39m [38;5;3m[Http] [39m[32m{
+  "kind": "http_request",
+  "requestId": "35b20562-bb9e-4cee-a1a4-c65377b6bc03",
+  "method": "GET",
+  "path": "/api/uoms",
+  "statusCode": 200,
+  "durationMs": 3,
+  "tenantId": null,
+  "branchId": "33511c3c-545e-4dd0-b9cd-1bc1b4eeb896",
+  "userId": "d317a2e3-686a-4e66-b70b-a58ef9f9ba56",
+  "ts": "2026-06-08T00:43:11.358Z"
+}[39m
+[32m[Nest] 17948  - [39m06/08/2026, 3:43:20 AM [32m    LOG[39m [38;5;3m[Http] [39m[32m{
+  "kind": "http_request",
+  "requestId": "7b132473-10e4-4be1-b04d-da0760b087f6",
+  "method": "GET",
+  "path": "/api/categories",
+  "statusCode": 200,
+  "durationMs": 27,
+  "tenantId": null,
+  "branchId": "33511c3c-545e-4dd0-b9cd-1bc1b4eeb896",
+  "userId": "d317a2e3-686a-4e66-b70b-a58ef9f9ba56",
+  "ts": "2026-06-08T00:43:20.574Z"
+}[39m
+[32m[Nest] 17948  - [39m06/08/2026, 3:43:20 AM [32m    LOG[39m [38;5;3m[Http] [39m[32m{
+  "kind": "http_request",
+  "requestId": "e6539d37-8aff-4586-b9aa-0cd3ca5ece00",
+  "method": "GET",
+  "path": "/api/inventory",
+  "statusCode": 200,
+  "durationMs": 48,
+  "tenantId": null,
+  "branchId": "33511c3c-545e-4dd0-b9cd-1bc1b4eeb896",
+  "userId": "d317a2e3-686a-4e66-b70b-a58ef9f9ba56",
+  "ts": "2026-06-08T00:43:20.601Z"
+}[39m
+[32m[Nest] 17948  - [39m06/08/2026, 3:43:27 AM [32m    LOG[39m [38;5;3m[Http] [39m[32m{
+  "kind": "http_request",
+  "requestId": "7b1876ca-d2f0-48e9-9465-2c1421ee6665",
+  "method": "GET",
+  "path": "/api/categories",
+  "statusCode": 200,
+  "durationMs": 1,
+  "tenantId": null,
+  "branchId": "33511c3c-545e-4dd0-b9cd-1bc1b4eeb896",
+  "userId": "d317a2e3-686a-4e66-b70b-a58ef9f9ba56",
+  "ts": "2026-06-08T00:43:27.384Z"
+}[39m
+[32m[Nest] 17948  - [39m06/08/2026, 3:43:27 AM [32m    LOG[39m [38;5;3m[Http] [39m[32m{
+  "kind": "http_request",
+  "requestId": "8038a0d4-cde0-4432-bb9c-7dfb3b59e198",
+  "method": "GET",
+  "path": "/api/branches",
+  "statusCode": 200,
+  "durationMs": 36,
+  "tenantId": null,
+  "branchId": "33511c3c-545e-4dd0-b9cd-1bc1b4eeb896",
+  "userId": "d317a2e3-686a-4e66-b70b-a58ef9f9ba56",
+  "ts": "2026-06-08T00:43:27.422Z"
+}[39m
+[32m[Nest] 17948  - [39m06/08/2026, 3:43:27 AM [32m    LOG[39m [38;5;3m[Http] [39m[32m{
+  "kind": "http_request",
+  "requestId": "82df218b-346e-4414-837a-933140d7f19b",
+  "method": "GET",
+  "path": "/api/products/catalog",
+  "statusCode": 200,
+  "durationMs": 75,
+  "tenantId": null,
+  "branchId": "33511c3c-545e-4dd0-b9cd-1bc1b4eeb896",
+  "userId": "d317a2e3-686a-4e66-b70b-a58ef9f9ba56",
+  "ts": "2026-06-08T00:43:27.457Z"
+}[39m
+[32m[Nest] 17948  - [39m06/08/2026, 3:43:27 AM [32m    LOG[39m [38;5;3m[Http] [39m[32m{
+  "kind": "http_request",
+  "requestId": "f37168e3-4d61-4f9e-87f4-64c4dc067567",
+  "method": "GET",
+  "path": "/api/categories",
+  "statusCode": 200,
+  "durationMs": 0,
+  "tenantId": null,
+  "branchId": "33511c3c-545e-4dd0-b9cd-1bc1b4eeb896",
+  "userId": "d317a2e3-686a-4e66-b70b-a58ef9f9ba56",
+  "ts": "2026-06-08T00:43:27.461Z"
+}[39m
+[32m[Nest] 17948  - [39m06/08/2026, 3:43:27 AM [32m    LOG[39m [38;5;3m[Http] [39m[32m{
+  "kind": "http_request",
+  "requestId": "be502735-6ab4-409f-bd9d-1b027f859927",
+  "method": "GET",
+  "path": "/api/branches",
+  "statusCode": 200,
+  "durationMs": 1,
+  "tenantId": null,
+  "branchId": "33511c3c-545e-4dd0-b9cd-1bc1b4eeb896",
+  "userId": "d317a2e3-686a-4e66-b70b-a58ef9f9ba56",
+  "ts": "2026-06-08T00:43:27.488Z"
+}[39m
+[32m[Nest] 17948  - [39m06/08/2026, 3:43:27 AM [32m    LOG[39m [38;5;3m[Http] [39m[32m{
+  "kind": "http_request",
+  "requestId": "4143392b-894c-45ed-b03b-118f46409d44",
+  "method": "GET",
+  "path": "/api/products/catalog",
+  "statusCode": 200,
+  "durationMs": 1,
+  "tenantId": null,
+  "branchId": "33511c3c-545e-4dd0-b9cd-1bc1b4eeb896",
+  "userId": "d317a2e3-686a-4e66-b70b-a58ef9f9ba56",
+  "ts": "2026-06-08T00:43:27.491Z"
+}[39m
+[32m[Nest] 17948  - [39m06/08/2026, 3:43:27 AM [32m    LOG[39m [38;5;3m[Http] [39m[32m{
+  "kind": "http_request",
+  "requestId": "de08ddac-1325-4365-8c4e-453637300fec",
+  "method": "GET",
+  "path": "/api/purchases/line-pricing-by-product",
+  "statusCode": 200,
+  "durationMs": 85,
+  "tenantId": null,
+  "branchId": "33511c3c-545e-4dd0-b9cd-1bc1b4eeb896",
+  "userId": "d317a2e3-686a-4e66-b70b-a58ef9f9ba56",
+  "ts": "2026-06-08T00:43:27.522Z"
+}[39m
+[32m[Nest] 17948  - [39m06/08/2026, 3:43:27 AM [32m    LOG[39m [38;5;3m[Http] [39m[32m{
+  "kind": "http_request",
+  "requestId": "c0b548fa-151e-4d31-b559-bf52c29d0f06",
+  "method": "GET",
+  "path": "/api/inventory",
+  "statusCode": 200,
+  "durationMs": 48,
+  "tenantId": null,
+  "branchId": "33511c3c-545e-4dd0-b9cd-1bc1b4eeb896",
+  "userId": "d317a2e3-686a-4e66-b70b-a58ef9f9ba56",
+  "ts": "2026-06-08T00:43:27.567Z"
+}[39m
+[32m[Nest] 17948  - [39m06/08/2026, 3:43:27 AM [32m    LOG[39m [38;5;3m[Http] [39m[32m{
+  "kind": "http_request",
+  "requestId": "f770b0e4-3a1c-474a-a04f-f3151a786f26",
+  "method": "GET",
+  "path": "/api/purchases/line-pricing-by-product",
+  "statusCode": 200,
+  "durationMs": 36,
+  "tenantId": null,
+  "branchId": "33511c3c-545e-4dd0-b9cd-1bc1b4eeb896",
+  "userId": "d317a2e3-686a-4e66-b70b-a58ef9f9ba56",
+  "ts": "2026-06-08T00:43:27.581Z"
+}[39m
+[32m[Nest] 17948  - [39m06/08/2026, 3:43:27 AM [32m    LOG[39m [38;5;3m[Http] [39m[32m{
+  "kind": "http_request",
+  "requestId": "d669ea0b-4b45-4cca-b8b7-f73ebfdbc8ea",
+  "method": "GET",
+  "path": "/api/inventory",
+  "statusCode": 200,
+  "durationMs": 9,
+  "tenantId": null,
+  "branchId": "33511c3c-545e-4dd0-b9cd-1bc1b4eeb896",
+  "userId": "d317a2e3-686a-4e66-b70b-a58ef9f9ba56",
+  "ts": "2026-06-08T00:43:27.593Z"
+}[39m
+[32m[Nest] 17948  - [39m06/08/2026, 3:43:39 AM [32m    LOG[39m [38;5;3m[Http] [39m[32m{
+  "kind": "http_request",
+  "requestId": "500780ad-cffb-47f5-8d56-336eb41563ea",
+  "method": "GET",
+  "path": "/api/products/catalog",
+  "statusCode": 200,
+  "durationMs": 0,
+  "tenantId": null,
+  "branchId": "33511c3c-545e-4dd0-b9cd-1bc1b4eeb896",
+  "userId": "d317a2e3-686a-4e66-b70b-a58ef9f9ba56",
+  "ts": "2026-06-08T00:43:39.236Z"
+}[39m
+[32m[Nest] 17948  - [39m06/08/2026, 3:43:39 AM [32m    LOG[39m [38;5;3m[Http] [39m[32m{
+  "kind": "http_request",
+  "requestId": "88a62871-a8e2-4bf1-8317-afe985c2d6e5",
+  "method": "GET",
+  "path": "/api/categories",
+  "statusCode": 200,
+  "durationMs": 0,
+  "tenantId": null,
+  "branchId": "33511c3c-545e-4dd0-b9cd-1bc1b4eeb896",
+  "userId": "d317a2e3-686a-4e66-b70b-a58ef9f9ba56",
+  "ts": "2026-06-08T00:43:39.240Z"
+}[39m
+[32m[Nest] 17948  - [39m06/08/2026, 3:43:39 AM [32m    LOG[39m [38;5;3m[Http] [39m[32m{
+  "kind": "http_request",
+  "requestId": "6b1e3d95-7720-4de1-a6d3-ef0cc1e747a0",
+  "method": "GET",
+  "path": "/api/inventory",
+  "statusCode": 200,
+  "durationMs": 10,
+  "tenantId": null,
+  "branchId": "33511c3c-545e-4dd0-b9cd-1bc1b4eeb896",
+  "userId": "d317a2e3-686a-4e66-b70b-a58ef9f9ba56",
+  "ts": "2026-06-08T00:43:39.253Z"
+}[39m
+[32m[Nest] 17948  - [39m06/08/2026, 3:43:45 AM [32m    LOG[39m [38;5;3m[Http] [39m[32m{
+  "kind": "http_request",
+  "requestId": "913247c9-5a41-4c24-9618-6e5687fa9653",
+  "method": "GET",
+  "path": "/api/products/148ee0bb-4996-45b1-84f5-e689c6ba8796/suppliers",
+  "statusCode": 200,
+  "durationMs": 22,
+  "tenantId": null,
+  "branchId": "33511c3c-545e-4dd0-b9cd-1bc1b4eeb896",
+  "userId": "d317a2e3-686a-4e66-b70b-a58ef9f9ba56",
+  "ts": "2026-06-08T00:43:45.747Z"
+}[39m
+[32m[Nest] 17948  - [39m06/08/2026, 3:43:45 AM [32m    LOG[39m [38;5;3m[Http] [39m[32m{
+  "kind": "http_request",
+  "requestId": "7bfd5a91-60c4-487f-bd26-a346cdeef8a1",
+  "method": "GET",
+  "path": "/api/products/148ee0bb-4996-45b1-84f5-e689c6ba8796/uoms",
+  "statusCode": 200,
+  "durationMs": 21,
+  "tenantId": null,
+  "branchId": "33511c3c-545e-4dd0-b9cd-1bc1b4eeb896",
+  "userId": "d317a2e3-686a-4e66-b70b-a58ef9f9ba56",
+  "ts": "2026-06-08T00:43:45.752Z"
+}[39m
+[32m[Nest] 17948  - [39m06/08/2026, 3:43:45 AM [32m    LOG[39m [38;5;3m[Http] [39m[32m{
+  "kind": "http_request",
+  "requestId": "2f060296-2447-4ff0-b281-186219c900e3",
+  "method": "GET",
+  "path": "/api/uoms",
+  "statusCode": 200,
+  "durationMs": 11,
+  "tenantId": null,
+  "branchId": "33511c3c-545e-4dd0-b9cd-1bc1b4eeb896",
+  "userId": "d317a2e3-686a-4e66-b70b-a58ef9f9ba56",
+  "ts": "2026-06-08T00:43:45.758Z"
+}[39m
+[32m[Nest] 17948  - [39m06/08/2026, 3:43:45 AM [32m    LOG[39m [38;5;3m[Http] [39m[32m{
+  "kind": "http_request",
+  "requestId": "babaacc8-e697-4bd7-9694-2e8b3cedf540",
+  "method": "GET",
+  "path": "/api/suppliers",
+  "statusCode": 200,
+  "durationMs": 19,
+  "tenantId": null,
+  "branchId": "33511c3c-545e-4dd0-b9cd-1bc1b4eeb896",
+  "userId": "d317a2e3-686a-4e66-b70b-a58ef9f9ba56",
+  "ts": "2026-06-08T00:43:45.760Z"
+}[39m
+[32m[Nest] 17948  - [39m06/08/2026, 3:43:50 AM [32m    LOG[39m [38;5;3m[Http] [39m[32m{
+  "kind": "http_request",
+  "requestId": "31018e12-de17-4676-82b6-f216159b0ff4",
+  "method": "PATCH",
+  "path": "/api/products/148ee0bb-4996-45b1-84f5-e689c6ba8796/uoms/e1077fb9-8ea0-42a1-a3d8-5a69d0c9bf3e",
+  "statusCode": 200,
+  "durationMs": 44,
+  "tenantId": null,
+  "branchId": "33511c3c-545e-4dd0-b9cd-1bc1b4eeb896",
+  "userId": "d317a2e3-686a-4e66-b70b-a58ef9f9ba56",
+  "ts": "2026-06-08T00:43:50.896Z"
+}[39m
+[32m[Nest] 17948  - [39m06/08/2026, 3:43:50 AM [32m    LOG[39m [38;5;3m[Http] [39m[32m{
+  "kind": "http_request",
+  "requestId": "b105f1db-e2b7-41ef-88e1-f9935ddc3dd4",
+  "method": "GET",
+  "path": "/api/products/148ee0bb-4996-45b1-84f5-e689c6ba8796/uoms",
+  "statusCode": 200,
+  "durationMs": 8,
+  "tenantId": null,
+  "branchId": "33511c3c-545e-4dd0-b9cd-1bc1b4eeb896",
+  "userId": "d317a2e3-686a-4e66-b70b-a58ef9f9ba56",
+  "ts": "2026-06-08T00:43:50.975Z"
+}[39m
+[32m[Nest] 17948  - [39m06/08/2026, 3:43:51 AM [32m    LOG[39m [38;5;3m[Http] [39m[32m{
+  "kind": "http_request",
+  "requestId": "16831f86-d7a7-464f-8e68-db712dd3949c",
+  "method": "GET",
+  "path": "/api/products/catalog",
+  "statusCode": 200,
+  "durationMs": 0,
+  "tenantId": null,
+  "branchId": "33511c3c-545e-4dd0-b9cd-1bc1b4eeb896",
+  "userId": "d317a2e3-686a-4e66-b70b-a58ef9f9ba56",
+  "ts": "2026-06-08T00:43:51.096Z"
+}[39m
+[32m[Nest] 17948  - [39m06/08/2026, 3:43:53 AM [32m    LOG[39m [38;5;3m[BranchScope] [39m[32mBRANCH_SCOPE_RESOLVED {"actorUserId":"d317a2e3-686a-4e66-b70b-a58ef9f9ba56","correlationId":null,"branchIds":["33511c3c-545e-4dd0-b9cd-1bc1b4eeb896"],"aggregateAll":false,"scopeHash":"cab1d8c1ad275f1f"}[39m
+[32m[Nest] 17948  - [39m06/08/2026, 3:43:53 AM [32m    LOG[39m [38;5;3m[Http] [39m[32m{
+  "kind": "http_request",
+  "requestId": "26f1000f-e8e3-40f1-8e22-bf080202c370",
+  "method": "GET",
+  "path": "/api/reports/alerts",
+  "statusCode": 200,
+  "durationMs": 17,
+  "tenantId": null,
+  "branchId": "33511c3c-545e-4dd0-b9cd-1bc1b4eeb896",
+  "userId": "d317a2e3-686a-4e66-b70b-a58ef9f9ba56",
+  "ts": "2026-06-08T00:43:53.107Z"
+}[39m
+[32m[Nest] 17948  - [39m06/08/2026, 3:43:55 AM [32m    LOG[39m [38;5;3m[Http] [39m[32m{
+  "kind": "http_request",
+  "requestId": "bfc52afd-8a21-4fe4-8af3-42b5161b3157",
+  "method": "GET",
+  "path": "/api/products/catalog",
+  "statusCode": 200,
+  "durationMs": 0,
+  "tenantId": null,
+  "branchId": "33511c3c-545e-4dd0-b9cd-1bc1b4eeb896",
+  "userId": "d317a2e3-686a-4e66-b70b-a58ef9f9ba56",
+  "ts": "2026-06-08T00:43:55.806Z"
+}[39m
+[32m[Nest] 17948  - [39m06/08/2026, 3:43:55 AM [32m    LOG[39m [38;5;3m[Http] [39m[32m{
+  "kind": "http_request",
+  "requestId": "1f94f388-e577-4664-bea9-7920fb2acda0",
+  "method": "GET",
+  "path": "/api/categories",
+  "statusCode": 200,
+  "durationMs": 1,
+  "tenantId": null,
+  "branchId": "33511c3c-545e-4dd0-b9cd-1bc1b4eeb896",
+  "userId": "d317a2e3-686a-4e66-b70b-a58ef9f9ba56",
+  "ts": "2026-06-08T00:43:55.829Z"
+}[39m
+[32m[Nest] 17948  - [39m06/08/2026, 3:43:55 AM [32m    LOG[39m [38;5;3m[Http] [39m[32m{
+  "kind": "http_request",
+  "requestId": "f5a8a51f-caaf-402e-ae3f-8b0b4f0bbc9d",
+  "method": "GET",
+  "path": "/api/branches",
+  "statusCode": 200,
+  "durationMs": 0,
+  "tenantId": null,
+  "branchId": "33511c3c-545e-4dd0-b9cd-1bc1b4eeb896",
+  "userId": "d317a2e3-686a-4e66-b70b-a58ef9f9ba56",
+  "ts": "2026-06-08T00:43:55.844Z"
+}[39m
+[32m[Nest] 17948  - [39m06/08/2026, 3:43:55 AM [32m    LOG[39m [38;5;3m[Http] [39m[32m{
+  "kind": "http_request",
+  "requestId": "98f4f7d2-d85b-43b2-be18-cc130e103466",
+  "method": "GET",
+  "path": "/api/products/catalog",
+  "statusCode": 200,
+  "durationMs": 1,
+  "tenantId": null,
+  "branchId": "33511c3c-545e-4dd0-b9cd-1bc1b4eeb896",
+  "userId": "d317a2e3-686a-4e66-b70b-a58ef9f9ba56",
+  "ts": "2026-06-08T00:43:55.926Z"
+}[39m
+[32m[Nest] 17948  - [39m06/08/2026, 3:43:55 AM [32m    LOG[39m [38;5;3m[Http] [39m[32m{
+  "kind": "http_request",
+  "requestId": "c7fb4282-fad4-4e74-90cc-b53eca738c03",
+  "method": "GET",
+  "path": "/api/branches",
+  "statusCode": 200,
+  "durationMs": 0,
+  "tenantId": null,
+  "branchId": "33511c3c-545e-4dd0-b9cd-1bc1b4eeb896",
+  "userId": "d317a2e3-686a-4e66-b70b-a58ef9f9ba56",
+  "ts": "2026-06-08T00:43:55.969Z"
+}[39m
+[32m[Nest] 17948  - [39m06/08/2026, 3:43:55 AM [32m    LOG[39m [38;5;3m[Http] [39m[32m{
+  "kind": "http_request",
+  "requestId": "c72a9fba-de03-414b-bc55-d92c941b8354",
+  "method": "GET",
+  "path": "/api/purchases/line-pricing-by-product",
+  "statusCode": 200,
+  "durationMs": 127,
+  "tenantId": null,
+  "branchId": "33511c3c-545e-4dd0-b9cd-1bc1b4eeb896",
+  "userId": "d317a2e3-686a-4e66-b70b-a58ef9f9ba56",
+  "ts": "2026-06-08T00:43:55.985Z"
+}[39m
+[32m[Nest] 17948  - [39m06/08/2026, 3:43:55 AM [32m    LOG[39m [38;5;3m[Http] [39m[32m{
+  "kind": "http_request",
+  "requestId": "2067847e-6afc-4f07-a03d-ce3d1803463f",
+  "method": "GET",
+  "path": "/api/inventory",
+  "statusCode": 200,
+  "durationMs": 142,
+  "tenantId": null,
+  "branchId": "33511c3c-545e-4dd0-b9cd-1bc1b4eeb896",
+  "userId": "d317a2e3-686a-4e66-b70b-a58ef9f9ba56",
+  "ts": "2026-06-08T00:43:55.994Z"
+}[39m
+[32m[Nest] 17948  - [39m06/08/2026, 3:43:56 AM [32m    LOG[39m [38;5;3m[Http] [39m[32m{
+  "kind": "http_request",
+  "requestId": "914f1df5-3735-43d0-ab60-18a15d2d5310",
+  "method": "GET",
+  "path": "/api/inventory",
+  "statusCode": 200,
+  "durationMs": 9,
+  "tenantId": null,
+  "branchId": "33511c3c-545e-4dd0-b9cd-1bc1b4eeb896",
+  "userId": "d317a2e3-686a-4e66-b70b-a58ef9f9ba56",
+  "ts": "2026-06-08T00:43:56.025Z"
+}[39m
+[32m[Nest] 17948  - [39m06/08/2026, 3:43:56 AM [32m    LOG[39m [38;5;3m[Http] [39m[32m{
+  "kind": "http_request",
+  "requestId": "4ad1c3bb-82b0-4dca-91f9-633216c676a2",
+  "method": "GET",
+  "path": "/api/purchases/line-pricing-by-product",
+  "statusCode": 200,
+  "durationMs": 21,
+  "tenantId": null,
+  "branchId": "33511c3c-545e-4dd0-b9cd-1bc1b4eeb896",
+  "userId": "d317a2e3-686a-4e66-b70b-a58ef9f9ba56",
+  "ts": "2026-06-08T00:43:56.034Z"
+}[39m
+[32m[Nest] 17948  - [39m06/08/2026, 3:43:56 AM [32m    LOG[39m [38;5;3m[Http] [39m[32m{
+  "kind": "http_request",
+  "requestId": "2e0a196a-8904-48f1-bd67-75f3b4aaf767",
+  "method": "GET",
+  "path": "/api/categories",
+  "statusCode": 200,
+  "durationMs": 1,
+  "tenantId": null,
+  "branchId": "33511c3c-545e-4dd0-b9cd-1bc1b4eeb896",
+  "userId": "d317a2e3-686a-4e66-b70b-a58ef9f9ba56",
+  "ts": "2026-06-08T00:43:56.042Z"
+}[39m
+[32m[Nest] 17948  - [39m06/08/2026, 3:44:00 AM [32m    LOG[39m [38;5;3m[Http] [39m[32m{
+  "kind": "http_request",
+  "requestId": "86f434d5-407c-4c17-8a3a-c5740167b847",
+  "method": "GET",
+  "path": "/api/products/catalog",
+  "statusCode": 200,
+  "durationMs": 0,
+  "tenantId": null,
+  "branchId": "33511c3c-545e-4dd0-b9cd-1bc1b4eeb896",
+  "userId": "d317a2e3-686a-4e66-b70b-a58ef9f9ba56",
+  "ts": "2026-06-08T00:44:00.171Z"
+}[39m
+[32m[Nest] 17948  - [39m06/08/2026, 3:44:00 AM [32m    LOG[39m [38;5;3m[Http] [39m[32m{
+  "kind": "http_request",
+  "requestId": "60011ec3-675d-4ed3-bec6-0550a35b4106",
+  "method": "GET",
+  "path": "/api/categories",
+  "statusCode": 200,
+  "durationMs": 0,
+  "tenantId": null,
+  "branchId": "33511c3c-545e-4dd0-b9cd-1bc1b4eeb896",
+  "userId": "d317a2e3-686a-4e66-b70b-a58ef9f9ba56",
+  "ts": "2026-06-08T00:44:00.178Z"
+}[39m
+[32m[Nest] 17948  - [39m06/08/2026, 3:44:00 AM [32m    LOG[39m [38;5;3m[Http] [39m[32m{
+  "kind": "http_request",
+  "requestId": "14f63141-7345-4434-a8fb-f0315c744044",
+  "method": "GET",
+  "path": "/api/inventory",
+  "statusCode": 200,
+  "durationMs": 11,
+  "tenantId": null,
+  "branchId": "33511c3c-545e-4dd0-b9cd-1bc1b4eeb896",
+  "userId": "d317a2e3-686a-4e66-b70b-a58ef9f9ba56",
+  "ts": "2026-06-08T00:44:00.193Z"
+}[39m
+[32m[Nest] 17948  - [39m06/08/2026, 3:44:03 AM [32m    LOG[39m [38;5;3m[Http] [39m[32m{
+  "kind": "http_request",
+  "requestId": "85739221-3a9b-4f34-931a-3914bd4627d1",
+  "method": "GET",
+  "path": "/api/products/148ee0bb-4996-45b1-84f5-e689c6ba8796/suppliers",
+  "statusCode": 200,
+  "durationMs": 19,
+  "tenantId": null,
+  "branchId": "33511c3c-545e-4dd0-b9cd-1bc1b4eeb896",
+  "userId": "d317a2e3-686a-4e66-b70b-a58ef9f9ba56",
+  "ts": "2026-06-08T00:44:03.153Z"
+}[39m
+[32m[Nest] 17948  - [39m06/08/2026, 3:44:03 AM [32m    LOG[39m [38;5;3m[Http] [39m[32m{
+  "kind": "http_request",
+  "requestId": "1d868c2b-9758-4cf0-85e2-a8924e58f284",
+  "method": "GET",
+  "path": "/api/products/148ee0bb-4996-45b1-84f5-e689c6ba8796/uoms",
+  "statusCode": 200,
+  "durationMs": 20,
+  "tenantId": null,
+  "branchId": "33511c3c-545e-4dd0-b9cd-1bc1b4eeb896",
+  "userId": "d317a2e3-686a-4e66-b70b-a58ef9f9ba56",
+  "ts": "2026-06-08T00:44:03.160Z"
+}[39m
+[32m[Nest] 17948  - [39m06/08/2026, 3:44:03 AM [32m    LOG[39m [38;5;3m[Http] [39m[32m{
+  "kind": "http_request",
+  "requestId": "038f3ea9-49e8-48df-a9e5-113f48c107a4",
+  "method": "GET",
+  "path": "/api/uoms",
+  "statusCode": 200,
+  "durationMs": 13,
+  "tenantId": null,
+  "branchId": "33511c3c-545e-4dd0-b9cd-1bc1b4eeb896",
+  "userId": "d317a2e3-686a-4e66-b70b-a58ef9f9ba56",
+  "ts": "2026-06-08T00:44:03.163Z"
+}[39m
+[32m[Nest] 17948  - [39m06/08/2026, 3:44:03 AM [32m    LOG[39m [38;5;3m[Http] [39m[32m{
+  "kind": "http_request",
+  "requestId": "51ca2afd-f18a-40e3-8ecc-918174fd5d05",
+  "method": "GET",
+  "path": "/api/suppliers",
+  "statusCode": 200,
+  "durationMs": 17,
+  "tenantId": null,
+  "branchId": "33511c3c-545e-4dd0-b9cd-1bc1b4eeb896",
+  "userId": "d317a2e3-686a-4e66-b70b-a58ef9f9ba56",
+  "ts": "2026-06-08T00:44:03.165Z"
+}[39m
+[32m[Nest] 17948  - [39m06/08/2026, 3:44:43 AM [32m    LOG[39m [38;5;3m[Http] [39m[32m{
+  "kind": "http_request",
+  "requestId": "e3d16660-a79a-48f2-8c4d-72ed91f692fb",
+  "method": "POST",
+  "path": "/api/auth/pin-login",
+  "statusCode": 201,
+  "durationMs": 114,
+  "tenantId": null,
+  "branchId": null,
+  "userId": null,
+  "authRoute": true,
+  "ts": "2026-06-08T00:44:43.115Z"
+}[39m
+[32m[Nest] 17948  - [39m06/08/2026, 3:44:43 AM [32m    LOG[39m [38;5;3m[Http] [39m[32m{
+  "kind": "http_request",
+  "requestId": "7c741753-11c1-47ab-ade2-70ba3c05afdd",
+  "method": "GET",
+  "path": "/api/sales",
+  "statusCode": 200,
+  "durationMs": 26,
+  "tenantId": null,
+  "branchId": "33511c3c-545e-4dd0-b9cd-1bc1b4eeb896",
+  "userId": "b49096e6-b3ac-4229-a2e1-96fb5a3d5443",
+  "ts": "2026-06-08T00:44:43.169Z"
+}[39m
+[32m[Nest] 17948  - [39m06/08/2026, 3:44:43 AM [32m    LOG[39m [38;5;3m[Http] [39m[32m{
+  "kind": "http_request",
+  "requestId": "7c98b977-885e-4fb3-ba61-2b94b0e2f9c8",
+  "method": "GET",
+  "path": "/api/pos/register-catalog",
+  "statusCode": 200,
+  "durationMs": 101,
+  "tenantId": null,
+  "branchId": "33511c3c-545e-4dd0-b9cd-1bc1b4eeb896",
+  "userId": "b49096e6-b3ac-4229-a2e1-96fb5a3d5443",
+  "ts": "2026-06-08T00:44:43.242Z"
+}[39m
+[32m[Nest] 17948  - [39m06/08/2026, 3:44:43 AM [32m    LOG[39m [38;5;3m[Http] [39m[32m{
+  "kind": "http_request",
+  "requestId": "7d8058f3-e78e-4549-bc4a-c33f45087186",
+  "method": "GET",
+  "path": "/api/sales/d5de1fba-0ab0-4c71-8097-f8236e2c8844",
+  "statusCode": 200,
+  "durationMs": 54,
+  "tenantId": null,
+  "branchId": "33511c3c-545e-4dd0-b9cd-1bc1b4eeb896",
+  "userId": "b49096e6-b3ac-4229-a2e1-96fb5a3d5443",
+  "ts": "2026-06-08T00:44:43.379Z"
+}[39m
+[32m[Nest] 17948  - [39m06/08/2026, 3:44:43 AM [32m    LOG[39m [38;5;3m[Http] [39m[32m{
+  "kind": "http_request",
+  "requestId": "4aad7859-f102-4be5-8e84-0bb57491d52f",
+  "method": "GET",
+  "path": "/api/sales/d5de1fba-0ab0-4c71-8097-f8236e2c8844",
+  "statusCode": 200,
+  "durationMs": 25,
+  "tenantId": null,
+  "branchId": "33511c3c-545e-4dd0-b9cd-1bc1b4eeb896",
+  "userId": "b49096e6-b3ac-4229-a2e1-96fb5a3d5443",
+  "ts": "2026-06-08T00:44:43.403Z"
+}[39m
+[32m[Nest] 17948  - [39m06/08/2026, 3:48:51 AM [32m    LOG[39m [38;5;3m[Http] [39m[32m{
+  "kind": "http_request",
+  "requestId": "6d37676c-9d19-42a2-834e-c8898b8cbc6e",
+  "method": "GET",
+  "path": "/api/suppliers",
+  "statusCode": 200,
+  "durationMs": 20,
+  "tenantId": null,
+  "branchId": "33511c3c-545e-4dd0-b9cd-1bc1b4eeb896",
+  "userId": "d317a2e3-686a-4e66-b70b-a58ef9f9ba56",
+  "ts": "2026-06-08T00:48:51.506Z"
+}[39m
+[32m[Nest] 17948  - [39m06/08/2026, 3:48:51 AM [32m    LOG[39m [38;5;3m[Http] [39m[32m{
+  "kind": "http_request",
+  "requestId": "39f7dc14-9e68-4dd4-abbb-7beeb8cda201",
+  "method": "GET",
+  "path": "/api/products/catalog",
+  "statusCode": 200,
+  "durationMs": 40,
+  "tenantId": null,
+  "branchId": "33511c3c-545e-4dd0-b9cd-1bc1b4eeb896",
+  "userId": "d317a2e3-686a-4e66-b70b-a58ef9f9ba56",
+  "ts": "2026-06-08T00:48:51.516Z"
+}[39m
+[32m[Nest] 17948  - [39m06/08/2026, 3:48:51 AM [32m    LOG[39m [38;5;3m[Http] [39m[32m{
+  "kind": "http_request",
+  "requestId": "486e452c-d9db-479b-9569-525022725186",
+  "method": "GET",
+  "path": "/api/suppliers",
+  "statusCode": 200,
+  "durationMs": 10,
+  "tenantId": null,
+  "branchId": "33511c3c-545e-4dd0-b9cd-1bc1b4eeb896",
+  "userId": "d317a2e3-686a-4e66-b70b-a58ef9f9ba56",
+  "ts": "2026-06-08T00:48:51.539Z"
+}[39m
+[32m[Nest] 17948  - [39m06/08/2026, 3:48:51 AM [32m    LOG[39m [38;5;3m[Http] [39m[32m{
+  "kind": "http_request",
+  "requestId": "91ba6d51-378d-454f-acc3-e25e1cf30230",
+  "method": "GET",
+  "path": "/api/products/catalog",
+  "statusCode": 200,
+  "durationMs": 0,
+  "tenantId": null,
+  "branchId": "33511c3c-545e-4dd0-b9cd-1bc1b4eeb896",
+  "userId": "d317a2e3-686a-4e66-b70b-a58ef9f9ba56",
+  "ts": "2026-06-08T00:48:51.542Z"
+}[39m
+[32m[Nest] 17948  - [39m06/08/2026, 3:48:51 AM [32m    LOG[39m [38;5;3m[Http] [39m[32m{
+  "kind": "http_request",
+  "requestId": "3419ffd7-bbca-4099-9074-1fac38e3507e",
+  "method": "GET",
+  "path": "/api/branches",
+  "statusCode": 200,
+  "durationMs": 4,
+  "tenantId": null,
+  "branchId": "33511c3c-545e-4dd0-b9cd-1bc1b4eeb896",
+  "userId": "d317a2e3-686a-4e66-b70b-a58ef9f9ba56",
+  "ts": "2026-06-08T00:48:51.577Z"
+}[39m
+[32m[Nest] 17948  - [39m06/08/2026, 3:48:51 AM [32m    LOG[39m [38;5;3m[Http] [39m[32m{
+  "kind": "http_request",
+  "requestId": "7a3744cc-592b-4049-a8b6-807fd60fa589",
+  "method": "GET",
+  "path": "/api/branches",
+  "statusCode": 200,
+  "durationMs": 0,
+  "tenantId": null,
+  "branchId": "33511c3c-545e-4dd0-b9cd-1bc1b4eeb896",
+  "userId": "d317a2e3-686a-4e66-b70b-a58ef9f9ba56",
+  "ts": "2026-06-08T00:48:51.592Z"
+}[39m
+[32m[Nest] 17948  - [39m06/08/2026, 3:48:51 AM [32m    LOG[39m [38;5;3m[Http] [39m[32m{
+  "kind": "http_request",
+  "requestId": "9ac72a92-42a7-49f1-9b8f-867dc5dd6ea9",
+  "method": "GET",
+  "path": "/api/purchases/line-pricing-by-product",
+  "statusCode": 200,
+  "durationMs": 71,
+  "tenantId": null,
+  "branchId": "33511c3c-545e-4dd0-b9cd-1bc1b4eeb896",
+  "userId": "d317a2e3-686a-4e66-b70b-a58ef9f9ba56",
+  "ts": "2026-06-08T00:48:51.725Z"
+}[39m
+[32m[Nest] 17948  - [39m06/08/2026, 3:53:16 AM [32m    LOG[39m [38;5;3m[BranchScope] [39m[32mBRANCH_SCOPE_RESOLVED {"actorUserId":"d317a2e3-686a-4e66-b70b-a58ef9f9ba56","correlationId":null,"branchIds":["33511c3c-545e-4dd0-b9cd-1bc1b4eeb896"],"aggregateAll":false,"scopeHash":"cab1d8c1ad275f1f"}[39m
+[32m[Nest] 17948  - [39m06/08/2026, 3:53:16 AM [32m    LOG[39m [38;5;3m[Http] [39m[32m{
+  "kind": "http_request",
+  "requestId": "860b1060-397c-4ad3-8e11-f9179a347958",
+  "method": "GET",
+  "path": "/api/reports/alerts",
+  "statusCode": 200,
+  "durationMs": 113,
+  "tenantId": null,
+  "branchId": "33511c3c-545e-4dd0-b9cd-1bc1b4eeb896",
+  "userId": "d317a2e3-686a-4e66-b70b-a58ef9f9ba56",
+  "ts": "2026-06-08T00:53:16.607Z"
+}[39m
+[32m[Nest] 17948  - [39m06/08/2026, 3:53:18 AM [32m    LOG[39m [38;5;3m[Http] [39m[32m{
+  "kind": "http_request",
+  "requestId": "f649cbb1-e320-44f0-b279-69215eea6de0",
+  "method": "GET",
+  "path": "/api/categories",
+  "statusCode": 200,
+  "durationMs": 15,
+  "tenantId": null,
+  "branchId": "33511c3c-545e-4dd0-b9cd-1bc1b4eeb896",
+  "userId": "d317a2e3-686a-4e66-b70b-a58ef9f9ba56",
+  "ts": "2026-06-08T00:53:18.814Z"
+}[39m
+[32m[Nest] 17948  - [39m06/08/2026, 3:53:18 AM [32m    LOG[39m [38;5;3m[Http] [39m[32m{
+  "kind": "http_request",
+  "requestId": "d022592e-5ddb-445c-ac68-659545ac0a94",
+  "method": "GET",
+  "path": "/api/branches",
+  "statusCode": 200,
+  "durationMs": 7,
+  "tenantId": null,
+  "branchId": "33511c3c-545e-4dd0-b9cd-1bc1b4eeb896",
+  "userId": "d317a2e3-686a-4e66-b70b-a58ef9f9ba56",
+  "ts": "2026-06-08T00:53:18.845Z"
+}[39m
+[32m[Nest] 17948  - [39m06/08/2026, 3:53:18 AM [32m    LOG[39m [38;5;3m[Http] [39m[32m{
+  "kind": "http_request",
+  "requestId": "ec75cd5f-3413-48de-abd2-c6340d7d4942",
+  "method": "GET",
+  "path": "/api/products/catalog",
+  "statusCode": 200,
+  "durationMs": 79,
+  "tenantId": null,
+  "branchId": "33511c3c-545e-4dd0-b9cd-1bc1b4eeb896",
+  "userId": "d317a2e3-686a-4e66-b70b-a58ef9f9ba56",
+  "ts": "2026-06-08T00:53:18.880Z"
+}[39m
+[32m[Nest] 17948  - [39m06/08/2026, 3:53:19 AM [32m    LOG[39m [38;5;3m[Http] [39m[32m{
+  "kind": "http_request",
+  "requestId": "523ecb06-39c0-41d3-9a60-218049d5d0dd",
+  "method": "GET",
+  "path": "/api/inventory",
+  "statusCode": 200,
+  "durationMs": 46,
+  "tenantId": null,
+  "branchId": "33511c3c-545e-4dd0-b9cd-1bc1b4eeb896",
+  "userId": "d317a2e3-686a-4e66-b70b-a58ef9f9ba56",
+  "ts": "2026-06-08T00:53:19.009Z"
+}[39m
+[32m[Nest] 17948  - [39m06/08/2026, 3:53:19 AM [32m    LOG[39m [38;5;3m[Http] [39m[32m{
+  "kind": "http_request",
+  "requestId": "2924aa50-23b8-4dbc-abfa-893b165f10ec",
+  "method": "GET",
+  "path": "/api/categories",
+  "statusCode": 200,
+  "durationMs": 1,
+  "tenantId": null,
+  "branchId": "33511c3c-545e-4dd0-b9cd-1bc1b4eeb896",
+  "userId": "d317a2e3-686a-4e66-b70b-a58ef9f9ba56",
+  "ts": "2026-06-08T00:53:19.044Z"
+}[39m
+[32m[Nest] 17948  - [39m06/08/2026, 3:53:19 AM [32m    LOG[39m [38;5;3m[Http] [39m[32m{
+  "kind": "http_request",
+  "requestId": "8c8e93d7-5826-41cf-ab21-4e471512b0df",
+  "method": "GET",
+  "path": "/api/purchases/line-pricing-by-product",
+  "statusCode": 200,
+  "durationMs": 74,
+  "tenantId": null,
+  "branchId": "33511c3c-545e-4dd0-b9cd-1bc1b4eeb896",
+  "userId": "d317a2e3-686a-4e66-b70b-a58ef9f9ba56",
+  "ts": "2026-06-08T00:53:19.074Z"
+}[39m
+[32m[Nest] 17948  - [39m06/08/2026, 3:53:19 AM [32m    LOG[39m [38;5;3m[Http] [39m[32m{
+  "kind": "http_request",
+  "requestId": "ce121945-8076-4cd5-8b2f-aede31c9e17e",
+  "method": "GET",
+  "path": "/api/branches",
+  "statusCode": 200,
+  "durationMs": 0,
+  "tenantId": null,
+  "branchId": "33511c3c-545e-4dd0-b9cd-1bc1b4eeb896",
+  "userId": "d317a2e3-686a-4e66-b70b-a58ef9f9ba56",
+  "ts": "2026-06-08T00:53:19.089Z"
+}[39m
+[32m[Nest] 17948  - [39m06/08/2026, 3:53:19 AM [32m    LOG[39m [38;5;3m[Http] [39m[32m{
+  "kind": "http_request",
+  "requestId": "90716452-ebe2-4f59-95b7-e0f407102ab6",
+  "method": "GET",
+  "path": "/api/products/catalog",
+  "statusCode": 200,
+  "durationMs": 0,
+  "tenantId": null,
+  "branchId": "33511c3c-545e-4dd0-b9cd-1bc1b4eeb896",
+  "userId": "d317a2e3-686a-4e66-b70b-a58ef9f9ba56",
+  "ts": "2026-06-08T00:53:19.169Z"
+}[39m
+[32m[Nest] 17948  - [39m06/08/2026, 3:53:19 AM [32m    LOG[39m [38;5;3m[Http] [39m[32m{
+  "kind": "http_request",
+  "requestId": "b0243870-8680-44a0-9945-77c9df8f065b",
+  "method": "GET",
+  "path": "/api/purchases/line-pricing-by-product",
+  "statusCode": 200,
+  "durationMs": 76,
+  "tenantId": null,
+  "branchId": "33511c3c-545e-4dd0-b9cd-1bc1b4eeb896",
+  "userId": "d317a2e3-686a-4e66-b70b-a58ef9f9ba56",
+  "ts": "2026-06-08T00:53:19.270Z"
+}[39m
+[32m[Nest] 17948  - [39m06/08/2026, 3:53:19 AM [32m    LOG[39m [38;5;3m[Http] [39m[32m{
+  "kind": "http_request",
+  "requestId": "74b6fd25-f471-4a48-8533-90c29b741225",
+  "method": "GET",
+  "path": "/api/inventory",
+  "statusCode": 200,
+  "durationMs": 122,
+  "tenantId": null,
+  "branchId": "33511c3c-545e-4dd0-b9cd-1bc1b4eeb896",
+  "userId": "d317a2e3-686a-4e66-b70b-a58ef9f9ba56",
+  "ts": "2026-06-08T00:53:19.275Z"
+}[39m
+[32m[Nest] 17948  - [39m06/08/2026, 3:57:58 AM [32m    LOG[39m [38;5;3m[BranchScope] [39m[32mBRANCH_SCOPE_RESOLVED {"actorUserId":"d317a2e3-686a-4e66-b70b-a58ef9f9ba56","correlationId":null,"branchIds":["33511c3c-545e-4dd0-b9cd-1bc1b4eeb896"],"aggregateAll":false,"scopeHash":"cab1d8c1ad275f1f"}[39m
+[32m[Nest] 17948  - [39m06/08/2026, 3:57:58 AM [32m    LOG[39m [38;5;3m[Http] [39m[32m{
+  "kind": "http_request",
+  "requestId": "ac61f600-bc7c-4ebb-8c4b-fe5809be5ff8",
+  "method": "GET",
+  "path": "/api/products/catalog",
+  "statusCode": 200,
+  "durationMs": 21,
+  "tenantId": null,
+  "branchId": "33511c3c-545e-4dd0-b9cd-1bc1b4eeb896",
+  "userId": "d317a2e3-686a-4e66-b70b-a58ef9f9ba56",
+  "ts": "2026-06-08T00:57:58.449Z"
+}[39m
+[32m[Nest] 17948  - [39m06/08/2026, 3:57:58 AM [32m    LOG[39m [38;5;3m[Http] [39m[32m{
+  "kind": "http_request",
+  "requestId": "8cb4a4d8-bc5a-4b89-be8f-381e59af7b96",
+  "method": "GET",
+  "path": "/api/branches",
+  "statusCode": 200,
+  "durationMs": 6,
+  "tenantId": null,
+  "branchId": "33511c3c-545e-4dd0-b9cd-1bc1b4eeb896",
+  "userId": "d317a2e3-686a-4e66-b70b-a58ef9f9ba56",
+  "ts": "2026-06-08T00:57:58.631Z"
+}[39m
+[32m[Nest] 17948  - [39m06/08/2026, 3:57:58 AM [32m    LOG[39m [38;5;3m[Http] [39m[32m{
+  "kind": "http_request",
+  "requestId": "c33369b8-146e-4eb0-9833-0f73b637a66e",
+  "method": "GET",
+  "path": "/api/branches",
+  "statusCode": 200,
+  "durationMs": 0,
+  "tenantId": null,
+  "branchId": "33511c3c-545e-4dd0-b9cd-1bc1b4eeb896",
+  "userId": "d317a2e3-686a-4e66-b70b-a58ef9f9ba56",
+  "ts": "2026-06-08T00:57:58.676Z"
+}[39m
+[32m[Nest] 17948  - [39m06/08/2026, 3:57:58 AM [32m    LOG[39m [38;5;3m[Http] [39m[32m{
+  "kind": "http_request",
+  "requestId": "73627c2e-dafa-43e5-b68d-c65dc4cbd2ee",
+  "method": "GET",
+  "path": "/api/reports/alerts",
+  "statusCode": 200,
+  "durationMs": 272,
+  "tenantId": null,
+  "branchId": "33511c3c-545e-4dd0-b9cd-1bc1b4eeb896",
+  "userId": "d317a2e3-686a-4e66-b70b-a58ef9f9ba56",
+  "ts": "2026-06-08T00:57:58.689Z"
+}[39m
+[32m[Nest] 17948  - [39m06/08/2026, 3:57:58 AM [32m    LOG[39m [38;5;3m[Http] [39m[32m{
+  "kind": "http_request",
+  "requestId": "bc7760e7-7b88-49dd-a901-1e7c6dec9fe4",
+  "method": "GET",
+  "path": "/api/categories",
+  "statusCode": 200,
+  "durationMs": 16,
+  "tenantId": null,
+  "branchId": "33511c3c-545e-4dd0-b9cd-1bc1b4eeb896",
+  "userId": "d317a2e3-686a-4e66-b70b-a58ef9f9ba56",
+  "ts": "2026-06-08T00:57:58.752Z"
+}[39m
+[32m[Nest] 17948  - [39m06/08/2026, 3:57:58 AM [32m    LOG[39m [38;5;3m[Http] [39m[32m{
+  "kind": "http_request",
+  "requestId": "79a9af84-1e37-4576-a22f-ae6ef904dc74",
+  "method": "GET",
+  "path": "/api/purchases/line-pricing-by-product",
+  "statusCode": 200,
+  "durationMs": 119,
+  "tenantId": null,
+  "branchId": "33511c3c-545e-4dd0-b9cd-1bc1b4eeb896",
+  "userId": "d317a2e3-686a-4e66-b70b-a58ef9f9ba56",
+  "ts": "2026-06-08T00:57:58.798Z"
+}[39m
+[32m[Nest] 17948  - [39m06/08/2026, 3:57:58 AM [32m    LOG[39m [38;5;3m[Http] [39m[32m{
+  "kind": "http_request",
+  "requestId": "cf8013c0-4662-431b-9a94-194945518bdf",
+  "method": "GET",
+  "path": "/api/inventory",
+  "statusCode": 200,
+  "durationMs": 37,
+  "tenantId": null,
+  "branchId": "33511c3c-545e-4dd0-b9cd-1bc1b4eeb896",
+  "userId": "d317a2e3-686a-4e66-b70b-a58ef9f9ba56",
+  "ts": "2026-06-08T00:57:58.804Z"
+}[39m
+[32m[Nest] 17948  - [39m06/08/2026, 3:58:08 AM [32m    LOG[39m [38;5;3m[Http] [39m[32m{
+  "kind": "http_request",
+  "requestId": "da6c4869-c9f9-4b22-b133-69de25ac9e35",
+  "method": "GET",
+  "path": "/api/products/catalog",
+  "statusCode": 200,
+  "durationMs": 1,
+  "tenantId": null,
+  "branchId": "33511c3c-545e-4dd0-b9cd-1bc1b4eeb896",
+  "userId": "d317a2e3-686a-4e66-b70b-a58ef9f9ba56",
+  "ts": "2026-06-08T00:58:08.302Z"
+}[39m
+[32m[Nest] 17948  - [39m06/08/2026, 3:58:08 AM [32m    LOG[39m [38;5;3m[Http] [39m[32m{
+  "kind": "http_request",
+  "requestId": "22eb43de-08a1-43ad-a824-de37979e605f",
+  "method": "GET",
+  "path": "/api/categories",
+  "statusCode": 200,
+  "durationMs": 5,
+  "tenantId": null,
+  "branchId": "33511c3c-545e-4dd0-b9cd-1bc1b4eeb896",
+  "userId": "d317a2e3-686a-4e66-b70b-a58ef9f9ba56",
+  "ts": "2026-06-08T00:58:08.329Z"
+}[39m
+[32m[Nest] 17948  - [39m06/08/2026, 3:58:08 AM [32m    LOG[39m [38;5;3m[Http] [39m[32m{
+  "kind": "http_request",
+  "requestId": "eaf891ce-039d-4a69-9c2a-33b0f33097b0",
+  "method": "GET",
+  "path": "/api/inventory",
+  "statusCode": 200,
+  "durationMs": 51,
+  "tenantId": null,
+  "branchId": "33511c3c-545e-4dd0-b9cd-1bc1b4eeb896",
+  "userId": "d317a2e3-686a-4e66-b70b-a58ef9f9ba56",
+  "ts": "2026-06-08T00:58:08.394Z"
+}[39m
+[32m[Nest] 17948  - [39m06/08/2026, 3:58:10 AM [32m    LOG[39m [38;5;3m[Http] [39m[32m{
+  "kind": "http_request",
+  "requestId": "27156236-ee42-4134-8a18-803ff54868c9",
+  "method": "GET",
+  "path": "/api/uoms",
+  "statusCode": 200,
+  "durationMs": 6,
+  "tenantId": null,
+  "branchId": "33511c3c-545e-4dd0-b9cd-1bc1b4eeb896",
+  "userId": "d317a2e3-686a-4e66-b70b-a58ef9f9ba56",
+  "ts": "2026-06-08T00:58:10.577Z"
+}[39m
+[32m[Nest] 17948  - [39m06/08/2026, 3:58:45 AM [32m    LOG[39m [38;5;3m[BranchScope] [39m[32mBRANCH_SCOPE_RESOLVED {"actorUserId":"d317a2e3-686a-4e66-b70b-a58ef9f9ba56","correlationId":null,"branchIds":["33511c3c-545e-4dd0-b9cd-1bc1b4eeb896"],"aggregateAll":false,"scopeHash":"cab1d8c1ad275f1f"}[39m
+[32m[Nest] 17948  - [39m06/08/2026, 3:58:45 AM [32m    LOG[39m [38;5;3m[Http] [39m[32m{
+  "kind": "http_request",
+  "requestId": "2f73bebb-0395-46c3-aba5-041598b5432e",
+  "method": "GET",
+  "path": "/api/reports/alerts",
+  "statusCode": 200,
+  "durationMs": 93,
+  "tenantId": null,
+  "branchId": "33511c3c-545e-4dd0-b9cd-1bc1b4eeb896",
+  "userId": "d317a2e3-686a-4e66-b70b-a58ef9f9ba56",
+  "ts": "2026-06-08T00:58:45.669Z"
+}[39m
+[32m[Nest] 17948  - [39m06/08/2026, 3:58:58 AM [32m    LOG[39m [38;5;3m[ProductsService] [39m[32m[barcode-validation] search {"schemaName":"wakiil","barcode":"12121","table":"products","column":"barcode","excludeProductId":null}[39m
+[32m[Nest] 17948  - [39m06/08/2026, 3:58:58 AM [32m    LOG[39m [38;5;3m[ProductsService] [39m[32m[barcode-validation] no-match {"schemaName":"wakiil","barcode":"12121","searchedTables":["products"],"matchingRecordId":null,"matchingProductName":null}[39m
+[32m[Nest] 17948  - [39m06/08/2026, 3:58:58 AM [32m    LOG[39m [38;5;3m[Http] [39m[32m{
+  "kind": "http_request",
+  "requestId": "8ce10a81-2cd0-4138-8b59-c148b2283360",
+  "method": "POST",
+  "path": "/api/products",
+  "statusCode": 201,
+  "durationMs": 83,
+  "tenantId": null,
+  "branchId": "33511c3c-545e-4dd0-b9cd-1bc1b4eeb896",
+  "userId": "d317a2e3-686a-4e66-b70b-a58ef9f9ba56",
+  "ts": "2026-06-08T00:58:58.628Z"
+}[39m
+[32m[Nest] 17948  - [39m06/08/2026, 3:58:58 AM [32m    LOG[39m [38;5;3m[Http] [39m[32m{
+  "kind": "http_request",
+  "requestId": "c83eedcd-0e3b-4b28-8551-293ece1a1608",
+  "method": "GET",
+  "path": "/api/products/catalog",
+  "statusCode": 200,
+  "durationMs": 17,
+  "tenantId": null,
+  "branchId": "33511c3c-545e-4dd0-b9cd-1bc1b4eeb896",
+  "userId": "d317a2e3-686a-4e66-b70b-a58ef9f9ba56",
+  "ts": "2026-06-08T00:58:58.726Z"
+}[39m
+[32m[Nest] 17948  - [39m06/08/2026, 3:59:08 AM [32m    LOG[39m [38;5;3m[Http] [39m[32m{
+  "kind": "http_request",
+  "requestId": "a74df4f9-0689-4b3b-8f92-702febcb4f27",
+  "method": "GET",
+  "path": "/api/products/catalog",
+  "statusCode": 200,
+  "durationMs": 0,
+  "tenantId": null,
+  "branchId": "33511c3c-545e-4dd0-b9cd-1bc1b4eeb896",
+  "userId": "d317a2e3-686a-4e66-b70b-a58ef9f9ba56",
+  "ts": "2026-06-08T00:59:08.824Z"
+}[39m
+[32m[Nest] 17948  - [39m06/08/2026, 3:59:08 AM [32m    LOG[39m [38;5;3m[Http] [39m[32m{
+  "kind": "http_request",
+  "requestId": "fb373d8e-9b63-4da7-a17e-63b2e1bc990f",
+  "method": "GET",
+  "path": "/api/categories",
+  "statusCode": 200,
+  "durationMs": 15,
+  "tenantId": null,
+  "branchId": "33511c3c-545e-4dd0-b9cd-1bc1b4eeb896",
+  "userId": "d317a2e3-686a-4e66-b70b-a58ef9f9ba56",
+  "ts": "2026-06-08T00:59:08.838Z"
+}[39m
+[32m[Nest] 17948  - [39m06/08/2026, 3:59:08 AM [32m    LOG[39m [38;5;3m[Http] [39m[32m{
+  "kind": "http_request",
+  "requestId": "a7aa71a8-8bd5-4d43-9718-4cc90931556d",
+  "method": "GET",
+  "path": "/api/products/catalog",
+  "statusCode": 200,
+  "durationMs": 0,
+  "tenantId": null,
+  "branchId": "33511c3c-545e-4dd0-b9cd-1bc1b4eeb896",
+  "userId": "d317a2e3-686a-4e66-b70b-a58ef9f9ba56",
+  "ts": "2026-06-08T00:59:08.857Z"
+}[39m
+[32m[Nest] 17948  - [39m06/08/2026, 3:59:08 AM [32m    LOG[39m [38;5;3m[Http] [39m[32m{
+  "kind": "http_request",
+  "requestId": "98ff9f97-0487-4dcc-9dc5-adadebf2c5e7",
+  "method": "GET",
+  "path": "/api/inventory",
+  "statusCode": 200,
+  "durationMs": 37,
+  "tenantId": null,
+  "branchId": "33511c3c-545e-4dd0-b9cd-1bc1b4eeb896",
+  "userId": "d317a2e3-686a-4e66-b70b-a58ef9f9ba56",
+  "ts": "2026-06-08T00:59:08.864Z"
+}[39m
+[32m[Nest] 17948  - [39m06/08/2026, 3:59:08 AM [32m    LOG[39m [38;5;3m[Http] [39m[32m{
+  "kind": "http_request",
+  "requestId": "4721be31-ff0b-405b-b488-cff94b4e8225",
+  "method": "GET",
+  "path": "/api/categories",
+  "statusCode": 200,
+  "durationMs": 1,
+  "tenantId": null,
+  "branchId": "33511c3c-545e-4dd0-b9cd-1bc1b4eeb896",
+  "userId": "d317a2e3-686a-4e66-b70b-a58ef9f9ba56",
+  "ts": "2026-06-08T00:59:08.869Z"
+}[39m
+[32m[Nest] 17948  - [39m06/08/2026, 3:59:08 AM [32m    LOG[39m [38;5;3m[Http] [39m[32m{
+  "kind": "http_request",
+  "requestId": "b2f9a2ea-2b91-4bb8-9a0a-bc40d9ceb4b8",
+  "method": "GET",
+  "path": "/api/inventory",
+  "statusCode": 200,
+  "durationMs": 17,
+  "tenantId": null,
+  "branchId": "33511c3c-545e-4dd0-b9cd-1bc1b4eeb896",
+  "userId": "d317a2e3-686a-4e66-b70b-a58ef9f9ba56",
+  "ts": "2026-06-08T00:59:08.901Z"
+}[39m
+[32m[Nest] 17948  - [39m06/08/2026, 3:59:08 AM [32m    LOG[39m [38;5;3m[Http] [39m[32m{
+  "kind": "http_request",
+  "requestId": "5ed7da20-4615-4d5b-803b-ca1fd9d7d662",
+  "method": "GET",
+  "path": "/api/branches",
+  "statusCode": 200,
+  "durationMs": 3,
+  "tenantId": null,
+  "branchId": "33511c3c-545e-4dd0-b9cd-1bc1b4eeb896",
+  "userId": "d317a2e3-686a-4e66-b70b-a58ef9f9ba56",
+  "ts": "2026-06-08T00:59:08.936Z"
+}[39m
+[32m[Nest] 17948  - [39m06/08/2026, 3:59:08 AM [32m    LOG[39m [38;5;3m[Http] [39m[32m{
+  "kind": "http_request",
+  "requestId": "a0e78fc6-fc65-4cd7-954a-33fd3f93c72d",
+  "method": "GET",
+  "path": "/api/branches",
+  "statusCode": 200,
+  "durationMs": 0,
+  "tenantId": null,
+  "branchId": "33511c3c-545e-4dd0-b9cd-1bc1b4eeb896",
+  "userId": "d317a2e3-686a-4e66-b70b-a58ef9f9ba56",
+  "ts": "2026-06-08T00:59:08.952Z"
+}[39m
+[32m[Nest] 17948  - [39m06/08/2026, 3:59:13 AM [32m    LOG[39m [38;5;3m[Http] [39m[32m{
+  "kind": "http_request",
+  "requestId": "e142b4fa-7fed-43f9-8bb3-ed4a72e011a1",
+  "method": "GET",
+  "path": "/api/branches",
+  "statusCode": 200,
+  "durationMs": 0,
+  "tenantId": null,
+  "branchId": "33511c3c-545e-4dd0-b9cd-1bc1b4eeb896",
+  "userId": "d317a2e3-686a-4e66-b70b-a58ef9f9ba56",
+  "ts": "2026-06-08T00:59:13.714Z"
+}[39m
+[32m[Nest] 17948  - [39m06/08/2026, 3:59:13 AM [32m    LOG[39m [38;5;3m[Http] [39m[32m{
+  "kind": "http_request",
+  "requestId": "76414cfb-4515-437b-9684-23b773fbb09a",
+  "method": "GET",
+  "path": "/api/categories",
+  "statusCode": 200,
+  "durationMs": 0,
+  "tenantId": null,
+  "branchId": "33511c3c-545e-4dd0-b9cd-1bc1b4eeb896",
+  "userId": "d317a2e3-686a-4e66-b70b-a58ef9f9ba56",
+  "ts": "2026-06-08T00:59:13.736Z"
+}[39m
+[32m[Nest] 17948  - [39m06/08/2026, 3:59:13 AM [32m    LOG[39m [38;5;3m[Http] [39m[32m{
+  "kind": "http_request",
+  "requestId": "4cdb9d9e-8bc0-4f81-b2e7-edebf9034a6a",
+  "method": "GET",
+  "path": "/api/products/catalog",
+  "statusCode": 200,
+  "durationMs": 0,
+  "tenantId": null,
+  "branchId": "33511c3c-545e-4dd0-b9cd-1bc1b4eeb896",
+  "userId": "d317a2e3-686a-4e66-b70b-a58ef9f9ba56",
+  "ts": "2026-06-08T00:59:13.740Z"
+}[39m
+[32m[Nest] 17948  - [39m06/08/2026, 3:59:13 AM [32m    LOG[39m [38;5;3m[Http] [39m[32m{
+  "kind": "http_request",
+  "requestId": "234e03ea-a92f-4688-ae14-8287c1dacfaa",
+  "method": "GET",
+  "path": "/api/branches",
+  "statusCode": 200,
+  "durationMs": 0,
+  "tenantId": null,
+  "branchId": "33511c3c-545e-4dd0-b9cd-1bc1b4eeb896",
+  "userId": "d317a2e3-686a-4e66-b70b-a58ef9f9ba56",
+  "ts": "2026-06-08T00:59:13.814Z"
+}[39m
+[32m[Nest] 17948  - [39m06/08/2026, 3:59:13 AM [32m    LOG[39m [38;5;3m[Http] [39m[32m{
+  "kind": "http_request",
+  "requestId": "6c658b49-d248-4896-ab8e-89b1033b67cc",
+  "method": "GET",
+  "path": "/api/categories",
+  "statusCode": 200,
+  "durationMs": 0,
+  "tenantId": null,
+  "branchId": "33511c3c-545e-4dd0-b9cd-1bc1b4eeb896",
+  "userId": "d317a2e3-686a-4e66-b70b-a58ef9f9ba56",
+  "ts": "2026-06-08T00:59:13.827Z"
+}[39m
+[32m[Nest] 17948  - [39m06/08/2026, 3:59:13 AM [32m    LOG[39m [38;5;3m[Http] [39m[32m{
+  "kind": "http_request",
+  "requestId": "2181ebab-c552-4ccc-8a6e-24abaf64d556",
+  "method": "GET",
+  "path": "/api/products/catalog",
+  "statusCode": 200,
+  "durationMs": 1,
+  "tenantId": null,
+  "branchId": "33511c3c-545e-4dd0-b9cd-1bc1b4eeb896",
+  "userId": "d317a2e3-686a-4e66-b70b-a58ef9f9ba56",
+  "ts": "2026-06-08T00:59:13.833Z"
+}[39m
+[32m[Nest] 17948  - [39m06/08/2026, 3:59:13 AM [32m    LOG[39m [38;5;3m[Http] [39m[32m{
+  "kind": "http_request",
+  "requestId": "dfbcedad-7905-4845-8f61-9369f7fba2d4",
+  "method": "GET",
+  "path": "/api/inventory",
+  "statusCode": 200,
+  "durationMs": 39,
+  "tenantId": null,
+  "branchId": "33511c3c-545e-4dd0-b9cd-1bc1b4eeb896",
+  "userId": "d317a2e3-686a-4e66-b70b-a58ef9f9ba56",
+  "ts": "2026-06-08T00:59:13.835Z"
+}[39m
+[32m[Nest] 17948  - [39m06/08/2026, 3:59:13 AM [32m    LOG[39m [38;5;3m[Http] [39m[32m{
+  "kind": "http_request",
+  "requestId": "8aee9e26-47ec-4715-b57c-5219300d4ae1",
+  "method": "GET",
+  "path": "/api/inventory",
+  "statusCode": 200,
+  "durationMs": 8,
+  "tenantId": null,
+  "branchId": "33511c3c-545e-4dd0-b9cd-1bc1b4eeb896",
+  "userId": "d317a2e3-686a-4e66-b70b-a58ef9f9ba56",
+  "ts": "2026-06-08T00:59:13.869Z"
+}[39m
+[32m[Nest] 17948  - [39m06/08/2026, 3:59:14 AM [32m    LOG[39m [38;5;3m[Http] [39m[32m{
+  "kind": "http_request",
+  "requestId": "137ee4e7-38e0-47c1-8a13-86b2470e7c27",
+  "method": "GET",
+  "path": "/api/purchases/line-pricing-by-product",
+  "statusCode": 200,
+  "durationMs": 89,
+  "tenantId": null,
+  "branchId": "33511c3c-545e-4dd0-b9cd-1bc1b4eeb896",
+  "userId": "d317a2e3-686a-4e66-b70b-a58ef9f9ba56",
+  "ts": "2026-06-08T00:59:14.025Z"
+}[39m
+[32m[Nest] 17948  - [39m06/08/2026, 3:59:14 AM [32m    LOG[39m [38;5;3m[Http] [39m[32m{
+  "kind": "http_request",
+  "requestId": "db9acc38-2c9c-414c-b7b5-23254de1575b",
+  "method": "GET",
+  "path": "/api/purchases/line-pricing-by-product",
+  "statusCode": 200,
+  "durationMs": 23,
+  "tenantId": null,
+  "branchId": "33511c3c-545e-4dd0-b9cd-1bc1b4eeb896",
+  "userId": "d317a2e3-686a-4e66-b70b-a58ef9f9ba56",
+  "ts": "2026-06-08T00:59:14.066Z"
+}[39m
+[32m[Nest] 17948  - [39m06/08/2026, 3:59:17 AM [32m    LOG[39m [38;5;3m[Http] [39m[32m{
+  "kind": "http_request",
+  "requestId": "9bc2323a-2ca4-4688-8ff5-0f04ef35d657",
+  "method": "GET",
+  "path": "/api/products/catalog",
+  "statusCode": 200,
+  "durationMs": 0,
+  "tenantId": null,
+  "branchId": "33511c3c-545e-4dd0-b9cd-1bc1b4eeb896",
+  "userId": "d317a2e3-686a-4e66-b70b-a58ef9f9ba56",
+  "ts": "2026-06-08T00:59:17.600Z"
+}[39m
+[32m[Nest] 17948  - [39m06/08/2026, 3:59:17 AM [32m    LOG[39m [38;5;3m[Http] [39m[32m{
+  "kind": "http_request",
+  "requestId": "3b024d49-c88e-4fb6-a6fd-3bfcc2b91c5f",
+  "method": "GET",
+  "path": "/api/categories",
+  "statusCode": 200,
+  "durationMs": 0,
+  "tenantId": null,
+  "branchId": "33511c3c-545e-4dd0-b9cd-1bc1b4eeb896",
+  "userId": "d317a2e3-686a-4e66-b70b-a58ef9f9ba56",
+  "ts": "2026-06-08T00:59:17.606Z"
+}[39m
+[32m[Nest] 17948  - [39m06/08/2026, 3:59:17 AM [32m    LOG[39m [38;5;3m[Http] [39m[32m{
+  "kind": "http_request",
+  "requestId": "218699d6-7960-4638-bd7e-e36ee469a19a",
+  "method": "GET",
+  "path": "/api/inventory",
+  "statusCode": 200,
+  "durationMs": 13,
+  "tenantId": null,
+  "branchId": "33511c3c-545e-4dd0-b9cd-1bc1b4eeb896",
+  "userId": "d317a2e3-686a-4e66-b70b-a58ef9f9ba56",
+  "ts": "2026-06-08T00:59:17.625Z"
+}[39m
+[32m[Nest] 17948  - [39m06/08/2026, 3:59:20 AM [32m    LOG[39m [38;5;3m[Http] [39m[32m{
+  "kind": "http_request",
+  "requestId": "106dc0d6-2b02-4c4a-8753-490d9047f629",
+  "method": "GET",
+  "path": "/api/products/0fc4ecf8-e474-450d-b9cd-eb5703e69ead/uoms",
+  "statusCode": 200,
+  "durationMs": 21,
+  "tenantId": null,
+  "branchId": "33511c3c-545e-4dd0-b9cd-1bc1b4eeb896",
+  "userId": "d317a2e3-686a-4e66-b70b-a58ef9f9ba56",
+  "ts": "2026-06-08T00:59:20.624Z"
+}[39m
+[32m[Nest] 17948  - [39m06/08/2026, 3:59:20 AM [32m    LOG[39m [38;5;3m[Http] [39m[32m{
+  "kind": "http_request",
+  "requestId": "c782276b-2045-4138-ac6c-e9c064fbac4f",
+  "method": "GET",
+  "path": "/api/uoms",
+  "statusCode": 200,
+  "durationMs": 12,
+  "tenantId": null,
+  "branchId": "33511c3c-545e-4dd0-b9cd-1bc1b4eeb896",
+  "userId": "d317a2e3-686a-4e66-b70b-a58ef9f9ba56",
+  "ts": "2026-06-08T00:59:20.626Z"
+}[39m
+[32m[Nest] 17948  - [39m06/08/2026, 3:59:20 AM [32m    LOG[39m [38;5;3m[Http] [39m[32m{
+  "kind": "http_request",
+  "requestId": "420fd64b-45df-4e00-a6c6-95a3aa27e430",
+  "method": "GET",
+  "path": "/api/suppliers",
+  "statusCode": 200,
+  "durationMs": 14,
+  "tenantId": null,
+  "branchId": "33511c3c-545e-4dd0-b9cd-1bc1b4eeb896",
+  "userId": "d317a2e3-686a-4e66-b70b-a58ef9f9ba56",
+  "ts": "2026-06-08T00:59:20.630Z"
+}[39m
+[32m[Nest] 17948  - [39m06/08/2026, 3:59:20 AM [32m    LOG[39m [38;5;3m[Http] [39m[32m{
+  "kind": "http_request",
+  "requestId": "62e104b3-aca7-46f5-94f9-7d958914a0f2",
+  "method": "GET",
+  "path": "/api/products/0fc4ecf8-e474-450d-b9cd-eb5703e69ead/suppliers",
+  "statusCode": 200,
+  "durationMs": 34,
+  "tenantId": null,
+  "branchId": "33511c3c-545e-4dd0-b9cd-1bc1b4eeb896",
+  "userId": "d317a2e3-686a-4e66-b70b-a58ef9f9ba56",
+  "ts": "2026-06-08T00:59:20.634Z"
+}[39m
+[32m[Nest] 17948  - [39m06/08/2026, 3:59:30 AM [32m    LOG[39m [38;5;3m[BranchScope] [39m[32mBRANCH_SCOPE_RESOLVED {"actorUserId":"d317a2e3-686a-4e66-b70b-a58ef9f9ba56","correlationId":null,"branchIds":["33511c3c-545e-4dd0-b9cd-1bc1b4eeb896"],"aggregateAll":false,"scopeHash":"cab1d8c1ad275f1f"}[39m
+[32m[Nest] 17948  - [39m06/08/2026, 3:59:30 AM [32m    LOG[39m [38;5;3m[Http] [39m[32m{
+  "kind": "http_request",
+  "requestId": "16bfadae-e5db-4d23-b91b-2f790f192bc4",
+  "method": "GET",
+  "path": "/api/reports/alerts",
+  "statusCode": 200,
+  "durationMs": 39,
+  "tenantId": null,
+  "branchId": "33511c3c-545e-4dd0-b9cd-1bc1b4eeb896",
+  "userId": "d317a2e3-686a-4e66-b70b-a58ef9f9ba56",
+  "ts": "2026-06-08T00:59:30.746Z"
+}[39m
+[32m[Nest] 17948  - [39m06/08/2026, 3:59:39 AM [32m    LOG[39m [38;5;3m[Http] [39m[32m{
+  "kind": "http_request",
+  "requestId": "a4e75e3c-18da-4429-ad24-816f3416969f",
+  "method": "POST",
+  "path": "/api/products/0fc4ecf8-e474-450d-b9cd-eb5703e69ead/uoms",
+  "statusCode": 201,
+  "durationMs": 19,
+  "tenantId": null,
+  "branchId": "33511c3c-545e-4dd0-b9cd-1bc1b4eeb896",
+  "userId": "d317a2e3-686a-4e66-b70b-a58ef9f9ba56",
+  "ts": "2026-06-08T00:59:39.965Z"
+}[39m
+[32m[Nest] 17948  - [39m06/08/2026, 3:59:40 AM [32m    LOG[39m [38;5;3m[Http] [39m[32m{
+  "kind": "http_request",
+  "requestId": "869d71d2-53fb-4ad6-9530-68d5a1564a82",
+  "method": "GET",
+  "path": "/api/products/0fc4ecf8-e474-450d-b9cd-eb5703e69ead/uoms",
+  "statusCode": 200,
+  "durationMs": 7,
+  "tenantId": null,
+  "branchId": "33511c3c-545e-4dd0-b9cd-1bc1b4eeb896",
+  "userId": "d317a2e3-686a-4e66-b70b-a58ef9f9ba56",
+  "ts": "2026-06-08T00:59:40.055Z"
+}[39m
+[32m[Nest] 17948  - [39m06/08/2026, 3:59:40 AM [32m    LOG[39m [38;5;3m[Http] [39m[32m{
+  "kind": "http_request",
+  "requestId": "2707fa2e-4a08-4e4e-8c54-5dadf27b1837",
+  "method": "GET",
+  "path": "/api/products/catalog",
+  "statusCode": 200,
+  "durationMs": 0,
+  "tenantId": null,
+  "branchId": "33511c3c-545e-4dd0-b9cd-1bc1b4eeb896",
+  "userId": "d317a2e3-686a-4e66-b70b-a58ef9f9ba56",
+  "ts": "2026-06-08T00:59:40.181Z"
+}[39m
+[32m[Nest] 17948  - [39m06/08/2026, 3:59:48 AM [32m    LOG[39m [38;5;3m[Http] [39m[32m{
+  "kind": "http_request",
+  "requestId": "ff94482a-12f1-4796-8888-f2c39cdedc7d",
+  "method": "PATCH",
+  "path": "/api/products/0fc4ecf8-e474-450d-b9cd-eb5703e69ead/uoms/2a613caf-4c7b-4430-a5e3-810ac6a6731f",
+  "statusCode": 200,
+  "durationMs": 14,
+  "tenantId": null,
+  "branchId": "33511c3c-545e-4dd0-b9cd-1bc1b4eeb896",
+  "userId": "d317a2e3-686a-4e66-b70b-a58ef9f9ba56",
+  "ts": "2026-06-08T00:59:48.976Z"
+}[39m
+[32m[Nest] 17948  - [39m06/08/2026, 3:59:49 AM [32m    LOG[39m [38;5;3m[Http] [39m[32m{
+  "kind": "http_request",
+  "requestId": "dd48847b-ca04-4b6e-96f1-20595c1098f3",
+  "method": "GET",
+  "path": "/api/products/0fc4ecf8-e474-450d-b9cd-eb5703e69ead/uoms",
+  "statusCode": 200,
+  "durationMs": 6,
+  "tenantId": null,
+  "branchId": "33511c3c-545e-4dd0-b9cd-1bc1b4eeb896",
+  "userId": "d317a2e3-686a-4e66-b70b-a58ef9f9ba56",
+  "ts": "2026-06-08T00:59:49.079Z"
+}[39m
+[32m[Nest] 17948  - [39m06/08/2026, 3:59:49 AM [32m    LOG[39m [38;5;3m[Http] [39m[32m{
+  "kind": "http_request",
+  "requestId": "d728f068-1fdf-4ea9-b910-09edda02974f",
+  "method": "GET",
+  "path": "/api/products/catalog",
+  "statusCode": 200,
+  "durationMs": 16,
+  "tenantId": null,
+  "branchId": "33511c3c-545e-4dd0-b9cd-1bc1b4eeb896",
+  "userId": "d317a2e3-686a-4e66-b70b-a58ef9f9ba56",
+  "ts": "2026-06-08T00:59:49.219Z"
+}[39m
+[32m[Nest] 17948  - [39m06/08/2026, 4:00:00 AM [32m    LOG[39m [38;5;3m[ReconciliationHourlyIntegrityJob] [39m[32mStarting hourly integrity snapshot run[39m
+[32m[Nest] 17948  - [39m06/08/2026, 4:00:00 AM [32m    LOG[39m [38;5;3m[IdempotencyService] [39m[32mIdempotency cleanup removed 0 expired rows across tenants[39m
+[32m[Nest] 17948  - [39m06/08/2026, 4:00:00 AM [32m    LOG[39m [38;5;3m[IdempotencyCleanupJob] [39m[32mExpired idempotency keys removed: 0[39m
+[32m[Nest] 17948  - [39m06/08/2026, 4:00:00 AM [32m    LOG[39m [38;5;3m[ReconciliationHourlyIntegrityJob] [39m[32mHourly integrity snapshot run finished[39m
+[32m[Nest] 17948  - [39m06/08/2026, 4:00:01 AM [32m    LOG[39m [38;5;3m[Http] [39m[32m{
+  "kind": "http_request",
+  "requestId": "0845a5a4-d0cd-44f9-a5f9-b5e23fcf4128",
+  "method": "POST",
+  "path": "/api/products/0fc4ecf8-e474-450d-b9cd-eb5703e69ead/uoms",
+  "statusCode": 201,
+  "durationMs": 34,
+  "tenantId": null,
+  "branchId": "33511c3c-545e-4dd0-b9cd-1bc1b4eeb896",
+  "userId": "d317a2e3-686a-4e66-b70b-a58ef9f9ba56",
+  "ts": "2026-06-08T01:00:01.175Z"
+}[39m
+[32m[Nest] 17948  - [39m06/08/2026, 4:00:01 AM [32m    LOG[39m [38;5;3m[Http] [39m[32m{
+  "kind": "http_request",
+  "requestId": "d31cc7bb-5380-4a5a-93fe-1ce7e6c6b83f",
+  "method": "GET",
+  "path": "/api/products/0fc4ecf8-e474-450d-b9cd-eb5703e69ead/uoms",
+  "statusCode": 200,
+  "durationMs": 6,
+  "tenantId": null,
+  "branchId": "33511c3c-545e-4dd0-b9cd-1bc1b4eeb896",
+  "userId": "d317a2e3-686a-4e66-b70b-a58ef9f9ba56",
+  "ts": "2026-06-08T01:00:01.250Z"
+}[39m
+[32m[Nest] 17948  - [39m06/08/2026, 4:00:01 AM [32m    LOG[39m [38;5;3m[Http] [39m[32m{
+  "kind": "http_request",
+  "requestId": "ceb539c0-5aff-4165-93eb-c32b3eda124b",
+  "method": "GET",
+  "path": "/api/products/catalog",
+  "statusCode": 200,
+  "durationMs": 0,
+  "tenantId": null,
+  "branchId": "33511c3c-545e-4dd0-b9cd-1bc1b4eeb896",
+  "userId": "d317a2e3-686a-4e66-b70b-a58ef9f9ba56",
+  "ts": "2026-06-08T01:00:01.361Z"
+}[39m
+[32m[Nest] 17948  - [39m06/08/2026, 4:00:07 AM [32m    LOG[39m [38;5;3m[ProductsService] [39m[32m[barcode-validation] search {"schemaName":"wakiil","barcode":"12121","table":"products","column":"barcode","excludeProductId":"0fc4ecf8-e474-450d-b9cd-eb5703e69ead"}[39m
+[32m[Nest] 17948  - [39m06/08/2026, 4:00:07 AM [32m    LOG[39m [38;5;3m[ProductsService] [39m[32m[barcode-validation] no-match {"schemaName":"wakiil","barcode":"12121","searchedTables":["products"],"matchingRecordId":null,"matchingProductName":null}[39m
+[32m[Nest] 17948  - [39m06/08/2026, 4:00:07 AM [32m    LOG[39m [38;5;3m[Http] [39m[32m{
+  "kind": "http_request",
+  "requestId": "60e1e2a9-4735-469d-8000-96019aae6a3b",
+  "method": "PATCH",
+  "path": "/api/products/0fc4ecf8-e474-450d-b9cd-eb5703e69ead",
+  "statusCode": 200,
+  "durationMs": 26,
+  "tenantId": null,
+  "branchId": "33511c3c-545e-4dd0-b9cd-1bc1b4eeb896",
+  "userId": "d317a2e3-686a-4e66-b70b-a58ef9f9ba56",
+  "ts": "2026-06-08T01:00:07.269Z"
+}[39m
+[32m[Nest] 17948  - [39m06/08/2026, 4:00:07 AM [32m    LOG[39m [38;5;3m[Http] [39m[32m{
+  "kind": "http_request",
+  "requestId": "efee0fe6-41f2-4dad-b58a-8d2a56e36d61",
+  "method": "GET",
+  "path": "/api/products/catalog",
+  "statusCode": 200,
+  "durationMs": 18,
+  "tenantId": null,
+  "branchId": "33511c3c-545e-4dd0-b9cd-1bc1b4eeb896",
+  "userId": "d317a2e3-686a-4e66-b70b-a58ef9f9ba56",
+  "ts": "2026-06-08T01:00:07.356Z"
+}[39m
+[32m[Nest] 17948  - [39m06/08/2026, 4:00:14 AM [32m    LOG[39m [38;5;3m[Http] [39m[32m{
+  "kind": "http_request",
+  "requestId": "395fff0c-2cc6-4ddd-b39b-756bf1c5f7c3",
+  "method": "GET",
+  "path": "/api/sales",
+  "statusCode": 200,
+  "durationMs": 20,
+  "tenantId": null,
+  "branchId": "33511c3c-545e-4dd0-b9cd-1bc1b4eeb896",
+  "userId": "b49096e6-b3ac-4229-a2e1-96fb5a3d5443",
+  "ts": "2026-06-08T01:00:14.514Z"
+}[39m
+[32m[Nest] 17948  - [39m06/08/2026, 4:00:14 AM [32m    LOG[39m [38;5;3m[Http] [39m[32m{
+  "kind": "http_request",
+  "requestId": "3a2c30fe-3897-4b1f-99d6-0ead7e32764e",
+  "method": "GET",
+  "path": "/api/pos/sessions/current",
+  "statusCode": 200,
+  "durationMs": 19,
+  "tenantId": null,
+  "branchId": "33511c3c-545e-4dd0-b9cd-1bc1b4eeb896",
+  "userId": "b49096e6-b3ac-4229-a2e1-96fb5a3d5443",
+  "ts": "2026-06-08T01:00:14.516Z"
+}[39m
+[32m[Nest] 17948  - [39m06/08/2026, 4:00:14 AM [32m    LOG[39m [38;5;3m[Http] [39m[32m{
+  "kind": "http_request",
+  "requestId": "3b1967ab-e1c0-4cd9-ae11-da8d1c02720d",
+  "method": "GET",
+  "path": "/api/pos/register-catalog",
+  "statusCode": 200,
+  "durationMs": 42,
+  "tenantId": null,
+  "branchId": "33511c3c-545e-4dd0-b9cd-1bc1b4eeb896",
+  "userId": "b49096e6-b3ac-4229-a2e1-96fb5a3d5443",
+  "ts": "2026-06-08T01:00:14.541Z"
+}[39m
+[32m[Nest] 17948  - [39m06/08/2026, 4:00:14 AM [32m    LOG[39m [38;5;3m[Http] [39m[32m{
+  "kind": "http_request",
+  "requestId": "41f31cdb-8053-4a2c-aac5-2582301db68c",
+  "method": "GET",
+  "path": "/api/sales/d5de1fba-0ab0-4c71-8097-f8236e2c8844",
+  "statusCode": 200,
+  "durationMs": 20,
+  "tenantId": null,
+  "branchId": "33511c3c-545e-4dd0-b9cd-1bc1b4eeb896",
+  "userId": "b49096e6-b3ac-4229-a2e1-96fb5a3d5443",
+  "ts": "2026-06-08T01:00:14.562Z"
+}[39m
+[32m[Nest] 17948  - [39m06/08/2026, 4:00:14 AM [32m    LOG[39m [38;5;3m[Http] [39m[32m{
+  "kind": "http_request",
+  "requestId": "af4c9b96-ac5b-419b-9ad1-23b9c04601d1",
+  "method": "GET",
+  "path": "/api/sales/d5de1fba-0ab0-4c71-8097-f8236e2c8844",
+  "statusCode": 200,
+  "durationMs": 4,
+  "tenantId": null,
+  "branchId": "33511c3c-545e-4dd0-b9cd-1bc1b4eeb896",
+  "userId": "b49096e6-b3ac-4229-a2e1-96fb5a3d5443",
+  "ts": "2026-06-08T01:00:14.586Z"
+}[39m
+[32m[Nest] 17948  - [39m06/08/2026, 4:00:43 AM [32m    LOG[39m [38;5;3m[Http] [39m[32m{
+  "kind": "http_request",
+  "requestId": "30bae47c-517a-401c-82de-1b19faed7a19",
+  "method": "GET",
+  "path": "/api/suppliers",
+  "statusCode": 200,
+  "durationMs": 12,
+  "tenantId": null,
+  "branchId": "33511c3c-545e-4dd0-b9cd-1bc1b4eeb896",
+  "userId": "d317a2e3-686a-4e66-b70b-a58ef9f9ba56",
+  "ts": "2026-06-08T01:00:43.055Z"
+}[39m
+[32m[Nest] 17948  - [39m06/08/2026, 4:00:48 AM [32m    LOG[39m [38;5;3m[Http] [39m[32m{
+  "kind": "http_request",
+  "requestId": "7767cf7c-6ff8-482b-b2e7-820adda9bd7f",
+  "method": "GET",
+  "path": "/api/suppliers",
+  "statusCode": 200,
+  "durationMs": 4,
+  "tenantId": null,
+  "branchId": "33511c3c-545e-4dd0-b9cd-1bc1b4eeb896",
+  "userId": "d317a2e3-686a-4e66-b70b-a58ef9f9ba56",
+  "ts": "2026-06-08T01:00:48.387Z"
+}[39m
+[32m[Nest] 17948  - [39m06/08/2026, 4:00:48 AM [32m    LOG[39m [38;5;3m[Http] [39m[32m{
+  "kind": "http_request",
+  "requestId": "2cb9f0c5-ef15-45c8-ad80-c3e9125835b8",
+  "method": "GET",
+  "path": "/api/branches",
+  "statusCode": 200,
+  "durationMs": 3,
+  "tenantId": null,
+  "branchId": "33511c3c-545e-4dd0-b9cd-1bc1b4eeb896",
+  "userId": "d317a2e3-686a-4e66-b70b-a58ef9f9ba56",
+  "ts": "2026-06-08T01:00:48.402Z"
+}[39m
+[32m[Nest] 17948  - [39m06/08/2026, 4:00:48 AM [32m    LOG[39m [38;5;3m[Http] [39m[32m{
+  "kind": "http_request",
+  "requestId": "70b1e636-0436-4419-996b-0fc06a5bf644",
+  "method": "GET",
+  "path": "/api/products/catalog",
+  "statusCode": 200,
+  "durationMs": 1,
+  "tenantId": null,
+  "branchId": "33511c3c-545e-4dd0-b9cd-1bc1b4eeb896",
+  "userId": "d317a2e3-686a-4e66-b70b-a58ef9f9ba56",
+  "ts": "2026-06-08T01:00:48.415Z"
+}[39m
+[32m[Nest] 17948  - [39m06/08/2026, 4:00:48 AM [32m    LOG[39m [38;5;3m[Http] [39m[32m{
+  "kind": "http_request",
+  "requestId": "7690de65-40d0-4a26-8388-cc220e305c1b",
+  "method": "GET",
+  "path": "/api/suppliers",
+  "statusCode": 200,
+  "durationMs": 3,
+  "tenantId": null,
+  "branchId": "33511c3c-545e-4dd0-b9cd-1bc1b4eeb896",
+  "userId": "d317a2e3-686a-4e66-b70b-a58ef9f9ba56",
+  "ts": "2026-06-08T01:00:48.432Z"
+}[39m
+[32m[Nest] 17948  - [39m06/08/2026, 4:00:48 AM [32m    LOG[39m [38;5;3m[Http] [39m[32m{
+  "kind": "http_request",
+  "requestId": "81afee19-fd1f-4b06-922d-ef6bd7968f04",
+  "method": "GET",
+  "path": "/api/branches",
+  "statusCode": 200,
+  "durationMs": 0,
+  "tenantId": null,
+  "branchId": "33511c3c-545e-4dd0-b9cd-1bc1b4eeb896",
+  "userId": "d317a2e3-686a-4e66-b70b-a58ef9f9ba56",
+  "ts": "2026-06-08T01:00:48.442Z"
+}[39m
+[32m[Nest] 17948  - [39m06/08/2026, 4:00:48 AM [32m    LOG[39m [38;5;3m[Http] [39m[32m{
+  "kind": "http_request",
+  "requestId": "14b468c9-0c33-454e-b07c-cfcd07b3c13a",
+  "method": "GET",
+  "path": "/api/products/catalog",
+  "statusCode": 200,
+  "durationMs": 1,
+  "tenantId": null,
+  "branchId": "33511c3c-545e-4dd0-b9cd-1bc1b4eeb896",
+  "userId": "d317a2e3-686a-4e66-b70b-a58ef9f9ba56",
+  "ts": "2026-06-08T01:00:48.455Z"
+}[39m
+[32m[Nest] 17948  - [39m06/08/2026, 4:00:48 AM [32m    LOG[39m [38;5;3m[Http] [39m[32m{
+  "kind": "http_request",
+  "requestId": "1f6dabd8-109f-447d-829a-be98bfe1b15f",
+  "method": "GET",
+  "path": "/api/purchases/line-pricing-by-product",
+  "statusCode": 200,
+  "durationMs": 47,
+  "tenantId": null,
+  "branchId": "33511c3c-545e-4dd0-b9cd-1bc1b4eeb896",
+  "userId": "d317a2e3-686a-4e66-b70b-a58ef9f9ba56",
+  "ts": "2026-06-08T01:00:48.722Z"
+}[39m
+[32m[Nest] 17948  - [39m06/08/2026, 4:00:50 AM [32m    LOG[39m [38;5;3m[Http] [39m[32m{
+  "kind": "http_request",
+  "requestId": "41e0fa7c-5e8d-4a6f-8f8b-37694e435c9c",
+  "method": "GET",
+  "path": "/api/purchases/line-pricing-by-product",
+  "statusCode": 200,
+  "durationMs": 52,
+  "tenantId": null,
+  "branchId": "33511c3c-545e-4dd0-b9cd-1bc1b4eeb896",
+  "userId": "d317a2e3-686a-4e66-b70b-a58ef9f9ba56",
+  "ts": "2026-06-08T01:00:50.755Z"
+}[39m
+[32m[Nest] 17948  - [39m06/08/2026, 4:00:55 AM [32m    LOG[39m [38;5;3m[Http] [39m[32m{
+  "kind": "http_request",
+  "requestId": "df1130a4-47c4-416c-9acc-476031156047",
+  "method": "GET",
+  "path": "/api/products/0fc4ecf8-e474-450d-b9cd-eb5703e69ead/uoms",
+  "statusCode": 200,
+  "durationMs": 11,
+  "tenantId": null,
+  "branchId": "33511c3c-545e-4dd0-b9cd-1bc1b4eeb896",
+  "userId": "d317a2e3-686a-4e66-b70b-a58ef9f9ba56",
+  "ts": "2026-06-08T01:00:55.903Z"
+}[39m
+[32m[Nest] 17948  - [39m06/08/2026, 4:01:00 AM [32m    LOG[39m [38;5;3m[BranchScope] [39m[32mBRANCH_SCOPE_RESOLVED {"actorUserId":"d317a2e3-686a-4e66-b70b-a58ef9f9ba56","correlationId":null,"branchIds":["33511c3c-545e-4dd0-b9cd-1bc1b4eeb896"],"aggregateAll":false,"scopeHash":"cab1d8c1ad275f1f"}[39m
+[32m[Nest] 17948  - [39m06/08/2026, 4:01:00 AM [32m    LOG[39m [38;5;3m[Http] [39m[32m{
+  "kind": "http_request",
+  "requestId": "19c3570c-2a10-417e-bcff-b601965fb093",
+  "method": "GET",
+  "path": "/api/reports/alerts",
+  "statusCode": 200,
+  "durationMs": 89,
+  "tenantId": null,
+  "branchId": "33511c3c-545e-4dd0-b9cd-1bc1b4eeb896",
+  "userId": "d317a2e3-686a-4e66-b70b-a58ef9f9ba56",
+  "ts": "2026-06-08T01:01:00.885Z"
+}[39m
+[32m[Nest] 17948  - [39m06/08/2026, 4:01:37 AM [32m    LOG[39m [38;5;3m[Http] [39m[32m{
+  "kind": "http_request",
+  "requestId": "e0e32fa2-e8ea-4a18-ad6a-f93f81d52768",
+  "method": "POST",
+  "path": "/api/purchases",
+  "statusCode": 201,
+  "durationMs": 109,
+  "tenantId": null,
+  "branchId": "33511c3c-545e-4dd0-b9cd-1bc1b4eeb896",
+  "userId": "d317a2e3-686a-4e66-b70b-a58ef9f9ba56",
+  "ts": "2026-06-08T01:01:37.333Z"
+}[39m
+[32m[Nest] 17948  - [39m06/08/2026, 4:01:40 AM [32m    LOG[39m [38;5;3m[Http] [39m[32m{
+  "kind": "http_request",
+  "requestId": "aa342455-df60-434d-a2fc-9733fc1e6210",
+  "method": "GET",
+  "path": "/api/branches",
+  "statusCode": 200,
+  "durationMs": 18,
+  "tenantId": null,
+  "branchId": "33511c3c-545e-4dd0-b9cd-1bc1b4eeb896",
+  "userId": "d317a2e3-686a-4e66-b70b-a58ef9f9ba56",
+  "ts": "2026-06-08T01:01:40.390Z"
+}[39m
+[32m[Nest] 17948  - [39m06/08/2026, 4:01:40 AM [32m    LOG[39m [38;5;3m[Http] [39m[32m{
+  "kind": "http_request",
+  "requestId": "193dfe70-273f-4a58-bb0a-91faf20ecc03",
+  "method": "GET",
+  "path": "/api/suppliers",
+  "statusCode": 200,
+  "durationMs": 5,
+  "tenantId": null,
+  "branchId": "33511c3c-545e-4dd0-b9cd-1bc1b4eeb896",
+  "userId": "d317a2e3-686a-4e66-b70b-a58ef9f9ba56",
+  "ts": "2026-06-08T01:01:40.398Z"
+}[39m
+[32m[Nest] 17948  - [39m06/08/2026, 4:01:40 AM [32m    LOG[39m [38;5;3m[Http] [39m[32m{
+  "kind": "http_request",
+  "requestId": "4f54a46c-d4ae-499c-8056-8c62bae42425",
+  "method": "GET",
+  "path": "/api/branches",
+  "statusCode": 200,
+  "durationMs": 0,
+  "tenantId": null,
+  "branchId": "33511c3c-545e-4dd0-b9cd-1bc1b4eeb896",
+  "userId": "d317a2e3-686a-4e66-b70b-a58ef9f9ba56",
+  "ts": "2026-06-08T01:01:40.462Z"
+}[39m
+[32m[Nest] 17948  - [39m06/08/2026, 4:01:40 AM [32m    LOG[39m [38;5;3m[Http] [39m[32m{
+  "kind": "http_request",
+  "requestId": "76d84454-5a17-4c8c-a4ad-d6c98b6b1c52",
+  "method": "GET",
+  "path": "/api/suppliers",
+  "statusCode": 200,
+  "durationMs": 5,
+  "tenantId": null,
+  "branchId": "33511c3c-545e-4dd0-b9cd-1bc1b4eeb896",
+  "userId": "d317a2e3-686a-4e66-b70b-a58ef9f9ba56",
+  "ts": "2026-06-08T01:01:40.493Z"
+}[39m
+[32m[Nest] 17948  - [39m06/08/2026, 4:01:40 AM [32m    LOG[39m [38;5;3m[Http] [39m[32m{
+  "kind": "http_request",
+  "requestId": "2ed48850-a6ef-4790-b79d-d3aa3248098f",
+  "method": "GET",
+  "path": "/api/purchases/4652af1c-3f3c-4756-9dd1-cf0d90efe487",
+  "statusCode": 200,
+  "durationMs": 40,
+  "tenantId": null,
+  "branchId": "33511c3c-545e-4dd0-b9cd-1bc1b4eeb896",
+  "userId": "d317a2e3-686a-4e66-b70b-a58ef9f9ba56",
+  "ts": "2026-06-08T01:01:40.591Z"
+}[39m
+[32m[Nest] 17948  - [39m06/08/2026, 4:01:40 AM [32m    LOG[39m [38;5;3m[Http] [39m[32m{
+  "kind": "http_request",
+  "requestId": "a0184476-9998-4344-ac7a-eadfd594eb35",
+  "method": "GET",
+  "path": "/api/products/catalog",
+  "statusCode": 200,
+  "durationMs": 63,
+  "tenantId": null,
+  "branchId": "33511c3c-545e-4dd0-b9cd-1bc1b4eeb896",
+  "userId": "d317a2e3-686a-4e66-b70b-a58ef9f9ba56",
+  "ts": "2026-06-08T01:01:40.593Z"
+}[39m
+[32m[Nest] 17948  - [39m06/08/2026, 4:01:40 AM [32m    LOG[39m [38;5;3m[Http] [39m[32m{
+  "kind": "http_request",
+  "requestId": "9fc6c784-e6ef-4569-80dd-cc21bfcc7b51",
+  "method": "GET",
+  "path": "/api/products/catalog",
+  "statusCode": 200,
+  "durationMs": 0,
+  "tenantId": null,
+  "branchId": "33511c3c-545e-4dd0-b9cd-1bc1b4eeb896",
+  "userId": "d317a2e3-686a-4e66-b70b-a58ef9f9ba56",
+  "ts": "2026-06-08T01:01:40.623Z"
+}[39m
+[32m[Nest] 17948  - [39m06/08/2026, 4:01:40 AM [32m    LOG[39m [38;5;3m[Http] [39m[32m{
+  "kind": "http_request",
+  "requestId": "93a000af-f104-4650-a1c1-02405f42190e",
+  "method": "GET",
+  "path": "/api/purchases/4652af1c-3f3c-4756-9dd1-cf0d90efe487",
+  "statusCode": 200,
+  "durationMs": 28,
+  "tenantId": null,
+  "branchId": "33511c3c-545e-4dd0-b9cd-1bc1b4eeb896",
+  "userId": "d317a2e3-686a-4e66-b70b-a58ef9f9ba56",
+  "ts": "2026-06-08T01:01:40.650Z"
+}[39m
+[32m[Nest] 17948  - [39m06/08/2026, 4:01:40 AM [32m    LOG[39m [38;5;3m[Http] [39m[32m{
+  "kind": "http_request",
+  "requestId": "bfa82e4c-94b1-43a4-bb40-487cec3749ef",
+  "method": "GET",
+  "path": "/api/products/0fc4ecf8-e474-450d-b9cd-eb5703e69ead/uoms",
+  "statusCode": 200,
+  "durationMs": 24,
+  "tenantId": null,
+  "branchId": "33511c3c-545e-4dd0-b9cd-1bc1b4eeb896",
+  "userId": "d317a2e3-686a-4e66-b70b-a58ef9f9ba56",
+  "ts": "2026-06-08T01:01:40.718Z"
+}[39m
+[32m[Nest] 17948  - [39m06/08/2026, 4:01:40 AM [32m    LOG[39m [38;5;3m[Http] [39m[32m{
+  "kind": "http_request",
+  "requestId": "c76729b4-ac05-44aa-a77e-1e10d255ddee",
+  "method": "GET",
+  "path": "/api/purchases/line-pricing-by-product",
+  "statusCode": 200,
+  "durationMs": 35,
+  "tenantId": null,
+  "branchId": "33511c3c-545e-4dd0-b9cd-1bc1b4eeb896",
+  "userId": "d317a2e3-686a-4e66-b70b-a58ef9f9ba56",
+  "ts": "2026-06-08T01:01:40.720Z"
+}[39m
+[32m[Nest] 17948  - [39m06/08/2026, 4:01:40 AM [32m    LOG[39m [38;5;3m[Http] [39m[32m{
+  "kind": "http_request",
+  "requestId": "8d5e397a-50d1-4706-92a7-41f5fda45e5f",
+  "method": "GET",
+  "path": "/api/products/0fc4ecf8-e474-450d-b9cd-eb5703e69ead/uoms",
+  "statusCode": 200,
+  "durationMs": 6,
+  "tenantId": null,
+  "branchId": "33511c3c-545e-4dd0-b9cd-1bc1b4eeb896",
+  "userId": "d317a2e3-686a-4e66-b70b-a58ef9f9ba56",
+  "ts": "2026-06-08T01:01:40.897Z"
+}[39m
+[32m[Nest] 17948  - [39m06/08/2026, 4:01:40 AM [32m    LOG[39m [38;5;3m[Http] [39m[32m{
+  "kind": "http_request",
+  "requestId": "faad1642-2ddc-4fdb-a001-ff23cd3d5ed5",
+  "method": "GET",
+  "path": "/api/products/0fc4ecf8-e474-450d-b9cd-eb5703e69ead/uoms",
+  "statusCode": 200,
+  "durationMs": 8,
+  "tenantId": null,
+  "branchId": "33511c3c-545e-4dd0-b9cd-1bc1b4eeb896",
+  "userId": "d317a2e3-686a-4e66-b70b-a58ef9f9ba56",
+  "ts": "2026-06-08T01:01:40.976Z"
+}[39m
+[32m[Nest] 17948  - [39m06/08/2026, 4:01:45 AM [32m    LOG[39m [38;5;3m[BranchScope] [39m[32mBRANCH_SCOPE_RESOLVED {"actorUserId":"d317a2e3-686a-4e66-b70b-a58ef9f9ba56","correlationId":null,"branchIds":["33511c3c-545e-4dd0-b9cd-1bc1b4eeb896"],"aggregateAll":false,"scopeHash":"cab1d8c1ad275f1f"}[39m
+[32m[Nest] 17948  - [39m06/08/2026, 4:01:45 AM [32m    LOG[39m [38;5;3m[Http] [39m[32m{
+  "kind": "http_request",
+  "requestId": "9fb09353-46c7-4f7d-ac06-7654b9afd42c",
+  "method": "GET",
+  "path": "/api/reports/alerts",
+  "statusCode": 200,
+  "durationMs": 33,
+  "tenantId": null,
+  "branchId": "33511c3c-545e-4dd0-b9cd-1bc1b4eeb896",
+  "userId": "d317a2e3-686a-4e66-b70b-a58ef9f9ba56",
+  "ts": "2026-06-08T01:01:45.954Z"
+}[39m
+[32m[Nest] 17948  - [39m06/08/2026, 4:02:01 AM [32m    LOG[39m [38;5;3m[Http] [39m[32m{
+  "kind": "http_request",
+  "requestId": "ded40d0d-99ef-4ec3-acd4-eb51ad57bd9d",
+  "method": "PATCH",
+  "path": "/api/purchases/4652af1c-3f3c-4756-9dd1-cf0d90efe487",
+  "statusCode": 200,
+  "durationMs": 50,
+  "tenantId": null,
+  "branchId": "33511c3c-545e-4dd0-b9cd-1bc1b4eeb896",
+  "userId": "d317a2e3-686a-4e66-b70b-a58ef9f9ba56",
+  "ts": "2026-06-08T01:02:01.337Z"
+}[39m
+[32m[Nest] 17948  - [39m06/08/2026, 4:02:01 AM [32m    LOG[39m [38;5;3m[Http] [39m[32m{
+  "kind": "http_request",
+  "requestId": "aad7b67f-384a-4e2c-83f2-2b8a724a3567",
+  "method": "GET",
+  "path": "/api/purchases/4652af1c-3f3c-4756-9dd1-cf0d90efe487",
+  "statusCode": 200,
+  "durationMs": 6,
+  "tenantId": null,
+  "branchId": "33511c3c-545e-4dd0-b9cd-1bc1b4eeb896",
+  "userId": "d317a2e3-686a-4e66-b70b-a58ef9f9ba56",
+  "ts": "2026-06-08T01:02:01.369Z"
+}[39m
+[32m[Nest] 17948  - [39m06/08/2026, 4:02:04 AM [32m    LOG[39m [38;5;3m[Http] [39m[32m{
+  "kind": "http_request",
+  "requestId": "ac62d751-6171-4ea4-89a1-c2ede5508694",
+  "method": "PATCH",
+  "path": "/api/purchases/4652af1c-3f3c-4756-9dd1-cf0d90efe487",
+  "statusCode": 200,
+  "durationMs": 18,
+  "tenantId": null,
+  "branchId": "33511c3c-545e-4dd0-b9cd-1bc1b4eeb896",
+  "userId": "d317a2e3-686a-4e66-b70b-a58ef9f9ba56",
+  "ts": "2026-06-08T01:02:04.944Z"
+}[39m
+[32m[Nest] 17948  - [39m06/08/2026, 4:02:05 AM [32m    LOG[39m [38;5;3m[Http] [39m[32m{
+  "kind": "http_request",
+  "requestId": "7cda8b6c-c9bd-4725-98c9-5d32b819432e",
+  "method": "GET",
+  "path": "/api/purchases/4652af1c-3f3c-4756-9dd1-cf0d90efe487",
+  "statusCode": 200,
+  "durationMs": 6,
+  "tenantId": null,
+  "branchId": "33511c3c-545e-4dd0-b9cd-1bc1b4eeb896",
+  "userId": "d317a2e3-686a-4e66-b70b-a58ef9f9ba56",
+  "ts": "2026-06-08T01:02:05.016Z"
+}[39m
+[32m[Nest] 17948  - [39m06/08/2026, 4:02:05 AM [32m    LOG[39m [38;5;3m[Http] [39m[32m{
+  "kind": "http_request",
+  "requestId": "2898a314-efde-4bcf-bf6d-ba3a33d15c9b",
+  "method": "POST",
+  "path": "/api/purchases/4652af1c-3f3c-4756-9dd1-cf0d90efe487/receive",
+  "statusCode": 201,
+  "durationMs": 25,
+  "tenantId": null,
+  "branchId": "33511c3c-545e-4dd0-b9cd-1bc1b4eeb896",
+  "userId": "d317a2e3-686a-4e66-b70b-a58ef9f9ba56",
+  "ts": "2026-06-08T01:02:05.060Z"
+}[39m
+[32m[Nest] 17948  - [39m06/08/2026, 4:02:05 AM [32m    LOG[39m [38;5;3m[Http] [39m[32m{
+  "kind": "http_request",
+  "requestId": "e6a4f82f-d01e-4bd0-9e6c-0177ee239db9",
+  "method": "GET",
+  "path": "/api/purchases/4652af1c-3f3c-4756-9dd1-cf0d90efe487",
+  "statusCode": 200,
+  "durationMs": 5,
+  "tenantId": null,
+  "branchId": "33511c3c-545e-4dd0-b9cd-1bc1b4eeb896",
+  "userId": "d317a2e3-686a-4e66-b70b-a58ef9f9ba56",
+  "ts": "2026-06-08T01:02:05.112Z"
+}[39m
+prisma:error 
+Invalid `prisma.$queryRawUnsafe()` invocation:
+
+
+Raw query failed. Code: `23505`. Message: `duplicate key value violates unique constraint "product_uom_prices_active_product_uom_uq"`
+[32m[Nest] 17948  - [39m06/08/2026, 4:03:04 AM [32m    LOG[39m [38;5;3m[Http] [39m[32m{
+  "kind": "http_request",
+  "requestId": "76264ad3-f13b-46af-9872-13446ae77dff",
+  "method": "POST",
+  "path": "/api/purchases/4652af1c-3f3c-4756-9dd1-cf0d90efe487/cancel",
+  "statusCode": 201,
+  "durationMs": 135,
+  "tenantId": null,
+  "branchId": "33511c3c-545e-4dd0-b9cd-1bc1b4eeb896",
+  "userId": "d317a2e3-686a-4e66-b70b-a58ef9f9ba56",
+  "ts": "2026-06-08T01:03:04.271Z"
+}[39m
+[32m[Nest] 17948  - [39m06/08/2026, 4:03:04 AM [32m    LOG[39m [38;5;3m[Http] [39m[32m{
+  "kind": "http_request",
+  "requestId": "05075bf4-3dea-44da-a931-9e03900ad01e",
+  "method": "GET",
+  "path": "/api/purchases/4652af1c-3f3c-4756-9dd1-cf0d90efe487",
+  "statusCode": 200,
+  "durationMs": 5,
+  "tenantId": null,
+  "branchId": "33511c3c-545e-4dd0-b9cd-1bc1b4eeb896",
+  "userId": "d317a2e3-686a-4e66-b70b-a58ef9f9ba56",
+  "ts": "2026-06-08T01:03:04.301Z"
+}[39m
+[32m[Nest] 17948  - [39m06/08/2026, 4:03:10 AM [32m    LOG[39m [38;5;3m[Http] [39m[32m{
+  "kind": "http_request",
+  "requestId": "bf7001ff-281f-4e74-92eb-9e9f7fdaadec",
+  "method": "GET",
+  "path": "/api/purchases",
+  "statusCode": 200,
+  "durationMs": 4,
+  "tenantId": null,
+  "branchId": "33511c3c-545e-4dd0-b9cd-1bc1b4eeb896",
+  "userId": "d317a2e3-686a-4e66-b70b-a58ef9f9ba56",
+  "ts": "2026-06-08T01:03:10.789Z"
+}[39m
+[32m[Nest] 17948  - [39m06/08/2026, 4:03:11 AM [32m    LOG[39m [38;5;3m[Http] [39m[32m{
+  "kind": "http_request",
+  "requestId": "410bbf05-8fd0-4636-a23a-253400619d0d",
+  "method": "GET",
+  "path": "/api/purchases",
+  "statusCode": 200,
+  "durationMs": 10,
+  "tenantId": null,
+  "branchId": "33511c3c-545e-4dd0-b9cd-1bc1b4eeb896",
+  "userId": "d317a2e3-686a-4e66-b70b-a58ef9f9ba56",
+  "ts": "2026-06-08T01:03:11.142Z"
+}[39m
+[32m[Nest] 17948  - [39m06/08/2026, 4:03:11 AM [32m    LOG[39m [38;5;3m[Http] [39m[32m{
+  "kind": "http_request",
+  "requestId": "87824245-5513-48bc-a8a8-fc809e72aabf",
+  "method": "GET",
+  "path": "/api/suppliers",
+  "statusCode": 200,
+  "durationMs": 5,
+  "tenantId": null,
+  "branchId": "33511c3c-545e-4dd0-b9cd-1bc1b4eeb896",
+  "userId": "d317a2e3-686a-4e66-b70b-a58ef9f9ba56",
+  "ts": "2026-06-08T01:03:11.172Z"
+}[39m
+[32m[Nest] 17948  - [39m06/08/2026, 4:03:11 AM [32m    LOG[39m [38;5;3m[Http] [39m[32m{
+  "kind": "http_request",
+  "requestId": "93bce1bd-e423-4c51-ae43-6da72e887a01",
+  "method": "GET",
+  "path": "/api/branches",
+  "statusCode": 200,
+  "durationMs": 7,
+  "tenantId": null,
+  "branchId": "33511c3c-545e-4dd0-b9cd-1bc1b4eeb896",
+  "userId": "d317a2e3-686a-4e66-b70b-a58ef9f9ba56",
+  "ts": "2026-06-08T01:03:11.198Z"
+}[39m
+[32m[Nest] 17948  - [39m06/08/2026, 4:03:11 AM [32m    LOG[39m [38;5;3m[Http] [39m[32m{
+  "kind": "http_request",
+  "requestId": "65fb0fb3-18c1-4efa-a489-f0c48e522083",
+  "method": "GET",
+  "path": "/api/products/catalog",
+  "statusCode": 200,
+  "durationMs": 30,
+  "tenantId": null,
+  "branchId": "33511c3c-545e-4dd0-b9cd-1bc1b4eeb896",
+  "userId": "d317a2e3-686a-4e66-b70b-a58ef9f9ba56",
+  "ts": "2026-06-08T01:03:11.282Z"
+}[39m
+[32m[Nest] 17948  - [39m06/08/2026, 4:03:11 AM [32m    LOG[39m [38;5;3m[Http] [39m[32m{
+  "kind": "http_request",
+  "requestId": "76476677-f67b-4a4e-a8a3-d61f40337bf8",
+  "method": "GET",
+  "path": "/api/purchases",
+  "statusCode": 200,
+  "durationMs": 4,
+  "tenantId": null,
+  "branchId": "33511c3c-545e-4dd0-b9cd-1bc1b4eeb896",
+  "userId": "d317a2e3-686a-4e66-b70b-a58ef9f9ba56",
+  "ts": "2026-06-08T01:03:11.307Z"
+}[39m
+[32m[Nest] 17948  - [39m06/08/2026, 4:03:11 AM [32m    LOG[39m [38;5;3m[Http] [39m[32m{
+  "kind": "http_request",
+  "requestId": "0a8b18b2-9714-4ff3-b139-6ca6f440c4ca",
+  "method": "GET",
+  "path": "/api/suppliers",
+  "statusCode": 200,
+  "durationMs": 12,
+  "tenantId": null,
+  "branchId": "33511c3c-545e-4dd0-b9cd-1bc1b4eeb896",
+  "userId": "d317a2e3-686a-4e66-b70b-a58ef9f9ba56",
+  "ts": "2026-06-08T01:03:11.332Z"
+}[39m
+[32m[Nest] 17948  - [39m06/08/2026, 4:03:11 AM [32m    LOG[39m [38;5;3m[Http] [39m[32m{
+  "kind": "http_request",
+  "requestId": "43a00f5e-9fb5-428e-81cc-f33f46792255",
+  "method": "GET",
+  "path": "/api/branches",
+  "statusCode": 200,
+  "durationMs": 1,
+  "tenantId": null,
+  "branchId": "33511c3c-545e-4dd0-b9cd-1bc1b4eeb896",
+  "userId": "d317a2e3-686a-4e66-b70b-a58ef9f9ba56",
+  "ts": "2026-06-08T01:03:11.360Z"
+}[39m
+[32m[Nest] 17948  - [39m06/08/2026, 4:03:11 AM [32m    LOG[39m [38;5;3m[Http] [39m[32m{
+  "kind": "http_request",
+  "requestId": "d5cc3450-9797-498b-9916-d5d88994769f",
+  "method": "GET",
+  "path": "/api/products/catalog",
+  "statusCode": 200,
+  "durationMs": 0,
+  "tenantId": null,
+  "branchId": "33511c3c-545e-4dd0-b9cd-1bc1b4eeb896",
+  "userId": "d317a2e3-686a-4e66-b70b-a58ef9f9ba56",
+  "ts": "2026-06-08T01:03:11.419Z"
+}[39m
+[32m[Nest] 17948  - [39m06/08/2026, 4:03:16 AM [32m    LOG[39m [38;5;3m[BranchScope] [39m[32mBRANCH_SCOPE_RESOLVED {"actorUserId":"d317a2e3-686a-4e66-b70b-a58ef9f9ba56","correlationId":null,"branchIds":["33511c3c-545e-4dd0-b9cd-1bc1b4eeb896"],"aggregateAll":false,"scopeHash":"cab1d8c1ad275f1f"}[39m
+[32m[Nest] 17948  - [39m06/08/2026, 4:03:16 AM [32m    LOG[39m [38;5;3m[Http] [39m[32m{
+  "kind": "http_request",
+  "requestId": "1e43e89a-d998-48ef-89c1-cdbc22b9d179",
+  "method": "GET",
+  "path": "/api/reports/alerts",
+  "statusCode": 200,
+  "durationMs": 127,
+  "tenantId": null,
+  "branchId": "33511c3c-545e-4dd0-b9cd-1bc1b4eeb896",
+  "userId": "d317a2e3-686a-4e66-b70b-a58ef9f9ba56",
+  "ts": "2026-06-08T01:03:16.150Z"
+}[39m
+[32m[Nest] 17948  - [39m06/08/2026, 4:03:16 AM [32m    LOG[39m [38;5;3m[Http] [39m[32m{
+  "kind": "http_request",
+  "requestId": "2ba87283-df3e-43db-8cc2-74373d0adb90",
+  "method": "GET",
+  "path": "/api/branches",
+  "statusCode": 200,
+  "durationMs": 0,
+  "tenantId": null,
+  "branchId": "33511c3c-545e-4dd0-b9cd-1bc1b4eeb896",
+  "userId": "d317a2e3-686a-4e66-b70b-a58ef9f9ba56",
+  "ts": "2026-06-08T01:03:16.399Z"
+}[39m
+[32m[Nest] 17948  - [39m06/08/2026, 4:03:16 AM [32m    LOG[39m [38;5;3m[Http] [39m[32m{
+  "kind": "http_request",
+  "requestId": "ac8cafe0-cef8-4cc5-ac12-e887b845150d",
+  "method": "GET",
+  "path": "/api/products/catalog",
+  "statusCode": 200,
+  "durationMs": 0,
+  "tenantId": null,
+  "branchId": "33511c3c-545e-4dd0-b9cd-1bc1b4eeb896",
+  "userId": "d317a2e3-686a-4e66-b70b-a58ef9f9ba56",
+  "ts": "2026-06-08T01:03:16.407Z"
+}[39m
+[32m[Nest] 17948  - [39m06/08/2026, 4:03:16 AM [32m    LOG[39m [38;5;3m[Http] [39m[32m{
+  "kind": "http_request",
+  "requestId": "bb6237cc-9f77-4537-ac6f-58e3ba53abd1",
+  "method": "GET",
+  "path": "/api/branches",
+  "statusCode": 200,
+  "durationMs": 0,
+  "tenantId": null,
+  "branchId": "33511c3c-545e-4dd0-b9cd-1bc1b4eeb896",
+  "userId": "d317a2e3-686a-4e66-b70b-a58ef9f9ba56",
+  "ts": "2026-06-08T01:03:16.421Z"
+}[39m
+[32m[Nest] 17948  - [39m06/08/2026, 4:03:16 AM [32m    LOG[39m [38;5;3m[Http] [39m[32m{
+  "kind": "http_request",
+  "requestId": "e3b92c31-5b01-47dc-ade8-188638925306",
+  "method": "GET",
+  "path": "/api/suppliers",
+  "statusCode": 200,
+  "durationMs": 18,
+  "tenantId": null,
+  "branchId": "33511c3c-545e-4dd0-b9cd-1bc1b4eeb896",
+  "userId": "d317a2e3-686a-4e66-b70b-a58ef9f9ba56",
+  "ts": "2026-06-08T01:03:16.429Z"
+}[39m
+[32m[Nest] 17948  - [39m06/08/2026, 4:03:16 AM [32m    LOG[39m [38;5;3m[Http] [39m[32m{
+  "kind": "http_request",
+  "requestId": "ac7eb9c7-c5a8-4a2b-8809-150473c647e1",
+  "method": "GET",
+  "path": "/api/products/catalog",
+  "statusCode": 200,
+  "durationMs": 0,
+  "tenantId": null,
+  "branchId": "33511c3c-545e-4dd0-b9cd-1bc1b4eeb896",
+  "userId": "d317a2e3-686a-4e66-b70b-a58ef9f9ba56",
+  "ts": "2026-06-08T01:03:16.440Z"
+}[39m
+[32m[Nest] 17948  - [39m06/08/2026, 4:03:16 AM [32m    LOG[39m [38;5;3m[Http] [39m[32m{
+  "kind": "http_request",
+  "requestId": "fdc6d1e5-20a1-46a8-a719-4b229c75fe85",
+  "method": "GET",
+  "path": "/api/suppliers",
+  "statusCode": 200,
+  "durationMs": 5,
+  "tenantId": null,
+  "branchId": "33511c3c-545e-4dd0-b9cd-1bc1b4eeb896",
+  "userId": "d317a2e3-686a-4e66-b70b-a58ef9f9ba56",
+  "ts": "2026-06-08T01:03:16.452Z"
+}[39m
+[32m[Nest] 17948  - [39m06/08/2026, 4:03:16 AM [32m    LOG[39m [38;5;3m[Http] [39m[32m{
+  "kind": "http_request",
+  "requestId": "ef166134-fd91-42a7-8c55-83d337d822f4",
+  "method": "GET",
+  "path": "/api/purchases/line-pricing-by-product",
+  "statusCode": 200,
+  "durationMs": 87,
+  "tenantId": null,
+  "branchId": "33511c3c-545e-4dd0-b9cd-1bc1b4eeb896",
+  "userId": "d317a2e3-686a-4e66-b70b-a58ef9f9ba56",
+  "ts": "2026-06-08T01:03:16.741Z"
+}[39m
+[32m[Nest] 17948  - [39m06/08/2026, 4:03:22 AM [32m    LOG[39m [38;5;3m[Http] [39m[32m{
+  "kind": "http_request",
+  "requestId": "f8fa28a1-a344-4545-aa60-7456e436982b",
+  "method": "GET",
+  "path": "/api/purchases/line-pricing-by-product",
+  "statusCode": 200,
+  "durationMs": 19,
+  "tenantId": null,
+  "branchId": "33511c3c-545e-4dd0-b9cd-1bc1b4eeb896",
+  "userId": "d317a2e3-686a-4e66-b70b-a58ef9f9ba56",
+  "ts": "2026-06-08T01:03:22.477Z"
+}[39m
+[32m[Nest] 17948  - [39m06/08/2026, 4:03:26 AM [32m    LOG[39m [38;5;3m[Http] [39m[32m{
+  "kind": "http_request",
+  "requestId": "80c145f1-31d7-497d-af72-7b4a53bdf2fa",
+  "method": "GET",
+  "path": "/api/products/0fc4ecf8-e474-450d-b9cd-eb5703e69ead/uoms",
+  "statusCode": 200,
+  "durationMs": 14,
+  "tenantId": null,
+  "branchId": "33511c3c-545e-4dd0-b9cd-1bc1b4eeb896",
+  "userId": "d317a2e3-686a-4e66-b70b-a58ef9f9ba56",
+  "ts": "2026-06-08T01:03:26.000Z"
+}[39m
+[32m[Nest] 17948  - [39m06/08/2026, 4:03:35 AM [32m    LOG[39m [38;5;3m[Http] [39m[32m{
+  "kind": "http_request",
+  "requestId": "285020e9-d63d-495e-ada2-b76659b5193a",
+  "method": "POST",
+  "path": "/api/purchases",
+  "statusCode": 201,
+  "durationMs": 48,
+  "tenantId": null,
+  "branchId": "33511c3c-545e-4dd0-b9cd-1bc1b4eeb896",
+  "userId": "d317a2e3-686a-4e66-b70b-a58ef9f9ba56",
+  "ts": "2026-06-08T01:03:35.624Z"
+}[39m
+[32m[Nest] 17948  - [39m06/08/2026, 4:03:36 AM [32m    LOG[39m [38;5;3m[Http] [39m[32m{
+  "kind": "http_request",
+  "requestId": "10e9c8b0-1c6a-4ebd-96af-064569c67ef8",
+  "method": "GET",
+  "path": "/api/branches",
+  "statusCode": 200,
+  "durationMs": 0,
+  "tenantId": null,
+  "branchId": "33511c3c-545e-4dd0-b9cd-1bc1b4eeb896",
+  "userId": "d317a2e3-686a-4e66-b70b-a58ef9f9ba56",
+  "ts": "2026-06-08T01:03:36.089Z"
+}[39m
+[32m[Nest] 17948  - [39m06/08/2026, 4:03:36 AM [32m    LOG[39m [38;5;3m[Http] [39m[32m{
+  "kind": "http_request",
+  "requestId": "ab7ab23d-7647-49da-ac9d-fc1cf98a2d14",
+  "method": "GET",
+  "path": "/api/products/catalog",
+  "statusCode": 200,
+  "durationMs": 0,
+  "tenantId": null,
+  "branchId": "33511c3c-545e-4dd0-b9cd-1bc1b4eeb896",
+  "userId": "d317a2e3-686a-4e66-b70b-a58ef9f9ba56",
+  "ts": "2026-06-08T01:03:36.092Z"
+}[39m
+[32m[Nest] 17948  - [39m06/08/2026, 4:03:36 AM [32m    LOG[39m [38;5;3m[Http] [39m[32m{
+  "kind": "http_request",
+  "requestId": "f3e60c5d-6935-4c7f-97bb-2e27a6d63b93",
+  "method": "GET",
+  "path": "/api/suppliers",
+  "statusCode": 200,
+  "durationMs": 63,
+  "tenantId": null,
+  "branchId": "33511c3c-545e-4dd0-b9cd-1bc1b4eeb896",
+  "userId": "d317a2e3-686a-4e66-b70b-a58ef9f9ba56",
+  "ts": "2026-06-08T01:03:36.143Z"
+}[39m
+[32m[Nest] 17948  - [39m06/08/2026, 4:03:36 AM [32m    LOG[39m [38;5;3m[Http] [39m[32m{
+  "kind": "http_request",
+  "requestId": "670941cd-f918-40ce-883f-9d7560914cc2",
+  "method": "GET",
+  "path": "/api/branches",
+  "statusCode": 200,
+  "durationMs": 0,
+  "tenantId": null,
+  "branchId": "33511c3c-545e-4dd0-b9cd-1bc1b4eeb896",
+  "userId": "d317a2e3-686a-4e66-b70b-a58ef9f9ba56",
+  "ts": "2026-06-08T01:03:36.232Z"
+}[39m
+[32m[Nest] 17948  - [39m06/08/2026, 4:03:36 AM [32m    LOG[39m [38;5;3m[Http] [39m[32m{
+  "kind": "http_request",
+  "requestId": "131af6bb-3265-41a9-9e47-c6b2b9511615",
+  "method": "GET",
+  "path": "/api/products/catalog",
+  "statusCode": 200,
+  "durationMs": 0,
+  "tenantId": null,
+  "branchId": "33511c3c-545e-4dd0-b9cd-1bc1b4eeb896",
+  "userId": "d317a2e3-686a-4e66-b70b-a58ef9f9ba56",
+  "ts": "2026-06-08T01:03:36.261Z"
+}[39m
+[32m[Nest] 17948  - [39m06/08/2026, 4:03:36 AM [32m    LOG[39m [38;5;3m[Http] [39m[32m{
+  "kind": "http_request",
+  "requestId": "c900c95e-d870-4717-970c-368a718632a6",
+  "method": "GET",
+  "path": "/api/suppliers",
+  "statusCode": 200,
+  "durationMs": 13,
+  "tenantId": null,
+  "branchId": "33511c3c-545e-4dd0-b9cd-1bc1b4eeb896",
+  "userId": "d317a2e3-686a-4e66-b70b-a58ef9f9ba56",
+  "ts": "2026-06-08T01:03:36.268Z"
+}[39m
+[32m[Nest] 17948  - [39m06/08/2026, 4:03:36 AM [32m    LOG[39m [38;5;3m[Http] [39m[32m{
+  "kind": "http_request",
+  "requestId": "d93fe582-1ac7-442b-8dba-ddef74578014",
+  "method": "GET",
+  "path": "/api/purchases/line-pricing-by-product",
+  "statusCode": 200,
+  "durationMs": 33,
+  "tenantId": null,
+  "branchId": "33511c3c-545e-4dd0-b9cd-1bc1b4eeb896",
+  "userId": "d317a2e3-686a-4e66-b70b-a58ef9f9ba56",
+  "ts": "2026-06-08T01:03:36.300Z"
+}[39m
+[32m[Nest] 17948  - [39m06/08/2026, 4:03:36 AM [32m    LOG[39m [38;5;3m[Http] [39m[32m{
+  "kind": "http_request",
+  "requestId": "a5073b01-3132-412b-bf48-778c3f3415c1",
+  "method": "GET",
+  "path": "/api/purchases/b0984a95-c95e-493a-b802-d33255a4404c",
+  "statusCode": 200,
+  "durationMs": 51,
+  "tenantId": null,
+  "branchId": "33511c3c-545e-4dd0-b9cd-1bc1b4eeb896",
+  "userId": "d317a2e3-686a-4e66-b70b-a58ef9f9ba56",
+  "ts": "2026-06-08T01:03:36.350Z"
+}[39m
+[32m[Nest] 17948  - [39m06/08/2026, 4:03:36 AM [32m    LOG[39m [38;5;3m[Http] [39m[32m{
+  "kind": "http_request",
+  "requestId": "527040a3-39b7-4b2d-b54a-75dd5d4373a8",
+  "method": "GET",
+  "path": "/api/purchases/b0984a95-c95e-493a-b802-d33255a4404c",
+  "statusCode": 200,
+  "durationMs": 7,
+  "tenantId": null,
+  "branchId": "33511c3c-545e-4dd0-b9cd-1bc1b4eeb896",
+  "userId": "d317a2e3-686a-4e66-b70b-a58ef9f9ba56",
+  "ts": "2026-06-08T01:03:36.377Z"
+}[39m
+[32m[Nest] 17948  - [39m06/08/2026, 4:03:36 AM [32m    LOG[39m [38;5;3m[Http] [39m[32m{
+  "kind": "http_request",
+  "requestId": "85b42b2c-e2e9-4e05-b689-f759b72e59d0",
+  "method": "GET",
+  "path": "/api/products/0fc4ecf8-e474-450d-b9cd-eb5703e69ead/uoms",
+  "statusCode": 200,
+  "durationMs": 8,
+  "tenantId": null,
+  "branchId": "33511c3c-545e-4dd0-b9cd-1bc1b4eeb896",
+  "userId": "d317a2e3-686a-4e66-b70b-a58ef9f9ba56",
+  "ts": "2026-06-08T01:03:36.469Z"
+}[39m
+[32m[Nest] 17948  - [39m06/08/2026, 4:03:36 AM [32m    LOG[39m [38;5;3m[Http] [39m[32m{
+  "kind": "http_request",
+  "requestId": "e36064be-62dc-45bf-a192-47e8ee9726f1",
+  "method": "GET",
+  "path": "/api/purchases/line-pricing-by-product",
+  "statusCode": 200,
+  "durationMs": 63,
+  "tenantId": null,
+  "branchId": "33511c3c-545e-4dd0-b9cd-1bc1b4eeb896",
+  "userId": "d317a2e3-686a-4e66-b70b-a58ef9f9ba56",
+  "ts": "2026-06-08T01:03:36.514Z"
+}[39m
+[32m[Nest] 17948  - [39m06/08/2026, 4:03:36 AM [32m    LOG[39m [38;5;3m[Http] [39m[32m{
+  "kind": "http_request",
+  "requestId": "51edde46-0bcb-400e-9455-a6ca5f976b4c",
+  "method": "GET",
+  "path": "/api/products/0fc4ecf8-e474-450d-b9cd-eb5703e69ead/uoms",
+  "statusCode": 200,
+  "durationMs": 12,
+  "tenantId": null,
+  "branchId": "33511c3c-545e-4dd0-b9cd-1bc1b4eeb896",
+  "userId": "d317a2e3-686a-4e66-b70b-a58ef9f9ba56",
+  "ts": "2026-06-08T01:03:36.548Z"
+}[39m
+[32m[Nest] 17948  - [39m06/08/2026, 4:03:36 AM [32m    LOG[39m [38;5;3m[Http] [39m[32m{
+  "kind": "http_request",
+  "requestId": "191034ae-0074-44b6-b4c2-7ae85b4d77de",
+  "method": "GET",
+  "path": "/api/products/0fc4ecf8-e474-450d-b9cd-eb5703e69ead/uoms",
+  "statusCode": 200,
+  "durationMs": 6,
+  "tenantId": null,
+  "branchId": "33511c3c-545e-4dd0-b9cd-1bc1b4eeb896",
+  "userId": "d317a2e3-686a-4e66-b70b-a58ef9f9ba56",
+  "ts": "2026-06-08T01:03:36.689Z"
+}[39m
+[32m[Nest] 17948  - [39m06/08/2026, 4:03:36 AM [32m    LOG[39m [38;5;3m[Http] [39m[32m{
+  "kind": "http_request",
+  "requestId": "0a273c8e-1046-45eb-b8bc-48a48bef2f2e",
+  "method": "GET",
+  "path": "/api/products/0fc4ecf8-e474-450d-b9cd-eb5703e69ead/uoms",
+  "statusCode": 200,
+  "durationMs": 19,
+  "tenantId": null,
+  "branchId": "33511c3c-545e-4dd0-b9cd-1bc1b4eeb896",
+  "userId": "d317a2e3-686a-4e66-b70b-a58ef9f9ba56",
+  "ts": "2026-06-08T01:03:36.788Z"
+}[39m
+[32m[Nest] 17948  - [39m06/08/2026, 4:03:38 AM [32m    LOG[39m [38;5;3m[Http] [39m[32m{
+  "kind": "http_request",
+  "requestId": "f4bf54a2-6d0c-448a-8f1a-fe4884d0434d",
+  "method": "PATCH",
+  "path": "/api/purchases/b0984a95-c95e-493a-b802-d33255a4404c",
+  "statusCode": 200,
+  "durationMs": 34,
+  "tenantId": null,
+  "branchId": "33511c3c-545e-4dd0-b9cd-1bc1b4eeb896",
+  "userId": "d317a2e3-686a-4e66-b70b-a58ef9f9ba56",
+  "ts": "2026-06-08T01:03:38.330Z"
+}[39m
+[32m[Nest] 17948  - [39m06/08/2026, 4:03:38 AM [32m    LOG[39m [38;5;3m[Http] [39m[32m{
+  "kind": "http_request",
+  "requestId": "e0845254-1905-4fc2-9ac0-228df3cdb546",
+  "method": "GET",
+  "path": "/api/purchases/b0984a95-c95e-493a-b802-d33255a4404c",
+  "statusCode": 200,
+  "durationMs": 7,
+  "tenantId": null,
+  "branchId": "33511c3c-545e-4dd0-b9cd-1bc1b4eeb896",
+  "userId": "d317a2e3-686a-4e66-b70b-a58ef9f9ba56",
+  "ts": "2026-06-08T01:03:38.377Z"
+}[39m
+[32m[Nest] 17948  - [39m06/08/2026, 4:03:38 AM [32m    LOG[39m [38;5;3m[Http] [39m[32m{
+  "kind": "http_request",
+  "requestId": "53d9bde9-3863-4b8b-9ce0-5f1c76a67584",
+  "method": "POST",
+  "path": "/api/purchases/b0984a95-c95e-493a-b802-d33255a4404c/receive",
+  "statusCode": 201,
+  "durationMs": 30,
+  "tenantId": null,
+  "branchId": "33511c3c-545e-4dd0-b9cd-1bc1b4eeb896",
+  "userId": "d317a2e3-686a-4e66-b70b-a58ef9f9ba56",
+  "ts": "2026-06-08T01:03:38.430Z"
+}[39m
+[32m[Nest] 17948  - [39m06/08/2026, 4:03:38 AM [32m    LOG[39m [38;5;3m[Http] [39m[32m{
+  "kind": "http_request",
+  "requestId": "ae27bd02-2b76-49ea-8e0c-8373bfd43a58",
+  "method": "GET",
+  "path": "/api/purchases/b0984a95-c95e-493a-b802-d33255a4404c",
+  "statusCode": 200,
+  "durationMs": 7,
+  "tenantId": null,
+  "branchId": "33511c3c-545e-4dd0-b9cd-1bc1b4eeb896",
+  "userId": "d317a2e3-686a-4e66-b70b-a58ef9f9ba56",
+  "ts": "2026-06-08T01:03:38.488Z"
+}[39m
+prisma:error 
+Invalid `prisma.$queryRawUnsafe()` invocation:
+
+
+Raw query failed. Code: `23505`. Message: `duplicate key value violates unique constraint "product_uom_prices_active_product_uom_uq"`
