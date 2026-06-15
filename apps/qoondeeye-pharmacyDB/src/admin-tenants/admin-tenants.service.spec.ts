@@ -9,6 +9,7 @@ import * as tenantControlRepo from '../tenant/tenant-control.repository';
 import * as tenantSchema from '../tenant/tenant-control.schema';
 import { decryptTenantDatabaseUrl } from '../tenant/tenant-database-url.crypto';
 import { runTenantPrismaMigrate } from '../tenant/run-tenant-prisma-migrate';
+import { seedTenantBaseDefaults } from '../tenant/tenant-base-defaults.seed';
 import { AdminTenantsService } from './admin-tenants.service';
 
 jest.mock('../tenant/tenant-database-url.crypto', () => ({
@@ -21,6 +22,10 @@ jest.mock('../tenant/run-tenant-prisma-migrate', () => ({
 
 jest.mock('../tenant/tenant-erp-defaults.seed', () => ({
   seedTenantErpDefaults: jest.fn(),
+}));
+
+jest.mock('../tenant/tenant-base-defaults.seed', () => ({
+  seedTenantBaseDefaults: jest.fn(),
 }));
 
 jest.mock('pg', () => ({
@@ -343,6 +348,134 @@ describe('AdminTenantsService', () => {
       expect(health.databaseConnection).toBe('failed');
       expect(health.errors).toContain('timeout postgresql://***');
       expect(JSON.stringify(health)).not.toMatch(/postgresql:\/\/user:secret/);
+    });
+  });
+
+  describe('assignTenantOwner', () => {
+    function mockTenantPool(
+      queryImpl: (sql: string, params?: unknown[]) => Promise<unknown>,
+    ) {
+      const { Pool } = jest.requireMock('pg') as { Pool: jest.Mock };
+      const pool = {
+        query: jest.fn(queryImpl),
+        end: jest.fn().mockResolvedValue(undefined),
+      };
+      Pool.mockImplementation(() => pool);
+      return pool;
+    }
+
+    it('seeds base defaults and creates owner with admin role and Main Branch', async () => {
+      const { service, prisma } = createService();
+      mockAuditInsert(prisma);
+      jest.spyOn(tenantControlRepo, 'getTenantControlById').mockResolvedValue({
+        id: 'tenant-1',
+        name: 'Hayat',
+        schemaName: 'hayat',
+        slug: 'hayat',
+        status: 'pending_setup',
+        databaseUrlEncrypted: 'enc',
+      } as never);
+      jest
+        .mocked(decryptTenantDatabaseUrl)
+        .mockReturnValue('postgresql://user:secret@host/db');
+      jest
+        .spyOn(tenantControlRepo, 'updateTenantControl')
+        .mockResolvedValue(undefined as never);
+      prisma.$queryRawUnsafe.mockResolvedValueOnce([sampleRow]);
+
+      const poolQueries: string[] = [];
+      mockTenantPool(async (sql: string) => {
+        poolQueries.push(String(sql));
+        if (sql === 'SELECT 1') {
+          return { rows: [{ '?column?': 1 }] };
+        }
+        if (sql.includes('information_schema.tables')) {
+          return { rows: [{ exists: true }] };
+        }
+        if (sql.includes('FROM tenant_settings')) {
+          return { rows: [{ id: 'settings-1' }] };
+        }
+        if (sql.includes('FROM users WHERE lower(email)')) {
+          return { rows: [] };
+        }
+        if (sql.includes('INSERT INTO users')) {
+          return { rows: [{ id: 'owner-1' }] };
+        }
+        return { rows: [] };
+      });
+
+      const result = await service.assignTenantOwner(
+        'tenant-1',
+        { ownerName: 'Moha', ownerEmail: 'moha@gmail.com' },
+        actor,
+      );
+
+      expect(seedTenantBaseDefaults).toHaveBeenCalledWith(
+        'postgresql://user:secret@host/db',
+      );
+      const insertSql = poolQueries.find((sql) =>
+        sql.includes('INSERT INTO users'),
+      );
+      expect(insertSql).toContain('branch_id');
+      expect(insertSql).toContain("lower(name) = 'admin'");
+      expect(insertSql).toContain('FROM branches ORDER BY created_at ASC');
+      expect(result.temporaryOwnerPassword).toEqual(expect.any(String));
+    });
+
+    it('resets password and backfills role and branch when owner email already exists', async () => {
+      const { service, prisma } = createService();
+      mockAuditInsert(prisma);
+      jest.spyOn(tenantControlRepo, 'getTenantControlById').mockResolvedValue({
+        id: 'tenant-1',
+        name: 'Hayat',
+        schemaName: 'hayat',
+        slug: 'hayat',
+        status: 'active',
+        databaseUrlEncrypted: 'enc',
+      } as never);
+      jest
+        .mocked(decryptTenantDatabaseUrl)
+        .mockReturnValue('postgresql://user:secret@host/db');
+      jest
+        .spyOn(tenantControlRepo, 'updateTenantControl')
+        .mockResolvedValue(undefined as never);
+      prisma.$queryRawUnsafe.mockResolvedValueOnce([sampleRow]);
+
+      const poolQueries: string[] = [];
+      mockTenantPool(async (sql: string) => {
+        poolQueries.push(String(sql));
+        if (sql === 'SELECT 1') {
+          return { rows: [{ '?column?': 1 }] };
+        }
+        if (sql.includes('information_schema.tables')) {
+          return { rows: [{ exists: true }] };
+        }
+        if (sql.includes('FROM tenant_settings')) {
+          return { rows: [{ id: 'settings-1' }] };
+        }
+        if (sql.includes('FROM users WHERE lower(email)')) {
+          return { rows: [{ id: 'owner-existing' }] };
+        }
+        if (sql.startsWith('UPDATE users')) {
+          return { rows: [], rowCount: 1 };
+        }
+        return { rows: [] };
+      });
+
+      const result = await service.assignTenantOwner(
+        'tenant-1',
+        { ownerName: 'Moha', ownerEmail: 'moha@gmail.com' },
+        actor,
+      );
+
+      expect(seedTenantBaseDefaults).toHaveBeenCalled();
+      const backfillSql = poolQueries.find((sql) =>
+        sql.startsWith('UPDATE users'),
+      );
+      expect(backfillSql).toContain('branch_id = COALESCE');
+      expect(backfillSql).toContain("lower(name) = 'admin'");
+      expect(backfillSql).toContain('password = $3');
+      expect(result.temporaryOwnerPassword).toEqual(expect.any(String));
     });
   });
 

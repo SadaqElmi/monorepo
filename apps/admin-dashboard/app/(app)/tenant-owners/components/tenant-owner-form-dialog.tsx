@@ -69,7 +69,7 @@ export function TenantOwnerFormDialog({
             <DialogDescription>
               {isCreate
                 ? "Pick a client tenant and create the pharmacy admin account."
-                : `Update owner details for ${row?.tenantName ?? "this tenant"}. A new temporary password may be issued if a new user is created.`}
+                : `Update owner details for ${row?.tenantName ?? "this tenant"}. A new temporary password is issued when the owner account is created or reassigned.`}
             </DialogDescription>
           </DialogHeader>
 

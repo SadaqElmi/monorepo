@@ -15,6 +15,7 @@ import {
 import { tenantControlFromSql } from '../tenant/tenant-control.schema';
 import { decryptTenantDatabaseUrl } from '../tenant/tenant-database-url.crypto';
 import { runTenantPrismaMigrate } from '../tenant/run-tenant-prisma-migrate';
+import { seedTenantBaseDefaults } from '../tenant/tenant-base-defaults.seed';
 import { seedTenantErpDefaults } from '../tenant/tenant-erp-defaults.seed';
 import { TenantService } from '../tenant/tenant.service';
 import type { ControlTenantRecord } from '../tenant/tenant.types';
@@ -732,10 +733,15 @@ export class AdminTenantsService {
     try {
       await pool.query('SELECT 1');
       await this.ensureTenantActivationPrerequisites(databaseUrl, pool);
-      return await this.ensureTenantOwnerUser(pool, tenant, {
-        ownerEmail: input.ownerEmail.trim(),
-        ownerName: input.ownerName.trim(),
-      });
+      return await this.ensureTenantOwnerUser(
+        pool,
+        tenant,
+        {
+          ownerEmail: input.ownerEmail.trim(),
+          ownerName: input.ownerName.trim(),
+        },
+        { resetPasswordIfExists: true },
+      );
     } finally {
       await pool.end().catch(() => undefined);
     }
@@ -765,6 +771,7 @@ export class AdminTenantsService {
             tenant.ownerName?.trim() ||
             `${tenant.name.trim()} Owner`,
         },
+        { resetPasswordIfExists: false },
       );
       await updateTenantControl(this.prisma, tenant.id, {
         databaseHealthStatus: 'connected',
@@ -813,6 +820,8 @@ export class AdminTenantsService {
     if (!settings?.id) {
       throw new BadRequestException('Tenant default settings are missing');
     }
+
+    await seedTenantBaseDefaults(databaseUrl);
   }
 
   private async readTenantSettingsRow(
@@ -914,6 +923,7 @@ export class AdminTenantsService {
     pool: Pool,
     tenant: ControlTenantRecord,
     input: { ownerEmail: string; ownerName: string },
+    options: { resetPasswordIfExists?: boolean } = {},
   ): Promise<string | undefined> {
     const email = input.ownerEmail.trim().toLowerCase();
     const existing = await pool.query<{ id: string }>(
@@ -921,23 +931,49 @@ export class AdminTenantsService {
       [email],
     );
     if (existing.rows[0]?.id) {
+      let temporaryOwnerPassword: string | undefined;
+      const updateParams: unknown[] = [email, input.ownerName.trim()];
+      let passwordClause = '';
+      if (options.resetPasswordIfExists) {
+        temporaryOwnerPassword = this.generateTemporaryPassword();
+        const passwordHash = await bcrypt.hash(temporaryOwnerPassword, 10);
+        passwordClause = 'password = $3,';
+        updateParams.push(passwordHash);
+      }
+      await pool.query(
+        `UPDATE users
+         SET
+           name = $2,
+           ${passwordClause}
+           role_id = COALESCE(
+             role_id,
+             (SELECT id FROM roles WHERE lower(name) = 'admin' LIMIT 1)
+           ),
+           branch_id = COALESCE(
+             branch_id,
+             (SELECT id FROM branches ORDER BY created_at ASC, name ASC LIMIT 1)
+           )
+         WHERE lower(email) = lower($1)`,
+        updateParams,
+      );
       await updateTenantControl(this.prisma, tenant.id, {
         ownerUserId: existing.rows[0].id,
         ownerEmail: email,
         ownerName: input.ownerName.trim(),
       });
-      return undefined;
+      return temporaryOwnerPassword;
     }
 
     const temporaryOwnerPassword = this.generateTemporaryPassword();
     const passwordHash = await bcrypt.hash(temporaryOwnerPassword, 10);
     const inserted = await pool.query<{ id: string }>(
-      `INSERT INTO users (name, email, password, role_id)
+      `INSERT INTO users (name, email, password, role_id, branch_id)
        VALUES (
          $1,
          $2,
          $3,
-         (SELECT id FROM roles WHERE lower(name) = 'admin' LIMIT 1)
+         (SELECT id FROM roles WHERE lower(name) = 'admin' LIMIT 1),
+         (SELECT id FROM branches ORDER BY created_at ASC, name ASC LIMIT 1)
        )
        RETURNING id`,
       [input.ownerName.trim(), email, passwordHash],

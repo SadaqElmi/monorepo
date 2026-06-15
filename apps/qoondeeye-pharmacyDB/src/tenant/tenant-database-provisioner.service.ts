@@ -17,6 +17,7 @@ import { Pool } from 'pg';
 import * as bcrypt from 'bcrypt';
 import { runTenantPrismaMigrate } from './run-tenant-prisma-migrate';
 import { usesSharedDatabaseOwner } from './tenant-database-provision-mode';
+import { seedTenantBaseDefaults } from './tenant-base-defaults.seed';
 import { seedTenantErpDefaults } from './tenant-erp-defaults.seed';
 import type { ControlTenantRecord } from './tenant.types';
 
@@ -193,7 +194,7 @@ export class TenantDatabaseProvisionerService {
 
       stage = 'seed';
       await seedTenantErpDefaults(databaseUrl);
-      await this.seedTenantDefaults(databaseUrl);
+      await seedTenantBaseDefaults(databaseUrl);
       await this.mark(tenantId, 'pending_setup', 'seeded');
 
       stage = 'owner';
@@ -438,50 +439,6 @@ END $$`);
     return url.toString();
   }
 
-  private async seedTenantDefaults(databaseUrl: string): Promise<void> {
-    const pool = new Pool({
-      connectionString: databaseUrl,
-      max: 1,
-      idleTimeoutMillis: 10_000,
-      connectionTimeoutMillis: 20_000,
-    });
-    try {
-      await pool.query(`
-INSERT INTO roles (name, is_system_role)
-VALUES ('admin', true), ('manager', true), ('pharmacist', true), ('cashier', true)
-ON CONFLICT (name) DO NOTHING;
-
-INSERT INTO permissions (name)
-VALUES
-  ('create_product'), ('edit_product'), ('delete_product'),
-  ('view_products'), ('view_sales'), ('create_sale'),
-  ('view_purchases'), ('create_purchase'), ('view_roles'),
-  ('view_pos_terminals'), ('manage_pos_terminals')
-ON CONFLICT (name) DO NOTHING;
-
-INSERT INTO role_permissions (role_id, permission_id)
-SELECT r.id, p.id
-FROM roles r
-CROSS JOIN permissions p
-WHERE r.name = 'admin'
-ON CONFLICT (role_id, permission_id) DO NOTHING;
-
-INSERT INTO branches (name, code)
-SELECT 'Main Branch', 'MAIN'
-WHERE NOT EXISTS (SELECT 1 FROM branches);
-
-INSERT INTO uoms (code, name, symbol)
-VALUES ('PCS', 'Piece', 'PCS'), ('TAB', 'Tablet', 'TAB')
-ON CONFLICT (code) DO NOTHING;
-
-INSERT INTO price_groups (code, name, is_default, active)
-VALUES ('RETAIL', 'Retail', TRUE, TRUE)
-ON CONFLICT (code) DO NOTHING;`);
-    } finally {
-      await pool.end();
-    }
-  }
-
   private async createOwnerUser(
     databaseUrl: string,
     input: { name: string; email: string; password: string },
@@ -499,17 +456,35 @@ ON CONFLICT (code) DO NOTHING;`);
         [email],
       );
       if (existing.rows[0]?.id) {
+        const passwordHash = await bcrypt.hash(input.password, 10);
+        await pool.query(
+          `UPDATE users
+           SET
+             password = $2,
+             name = $3,
+             role_id = COALESCE(
+               role_id,
+               (SELECT id FROM roles WHERE lower(name) = 'admin' LIMIT 1)
+             ),
+             branch_id = COALESCE(
+               branch_id,
+               (SELECT id FROM branches ORDER BY created_at ASC, name ASC LIMIT 1)
+             )
+           WHERE lower(email) = lower($1)`,
+          [email, passwordHash, input.name.trim()],
+        );
         return existing.rows[0].id;
       }
 
       const passwordHash = await bcrypt.hash(input.password, 10);
       const inserted = await pool.query<{ id: string }>(
-        `INSERT INTO users (name, email, password, role_id)
+        `INSERT INTO users (name, email, password, role_id, branch_id)
          VALUES (
            $1,
            $2,
            $3,
-           (SELECT id FROM roles WHERE lower(name) = 'admin' LIMIT 1)
+           (SELECT id FROM roles WHERE lower(name) = 'admin' LIMIT 1),
+           (SELECT id FROM branches ORDER BY created_at ASC, name ASC LIMIT 1)
          )
          RETURNING id`,
         [input.name.trim(), email, passwordHash],
