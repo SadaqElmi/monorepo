@@ -9,15 +9,18 @@ import { PrismaService } from '../prisma/prisma.service';
 import { TenantService } from '../tenant/tenant.service';
 import { AuditLogService } from '../accounting/audit-log.service';
 import { COMMIT_CHUNK } from './handlers/import-commit.constants';
+import { listActiveTenantSchemas } from '../tenant/tenant-control.repository';
 import { ImportHandlerRegistry } from './import-handler.registry';
 import { ImportJobsService } from './import-jobs.service';
 import { ImportProgressService } from './import-progress.service';
 import { commitProcessedFromPending } from './import-progress.util';
 import type { ImportContext, ImportJob } from './types/import.types';
+import { isMissingRelationError } from '../tenant/tenant-sql-errors';
 
 @Injectable()
 export class ImportWorkerService {
   private readonly logger = new Logger(ImportWorkerService.name);
+  private readonly missingSchemaWarned = new Set<string>();
 
   constructor(
     private readonly prisma: PrismaService,
@@ -30,10 +33,7 @@ export class ImportWorkerService {
 
   @Cron('*/25 * * * * *')
   async drainImportJobs(): Promise<void> {
-    const tenants = await this.prisma.tenant.findMany({
-      where: { status: 'active' },
-      select: { id: true, schemaName: true },
-    });
+    const tenants = await listActiveTenantSchemas(this.prisma);
 
     for (const tenant of tenants) {
       try {
@@ -41,6 +41,15 @@ export class ImportWorkerService {
         await this.jobs.releaseStaleCommittingJobs(tenant.schemaName);
         await this.processOneJob(tenant.id, tenant.schemaName);
       } catch (e) {
+        if (isMissingRelationError(e)) {
+          if (!this.missingSchemaWarned.has(tenant.schemaName)) {
+            this.missingSchemaWarned.add(tenant.schemaName);
+            this.logger.warn(
+              `Import worker skipped ${tenant.schemaName}: tenant ERP tables missing (run tenant migrate)`,
+            );
+          }
+          continue;
+        }
         this.logger.warn(
           `Import worker error for ${tenant.schemaName}: ${
             e instanceof Error ? e.message : String(e)

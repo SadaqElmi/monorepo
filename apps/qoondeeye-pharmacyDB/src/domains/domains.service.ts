@@ -1,10 +1,28 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
-import type { TenantContextPayload } from '../tenant/tenant-context.service';
+import { listTenantsByIds } from '../tenant/tenant-control.repository';
+import { TenantService } from '../tenant/tenant.service';
+import type { TenantContextPayload } from '../tenant/tenant.types';
+import { toTenantContextPayload } from '../tenant/tenant.types';
+import type { ControlTenantRecord } from '../tenant/tenant.types';
+
+type DomainRow = {
+  id: string;
+  tenantId: string;
+  domain: string;
+  createdAt: Date;
+};
+
+type DomainWithTenant = DomainRow & {
+  tenant: Omit<ControlTenantRecord, 'databaseUrlEncrypted'>;
+};
 
 @Injectable()
 export class DomainsService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly tenantService: TenantService,
+  ) {}
 
   private readonly domainCache = new Map<
     string,
@@ -24,32 +42,54 @@ export class DomainsService {
 
   private setCached(domain: string, value: TenantContextPayload) {
     const key = domain.trim().toLowerCase();
-    // small TTL to avoid stale tenant/domain changes while still preventing a DB hit per request
     const ttlMs = 60_000;
     this.domainCache.set(key, { value, expiresAt: Date.now() + ttlMs });
   }
 
+  private async attachTenants(rows: DomainRow[]): Promise<DomainWithTenant[]> {
+    const tenantIds = [...new Set(rows.map((row) => row.tenantId))];
+    const tenants = await listTenantsByIds(this.prisma, tenantIds);
+    const tenantMap = new Map(
+      tenants.map((tenant) => [
+        tenant.id,
+        this.tenantService.sanitizeTenant(tenant),
+      ]),
+    );
+
+    return rows.map((row) => ({
+      ...row,
+      tenant:
+        tenantMap.get(row.tenantId) ??
+        ({
+          id: row.tenantId,
+          name: '',
+          schemaName: '',
+          status: 'unknown',
+        } as Omit<ControlTenantRecord, 'databaseUrlEncrypted'>),
+    }));
+  }
+
   async findAll() {
-    return this.prisma.domain.findMany({
-      include: { tenant: true },
+    const rows = await this.prisma.domain.findMany({
       orderBy: { createdAt: 'desc' },
     });
+    return this.attachTenants(rows);
   }
 
   async findOne(id: string) {
     const domain = await this.prisma.domain.findUnique({
       where: { id },
-      include: { tenant: true },
     });
     if (!domain) throw new NotFoundException('Domain not found');
-    return domain;
+    const [mapped] = await this.attachTenants([domain]);
+    return mapped;
   }
 
   async findByTenant(tenantId: string) {
-    return this.prisma.domain.findMany({
+    const rows = await this.prisma.domain.findMany({
       where: { tenantId },
-      include: { tenant: true },
     });
+    return this.attachTenants(rows);
   }
 
   /**
@@ -63,45 +103,29 @@ export class DomainsService {
     const cached = this.getCached(normalized);
     if (cached) return cached;
 
-    const record = await this.prisma.domain.findUnique({
-      where: { domain: normalized },
-      select: {
-        tenant: {
-          select: {
-            id: true,
-            name: true,
-            schemaName: true,
-            status: true,
-          },
-        },
-      },
-    });
+    const tenant = await this.tenantService.findByDomain(normalized);
+    if (!tenant) return null;
 
-    if (!record?.tenant) return null;
-
-    const resolved = {
-      id: record.tenant.id,
-      name: record.tenant.name,
-      schemaName: record.tenant.schemaName,
-      status: record.tenant.status,
-    };
+    const resolved = toTenantContextPayload(tenant);
     this.setCached(normalized, resolved);
     return resolved;
   }
 
   async create(dto: { tenantId: string; domain: string }) {
-    return this.prisma.domain.create({
+    const created = await this.prisma.domain.create({
       data: { tenantId: dto.tenantId, domain: dto.domain },
-      include: { tenant: true },
     });
+    const [mapped] = await this.attachTenants([created]);
+    return mapped;
   }
 
   async update(id: string, dto: { domain?: string }) {
-    return this.prisma.domain.update({
+    const updated = await this.prisma.domain.update({
       where: { id },
       data: { domain: dto.domain },
-      include: { tenant: true },
     });
+    const [mapped] = await this.attachTenants([updated]);
+    return mapped;
   }
 
   async remove(id: string) {

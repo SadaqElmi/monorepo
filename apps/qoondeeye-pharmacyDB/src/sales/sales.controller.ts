@@ -17,6 +17,7 @@ import { TenantContextService } from '../tenant/tenant-context.service';
 import { SalesService } from './sales.service';
 import { CreateSaleDto } from './dto/create-sale.dto';
 import { UpdateSaleDto } from './dto/update-sale.dto';
+import { VoidSaleDto } from './dto/void-sale.dto';
 import type { FastifyRequest } from 'fastify';
 import { parsePagedQueryParam } from '../common/pagination.util';
 import { PermissionGuard } from '../common/security/permission.guard';
@@ -136,6 +137,24 @@ export class SalesController {
       req.branchId!,
       req.allowedBranchIds ?? [],
       dto,
+      { actorUserId: req.userId },
+    );
+  }
+
+  @Post(':id/void')
+  @RequirePermissions('void_sale')
+  voidSale(
+    @Param('id') id: string,
+    @Body() dto: VoidSaleDto,
+    @Req() req: FastifyRequest,
+  ) {
+    this.ensureTenant();
+    return this.salesService.voidSale(
+      this.tenantContext.getSchemaName()!,
+      id,
+      req.branchId!,
+      req.allowedBranchIds ?? [],
+      dto.approvalId,
       { actorUserId: req.userId },
     );
   }

@@ -1,103 +1,101 @@
-import {
-  parseInput,
-  pinLoginSchema,
-  staffLoginSchema,
-} from "@/lib/validation";
+import { parseInput, posSetupSchema, staffLoginSchema } from "@/lib/validation";
 
-import { AUTH_PREFIX } from "./endpoints";
+
+
+import { AUTH_PREFIX, POS_DEVICE_STATUS_PATH } from "./endpoints";
+
 import { jsonFetch } from "./http";
+
+import { getOrCreateDeviceFingerprint, getPosServerUrl } from "../device-client";
+
+
 
 export type AuthUser = { id: string; email: string | null; name: string | null };
 
+
+
 /** Unified login response: backend decides role and userType */
+
 export type LoginResponse = {
   user: AuthUser;
   token: string;
+  refreshToken?: string;
+  expiresIn?: number;
   userId: string;
+
   role: "admin" | "pharmacist" | "cashier" | "super_admin" | string;
+
   tenantId: string | null;
+
   tenantSlug: string | null;
+
   userType: "system" | "tenant";
+
   defaultBranchId: string | null;
+
   assignedBranchId: string | null;
+
   allowedBranchIds: string[];
+
   canViewAllBranches?: boolean;
+  staffId?: string | null;
   permissions?: string[];
 };
 
-export type PosDeviceEnrollmentResponse = {
-  deviceId: string;
-  deviceCode: string;
-  displayName?: string | null;
-  branchId?: string | null;
-  status: "active" | "revoked" | string;
-  tenantId: string;
-  tenantSlug: string;
-  enrolledByUserId: string;
+
+
+export type PosTerminalSetupResponse = {
+
   deviceCredential: string;
+
+  deviceId: string;
+
+  terminalId: string;
+
+  tenantId: string;
+
+  tenantSlug: string;
+
+  branchId: string | null;
+
+  displayName: string | null;
+
+  status: string;
+
 };
 
-/**
- * Email/password sign-in for managers from the POS terminal. The backend resolves
- * tenant/role; pass the tenant slug when known so cross-tenant accounts pick the
- * correct pharmacy.
- */
-export async function login(
-  email: string,
-  password: string,
-  tenant?: string,
-): Promise<LoginResponse> {
-  const slug = tenant?.trim();
-  return jsonFetch<LoginResponse>(`${AUTH_PREFIX}/login`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      email,
-      password,
-      ...(slug ? { tenant: slug } : {}),
-    }),
-  });
-}
 
-/** PIN-only POS sign-in (pharmacy slug). Optional staffId scopes login to that staff row. */
-export async function pinLogin(
-  pin: string,
-  tenant: string,
-  branchId?: string,
-  staffId?: string,
-): Promise<LoginResponse> {
-  const trimmed = branchId?.trim();
-  const resolvedBranchId =
-    trimmed && trimmed.toLowerCase() !== "all" ? trimmed : undefined;
-  const sid = staffId?.trim();
-  const body = parseInput(pinLoginSchema, {
-    pin,
-    tenant: tenant.trim(),
-    ...(resolvedBranchId ? { branchId: resolvedBranchId } : {}),
-    ...(sid ? { staffId: sid } : {}),
-  });
-  return jsonFetch<LoginResponse>(`${AUTH_PREFIX}/pin-login`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(body),
-  });
-}
 
 export async function staffLogin(
+
   staffId: string,
+
   pin: string,
+
   deviceCredential: string,
+
   branchId?: string,
+
 ): Promise<LoginResponse> {
+
   const trimmed = branchId?.trim();
+
   const resolvedBranchId =
+
     trimmed && trimmed.toLowerCase() !== "all" ? trimmed : undefined;
+
   const body = parseInput(staffLoginSchema, {
+
     staffId: staffId.trim(),
+
     pin,
+
     deviceCredential,
+
     ...(resolvedBranchId ? { branchId: resolvedBranchId } : {}),
+
   });
+
   return jsonFetch<LoginResponse>(`${AUTH_PREFIX}/staff-login`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
@@ -105,35 +103,97 @@ export async function staffLogin(
   });
 }
 
-export async function enrollPosDevice(input: {
-  tenant: string;
-  email: string;
-  password: string;
-  deviceCode?: string;
-  displayName?: string;
-  branchId?: string;
-}): Promise<PosDeviceEnrollmentResponse> {
-  return jsonFetch<PosDeviceEnrollmentResponse>(`${AUTH_PREFIX}/pos/enroll`, {
+export async function refreshPosSession(
+  refreshToken: string,
+  tenantSlug: string,
+  deviceCredential: string,
+): Promise<{ token: string; refreshToken: string; expiresIn: number }> {
+  return jsonFetch(`${AUTH_PREFIX}/pos/refresh`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(input),
+    body: JSON.stringify({ refreshToken, tenantSlug, deviceCredential }),
+    _skipRefresh: true,
   });
 }
 
-export async function revokePosDevice(input: {
-  tenant: string;
-  email: string;
-  password: string;
-  deviceCode: string;
-}) {
-  return jsonFetch<{
-    deviceId: string;
-    deviceCode: string;
-    status: string;
-    revoked: boolean;
-  }>(`${AUTH_PREFIX}/pos/revoke`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(input),
+
+
+export type PosDeviceStatusResponse = {
+  ok: boolean;
+  reason: "missing" | "revoked" | "inactive" | "invalid" | null;
+  status: string | null;
+  bindingStatus: string | null;
+  displayName: string | null;
+  branchId: string | null;
+  tenantSlug: string | null;
+};
+
+export async function checkPosDeviceStatus(
+  deviceCredential: string,
+): Promise<PosDeviceStatusResponse> {
+  const serverUrl = getPosServerUrl().replace(/\/$/, "");
+  const url = serverUrl.endsWith("/api/auth/pos/device-status")
+    ? serverUrl
+    : `${serverUrl}/api/auth/pos/device-status`;
+  return jsonFetch<PosDeviceStatusResponse>(url, {
+    method: "GET",
+    headers: {
+      "X-Pos-Device-Credential": deviceCredential.trim(),
+    },
   });
 }
+
+export async function setupPosTerminal(input: {
+
+  terminalUsername: string;
+
+  password: string;
+
+  tenantCode?: string;
+
+  serverUrl?: string;
+
+  deviceFingerprint?: string;
+
+}): Promise<PosTerminalSetupResponse> {
+
+  const serverUrl = (input.serverUrl?.trim() || getPosServerUrl()).replace(
+
+    /\/$/,
+
+    "",
+
+  );
+
+  const body = parseInput(posSetupSchema, {
+
+    terminalUsername: input.terminalUsername.trim(),
+
+    password: input.password,
+
+    tenantCode: input.tenantCode?.trim() ?? "",
+
+    deviceFingerprint:
+
+      input.deviceFingerprint?.trim() || getOrCreateDeviceFingerprint(),
+
+  });
+
+  const url = serverUrl.endsWith("/api/auth/pos/setup")
+
+    ? serverUrl
+
+    : `${serverUrl}/api/auth/pos/setup`;
+
+  return jsonFetch<PosTerminalSetupResponse>(url, {
+
+    method: "POST",
+
+    headers: { "Content-Type": "application/json" },
+
+    body: JSON.stringify(body),
+
+  });
+
+}
+

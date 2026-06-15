@@ -7,11 +7,18 @@ import { usePathname } from "next/navigation";
 import { Settings2 } from "lucide-react";
 
 import { ErpWorkbenchShell } from "@/components/erp/erp-workbench-shell";
+import { ROUTES } from "@/lib/routes";
 import { cn } from "@/lib/utils";
 
 const CONFIG_NAV = [
-  { label: "Staff & users", href: "/configuration/staff" },
-  { label: "Roles & permissions", href: "/configuration/roles" },
+  { label: "Terminals", href: ROUTES.configuration.posTerminals },
+  { label: "Devices", href: ROUTES.configuration.posDevices },
+  { label: "Security", href: ROUTES.configuration.posSecurity },
+  { label: "Operations", href: ROUTES.configuration.posCenter },
+  { label: "Approvals", href: ROUTES.configuration.posApprovals },
+  { label: "Analytics", href: ROUTES.configuration.posAnalytics },
+  { label: "Audit", href: ROUTES.configuration.posAudit },
+  { label: "Shifts", href: ROUTES.configuration.posShifts },
 ] as const;
 
 function ConfigurationSubNav() {
@@ -64,7 +71,7 @@ export function ConfigurationModuleShell({
   return (
     <ErpWorkbenchShell
       breadcrumbs={[
-        { label: "Configuration", href: "/configuration/staff" },
+        { label: "Configuration", href: ROUTES.configuration.posTerminals },
         { label: title },
       ]}
       headerEnd={headerEnd}

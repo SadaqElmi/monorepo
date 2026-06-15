@@ -1,11 +1,12 @@
 import { DOMAINS_PREFIX } from "./endpoints";
 import { type JsonHeaders, jsonFetch } from "./http";
+import type { TenantStatus } from "./tenants";
 
 export type DomainTenant = {
   id: string;
   name: string;
   schemaName: string;
-  status: string;
+  status: TenantStatus;
   createdAt?: string;
 };
 

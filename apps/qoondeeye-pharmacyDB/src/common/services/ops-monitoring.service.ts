@@ -13,7 +13,7 @@ export class OpsMonitoringService {
   private async ensureTable(schemaName: string): Promise<void> {
     if (this.ensuredSchemas.has(schemaName)) return;
     await this.prisma.$executeRawUnsafe(
-      `CREATE TABLE IF NOT EXISTS "${schemaName}"."ops_metric_counters" (
+      `CREATE TABLE IF NOT EXISTS "ops_metric_counters" (
         id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
         metric_date DATE NOT NULL DEFAULT CURRENT_DATE,
         metric_key VARCHAR(100) NOT NULL,

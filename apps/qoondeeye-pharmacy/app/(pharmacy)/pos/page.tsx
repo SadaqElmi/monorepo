@@ -1,7 +1,8 @@
-import PharmacyPosPage from "@/components/pharmacy-pos/pharmacy-pos-page";
-import { requireServerSession } from "@/lib/auth-server";
+import { redirect } from "next/navigation";
 
-export default async function Page() {
-  await requireServerSession();
-  return <PharmacyPosPage />;
+import { getPosAppUrl } from "@/lib/pos-app-url";
+
+/** Embedded ERP POS is retired — send users to the standalone POS app. */
+export default function PosRedirectPage() {
+  redirect(getPosAppUrl());
 }

@@ -7,7 +7,15 @@ declare module 'fastify' {
       id: string;
       schema_name: string;
       name: string;
+      slug?: string | null;
+      subdomain?: string | null;
+      database_name?: string | null;
+      status?: string | null;
     };
+    tenantId?: string;
+    tenantSlug?: string | null;
+    tenantName?: string;
+    tenantDatabaseName?: string | null;
     isSystem?: boolean;
     /**
      * Branch isolation context (tenant-scoped).

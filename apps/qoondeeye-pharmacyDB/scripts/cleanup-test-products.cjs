@@ -5,7 +5,7 @@ const DRY_RUN = process.argv.includes("--dry-run");
 
 const c = new pg.Client({
   connectionString:
-    process.env.DATABASE_URL_LOCAL ??
+    process.env.DATABASE_URL ??
     "postgresql://postgres:sadaq123@localhost:5432/QoondeeyeDB",
 });
 

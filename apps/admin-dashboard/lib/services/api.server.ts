@@ -9,7 +9,7 @@ import {
 } from "@/lib/services/endpoints";
 import type { Domain } from "@/lib/services/domains";
 import type { SystemUser } from "@/lib/services/system-users";
-import type { Tenant } from "@/lib/services/tenants";
+import type { Tenant, TenantListResult } from "@/lib/services/tenants";
 
 export async function serverPlatformJsonFetch<TResponse>(
   url: string,
@@ -22,7 +22,10 @@ export async function serverPlatformJsonFetch<TResponse>(
 
   const cacheMode = init?.cacheMode ?? "default";
   const cacheInit = serverFetchCacheInit(cacheMode);
-  const { cacheMode: _cm, ...restInit } = init ?? {};
+  const restInit = { ...(init ?? {}) } as RequestInit & {
+    cacheMode?: "default" | "report" | "no-store";
+  };
+  delete restInit.cacheMode;
 
   const headers: Record<string, string> = {
     "Content-Type": "application/json",
@@ -52,8 +55,30 @@ export async function serverPlatformJsonFetch<TResponse>(
   return data as TResponse;
 }
 
-export async function getTenantsServer(): Promise<Tenant[]> {
-  return serverPlatformJsonFetch<Tenant[]>(TENANTS_PREFIX, { method: "GET" });
+export async function getTenantsServer(): Promise<TenantListResult> {
+  return serverPlatformJsonFetch<TenantListResult>(
+    `${TENANTS_PREFIX}?limit=50&offset=0`,
+    { method: "GET" },
+  );
+}
+
+export async function getAllTenantsServer(): Promise<Tenant[]> {
+  const items: Tenant[] = [];
+  let offset = 0;
+  let total = Number.POSITIVE_INFINITY;
+
+  while (offset < total) {
+    const page = await serverPlatformJsonFetch<TenantListResult>(
+      `${TENANTS_PREFIX}?limit=100&offset=${offset}`,
+      { method: "GET" },
+    );
+    items.push(...page.items);
+    total = page.total;
+    offset += page.items.length;
+    if (page.items.length === 0) break;
+  }
+
+  return items;
 }
 
 export async function getDomainsServer(input?: {

@@ -38,6 +38,17 @@ import { IdempotencyInterceptor } from './common/interceptors/idempotency.interc
 import { OpsMonitoringService } from './common/services/ops-monitoring.service';
 import { ReconciliationModule } from './reconciliation/reconciliation.module';
 import { PosSessionsModule } from './pos-sessions/pos-sessions.module';
+import { PosTerminalsModule } from './pos-terminals/pos-terminals.module';
+import { PosSyncModule } from './pos-sync/pos-sync.module';
+import { PosApprovalsModule } from './pos-approvals/pos-approvals.module';
+import { PosCashDrawerModule } from './pos-cash-drawer/pos-cash-drawer.module';
+import { PosReceiptsModule } from './pos-receipts/pos-receipts.module';
+import { PosMonitoringModule } from './pos-monitoring/pos-monitoring.module';
+import { PosAnalyticsModule } from './pos-analytics/pos-analytics.module';
+import { PosDevicesModule } from './pos-devices/pos-devices.module';
+import { PosSecurityModule } from './pos-security/pos-security.module';
+import { AdminPosOpsModule } from './admin-pos-ops/admin-pos-ops.module';
+import { AdminTenantsModule } from './admin-tenants/admin-tenants.module';
 import { AppCacheModule } from './cache/app-cache.module';
 import { RateLimitModule } from './common/rate-limit/rate-limit.module';
 import { LoggingModule } from './common/logging/logging.module';
@@ -48,10 +59,11 @@ import { UomsModule } from './uoms/uoms.module';
 import { PricingModule } from './pricing/pricing.module';
 import { OffersModule } from './offers/offers.module';
 import { TransactionRegisterModule } from './transaction-register/transaction-register.module';
+import { HealthModule } from './health/health.module';
 
 @Module({
   imports: [
-    ConfigModule.forRoot({ isGlobal: true }),
+    ConfigModule.forRoot({ isGlobal: true, ignoreEnvFile: true }),
     AppCacheModule,
     LoggingModule,
     RateLimitModule,
@@ -59,6 +71,7 @@ import { TransactionRegisterModule } from './transaction-register/transaction-re
     PrismaModule,
     TenantModule,
     AuthModule,
+    HealthModule,
     DomainsModule,
     CategoriesModule,
     ProductsModule,
@@ -84,6 +97,17 @@ import { TransactionRegisterModule } from './transaction-register/transaction-re
     TransfersModule,
     ReconciliationModule,
     PosSessionsModule,
+    PosTerminalsModule,
+    PosSyncModule,
+    PosApprovalsModule,
+    PosCashDrawerModule,
+    PosReceiptsModule,
+    PosMonitoringModule,
+    PosAnalyticsModule,
+    PosDevicesModule,
+    PosSecurityModule,
+    AdminPosOpsModule,
+    AdminTenantsModule,
     ImportModule,
     UomsModule,
     PricingModule,

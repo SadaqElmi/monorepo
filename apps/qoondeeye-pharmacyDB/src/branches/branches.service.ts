@@ -11,6 +11,8 @@ import { CacheInvalidationService } from '../cache/cache-invalidation.service';
 import { catalogListCacheKey } from '../cache/cache-keys';
 import { catalogTenantTags } from '../cache/cache-tags';
 import { TaggedCacheService } from '../cache/tagged-cache.service';
+import { ChartOfAccountsSeedService } from '../accounting/chart-of-accounts-seed.service';
+import { JournalBooksSeedService } from '../accounting/journal-books-seed.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { TenantService } from '../tenant/tenant.service';
 
@@ -41,6 +43,8 @@ export class BranchesService {
     private readonly tenantService: TenantService,
     private readonly taggedCache: TaggedCacheService,
     private readonly cacheInvalidation: CacheInvalidationService,
+    private readonly coaSeed: ChartOfAccountsSeedService,
+    private readonly journalBooksSeed: JournalBooksSeedService,
   ) {}
 
   async findAll(schemaName: string, tenantId: string) {
@@ -102,6 +106,8 @@ export class BranchesService {
          ON CONFLICT (product_id, branch_id) DO NOTHING`,
         row.id,
       );
+      await this.coaSeed.ensureAccountsForBranch(tx, row.id);
+      await this.journalBooksSeed.ensureBooksForBranch(tx, row.id);
       return row;
     });
     await this.cacheInvalidation.invalidateCatalogTenant(tenantId);

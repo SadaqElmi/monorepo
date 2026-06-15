@@ -201,8 +201,7 @@ export default function DashboardPageClient({
     },
   });
 
-  const fromStr =
-    date?.from != null ? format(date.from, "yyyy-MM-dd") : "";
+  const fromStr = date?.from != null ? format(date.from, "yyyy-MM-dd") : "";
   const toStr = date?.to != null ? format(date.to, "yyyy-MM-dd") : "";
 
   const seriesQuery = useQuery({
@@ -216,9 +215,9 @@ export default function DashboardPageClient({
     ),
     enabled: Boolean(
       tenantSlug &&
-        (branchFacet || serverPrefetched) &&
-        date?.from != null &&
-        date?.to != null,
+      (branchFacet || serverPrefetched) &&
+      date?.from != null &&
+      date?.to != null,
     ),
     staleTime: ERP_STALE_LIST,
     initialData:
@@ -249,11 +248,11 @@ export default function DashboardPageClient({
     ),
     enabled: Boolean(
       tenantSlug &&
-        (branchFacet || serverPrefetched) &&
-        date?.from != null &&
-        date?.to != null &&
-        (Boolean(branchId) || aggregateAll) &&
-        (bundleQuery.isSuccess || (serverPrefetched && initialBundle)),
+      (branchFacet || serverPrefetched) &&
+      date?.from != null &&
+      date?.to != null &&
+      (Boolean(branchId) || aggregateAll) &&
+      (bundleQuery.isSuccess || (serverPrefetched && initialBundle)),
     ),
     staleTime: ERP_STALE_LIST,
     initialData:

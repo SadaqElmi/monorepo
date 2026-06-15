@@ -1,17 +1,17 @@
-import { Body, Controller, Post } from '@nestjs/common';
+import { Body, Controller, Get, Headers, Post, Req } from '@nestjs/common';
+import type { FastifyRequest } from 'fastify';
 import { AuthService } from './auth.service';
 import {
   StaffLoginDto,
   LoginDto,
-  PinLoginDto,
-  PosDeviceEnrollDto,
-  PosDeviceRevokeDto,
   RegisterDto,
   SuperAdminSignUpDto,
   SuperAdminLoginDto,
   TenantSignUpDto,
   TenantLoginDto,
 } from './dto/auth.dto';
+import { PosSetupDto } from './dto/pos-setup.dto';
+import { PosRefreshTokenDto } from './dto/pos-refresh.dto';
 
 @Controller('auth')
 export class AuthController {
@@ -28,16 +28,6 @@ export class AuthController {
     });
   }
 
-  @Post('pin-login')
-  pinLogin(@Body() dto: PinLoginDto) {
-    return this.authService.pinLogin({
-      pin: dto.pin,
-      tenant: dto.tenant,
-      branchId: dto.branchId,
-      staffId: dto.staffId,
-    });
-  }
-
   @Post('staff-login')
   staffLogin(@Body() dto: StaffLoginDto) {
     return this.authService.staffLogin({
@@ -48,38 +38,31 @@ export class AuthController {
     });
   }
 
-  @Post('pos/enroll')
-  enrollPosDevice(@Body() dto: PosDeviceEnrollDto) {
-    return this.authService.enrollPosDevice({
-      tenant: dto.tenant,
-      email: dto.email,
+  @Post('pos/setup')
+  setupPosTerminal(@Body() dto: PosSetupDto, @Req() req: FastifyRequest) {
+    return this.authService.setupPosTerminal({
+      terminalUsername: dto.terminalUsername,
       password: dto.password,
-      deviceCode: dto.deviceCode,
-      displayName: dto.displayName,
-      branchId: dto.branchId,
+      tenantCode: dto.tenantCode,
+      deviceFingerprint: dto.deviceFingerprint,
+      clientIp: req.ip,
     });
   }
 
-  @Post('pos/rebind')
-  rebindPosDevice(@Body() dto: PosDeviceEnrollDto) {
-    return this.authService.enrollPosDevice({
-      tenant: dto.tenant,
-      email: dto.email,
-      password: dto.password,
-      deviceCode: dto.deviceCode,
-      displayName: dto.displayName,
-      branchId: dto.branchId,
+  @Post('pos/refresh')
+  refreshPosSession(@Body() dto: PosRefreshTokenDto) {
+    return this.authService.refreshPosSession({
+      refreshToken: dto.refreshToken,
+      tenantSlug: dto.tenantSlug,
+      deviceCredential: dto.deviceCredential,
     });
   }
 
-  @Post('pos/revoke')
-  revokePosDevice(@Body() dto: PosDeviceRevokeDto) {
-    return this.authService.revokePosDevice({
-      tenant: dto.tenant,
-      email: dto.email,
-      password: dto.password,
-      deviceCode: dto.deviceCode,
-    });
+  @Get('pos/device-status')
+  getPosDeviceStatus(
+    @Headers('x-pos-device-credential') deviceCredential?: string,
+  ) {
+    return this.authService.getPosDeviceStatus(deviceCredential ?? '');
   }
 
   @Post('register')
@@ -115,3 +98,4 @@ export class AuthController {
     return this.authService.tenantLogin(dto);
   }
 }
+

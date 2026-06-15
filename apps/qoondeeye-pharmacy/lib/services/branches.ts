@@ -1,5 +1,16 @@
+import { getResolvedStoredUser } from "@/lib/auth-client";
+import { hasGlobalBranchAccess, normalizeRole } from "@/lib/branch-access";
 import { BRANCHES_PREFIX } from "./endpoints";
 import { type JsonHeaders, jsonFetch } from "./http";
+
+function canLoadAllBranchesForConfiguration(): boolean {
+  const user = getResolvedStoredUser();
+  const role = normalizeRole(user?.role);
+  return (
+    hasGlobalBranchAccess(role, user?.canViewAllBranches) ||
+    role === "manager"
+  );
+}
 
 export type Branch = {
   id: string;
@@ -28,6 +39,22 @@ export async function getBranches(
   const rows = await jsonFetch<Branch[]>(BRANCHES_PREFIX, {
     method: "GET",
     headers: { "X-Tenant": tenantSlug } as JsonHeaders,
+    signal: init?.signal,
+  });
+  return filterOperationalBranches(rows);
+}
+
+/** Branch list for configuration forms (staff, POS terminals, etc.). */
+export async function getConfigurationBranches(
+  tenantSlug: string,
+  init?: Pick<RequestInit, "signal">,
+): Promise<Branch[]> {
+  const rows = await jsonFetch<Branch[]>(BRANCHES_PREFIX, {
+    method: "GET",
+    headers: {
+      "X-Tenant": tenantSlug,
+      ...(canLoadAllBranchesForConfiguration() ? { "x-branch-id": "all" } : {}),
+    } as JsonHeaders,
     signal: init?.signal,
   });
   return filterOperationalBranches(rows);

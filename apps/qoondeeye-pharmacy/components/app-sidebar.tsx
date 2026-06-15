@@ -77,12 +77,27 @@ const pharmacyNavMain = [
     ],
   },
   {
-    title: "Staff",
-    url: "/configuration/staff",
+    title: "Users",
+    url: ROUTES.users.staff,
     icon: Users2,
     items: [
-      { title: "Staff & users", url: "/configuration/staff" },
-      { title: "Roles", url: "/configuration/roles" },
+      { title: "Staff & users", url: ROUTES.users.staff },
+      { title: "Roles", url: ROUTES.users.roles },
+    ],
+  },
+  {
+    title: "Configuration",
+    url: ROUTES.configuration.posTerminals,
+    icon: Settings2,
+    items: [
+      { title: "POS Terminals", url: ROUTES.configuration.posTerminals },
+      { title: "POS Devices", url: ROUTES.configuration.posDevices },
+      { title: "POS Security", url: ROUTES.configuration.posSecurity },
+      { title: "Operations center", url: ROUTES.configuration.posCenter },
+      { title: "POS approvals", url: ROUTES.configuration.posApprovals },
+      { title: "POS analytics", url: ROUTES.configuration.posAnalytics },
+      { title: "POS audit log", url: ROUTES.configuration.posAudit },
+      { title: "POS shifts", url: ROUTES.configuration.posShifts },
     ],
   },
 
@@ -106,6 +121,9 @@ const pharmacyNavMain = [
       { title: "Accounting", url: "/accounting" },
       { title: "Control Center", url: ROUTES.accounting.controlCenter },
       { title: "Monitoring", url: ROUTES.accounting.monitoring },
+      { title: "POS statement", url: ROUTES.accounting.posStatement },
+      { title: "Audit trail", url: ROUTES.accounting.auditTrail },
+      { title: "Cash movements", url: ROUTES.accounting.cashMovements },
       { title: "Expenses", url: ROUTES.vendors.expenses },
       {
         title: "Expense Categories",

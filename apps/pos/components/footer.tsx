@@ -3,11 +3,11 @@
 import React, { useEffect, useState } from "react";
 import { usePathname } from "next/navigation";
 
-import { getResolvedStoredUser } from "@/lib/auth-client";
+import { isPosStaffSessionActive } from "@/lib/auth-client";
 import { usePos } from "./pos-context";
 import { PosActionRow } from "./pos-action-row";
 
-const AUTH_PATHS = new Set(["/login", "/staff-login"]);
+const AUTH_PATHS = new Set(["/login", "/staff-login", "/setup"]);
 
 /** Register chrome only when a staff/manager session is active — not on login or idle gate screens. */
 function usePosFooterVisible() {
@@ -19,10 +19,7 @@ function usePosFooterVisible() {
       setVisible(false);
       return;
     }
-    const user = getResolvedStoredUser();
-    const registerReady =
-      user?.userType === "tenant" && Boolean(user.tenantSlug?.trim());
-    setVisible(registerReady);
+    setVisible(isPosStaffSessionActive());
   }, [pathname]);
 
   return visible;

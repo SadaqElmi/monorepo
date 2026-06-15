@@ -1501,8 +1501,10 @@ export type AuditLogRow = {
   id: string;
   branch_id: string | null;
   actor_user_id: string | null;
+  actor_name?: string | null;
   table_name: string;
   record_id: string;
+  record_label?: string | null;
   action: string;
   old_payload: unknown;
   new_payload: unknown;
@@ -1629,13 +1631,14 @@ export async function getAuditTrailPaged(
   branchId: string,
   page: number,
   limit: number,
-  init?: Pick<RequestInit, "signal">,
+  init?: Pick<RequestInit, "signal"> & { tableName?: string },
 ): Promise<PagedList<AuditLogRow>> {
   const q = new URLSearchParams({
     branchId,
     page: String(Math.max(1, page)),
     limit: String(Math.min(500, Math.max(1, limit))),
   });
+  if (init?.tableName?.trim()) q.set("tableName", init.tableName.trim());
   return jsonFetch<PagedList<AuditLogRow>>(
     `${ACCOUNTING_PREFIX}/audit-trail?${q}`,
     {

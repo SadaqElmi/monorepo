@@ -26,19 +26,12 @@ pnpm dev
 
 POS runs on `http://localhost:3001`.
 
-## Device-bound login modes
+## POS terminal setup and cashier login
 
-`NEXT_PUBLIC_POS_DEVICE_LOGIN_MODE` controls cashier login UI behavior:
+1. Manager provisions the terminal in the ERP dashboard (`Configuration → POS Terminals`).
+2. POS first-time setup: server URL (`https://api.qoondeeye.online`), optional tenant code, terminal username, and setup password.
+3. Daily cashier login: Staff ID + PIN only (device binding is stored locally after setup).
 
-- `legacy`: tenant + PIN only (old flow)
-- `dual` (default): prefer device-bound `staffId + PIN`, allow legacy fallback when device is not bound
-- `device`: require device enrollment, then `staffId + PIN` only
+Use **Reconfigure terminal** on the idle launcher to clear local binding and run setup again after a manager reset/revoke in the dashboard.
 
-## POS rollout checklist (tenant + PIN -> device-bound cashier login)
-
-1. Deploy backend migration and auth endpoints (`/api/auth/pos/enroll`, `/api/auth/staff-login`, `/api/auth/pos/revoke`).
-2. Keep frontend + backend in `dual` mode.
-3. Pilot enroll a few pharmacy devices using manager credentials.
-4. Validate revoke/rebind flow at least once per pilot tenant.
-5. Add pilot tenants to backend `POS_DEVICE_ENFORCED_TENANTS` when ready.
-6. Switch global mode to `device` after all active tenants are enrolled.
+Legacy PIN login without device binding and manager email login on POS have been retired.

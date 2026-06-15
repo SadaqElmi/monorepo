@@ -11,6 +11,7 @@ import { toPagedResult, type PagedResult } from '../common/pagination.util';
 import { CacheInvalidationService } from '../cache/cache-invalidation.service';
 import { UomsService } from '../uoms/uoms.service';
 import { CustomersService } from '../customers/customers.service';
+import { PosApprovalsService } from '../pos-approvals/pos-approvals.service';
 
 export type SalesMutationContext = {
   actorUserId?: string | null;
@@ -35,6 +36,9 @@ export interface SaleListRow {
   customer_id: string | null;
   on_account: boolean;
   payment_method: string | null;
+  store_no?: string | null;
+  terminal_id?: string | null;
+  terminal_no?: string | null;
 }
 
 export interface SaleItemRow {
@@ -95,16 +99,21 @@ export class SalesService {
     private readonly cacheInvalidation: CacheInvalidationService,
     private readonly uomsService: UomsService,
     private readonly customersService: CustomersService,
+    private readonly posApprovals: PosApprovalsService,
   ) {}
 
   private static readonly saleListSelect = `
         SELECT s.id, s.branch_id, s.receipt_number, s.total_amount, s.discount, s.tax, s.sale_date,
                s.customer_id, s.on_account, c.name AS customer_name,
+               NULLIF(TRIM(b.code::text), '') AS store_no,
+               ps.device_id AS terminal_id,
                CASE
                  WHEN COALESCE(s.on_account, FALSE) THEN 'customer-credit'
                  ELSE pay.method
                END AS payment_method
          FROM sales s
+         LEFT JOIN branches b ON b.id = s.branch_id
+         LEFT JOIN pos_sessions ps ON ps.id = s.pos_session_id
          LEFT JOIN customers c ON c.id = s.customer_id
          LEFT JOIN LATERAL (
            SELECT p.method
@@ -113,6 +122,31 @@ export class SalesService {
            ORDER BY p.paid_at ASC NULLS LAST
            LIMIT 1
          ) pay ON true`;
+
+  private async resolveTerminalCodes(rows: SaleListRow[]): Promise<void> {
+    const deviceIds = [
+      ...new Set(
+        rows.map((r) => r.terminal_id).filter((id): id is string => Boolean(id)),
+      ),
+    ];
+    if (!deviceIds.length) return;
+
+    const devices = await this.prisma.$queryRawUnsafe<
+      { id: string; device_code: string }[]
+    >(
+      `SELECT id::text AS id, device_code
+       FROM public.pos_devices
+       WHERE id = ANY($1::uuid[])`,
+      deviceIds,
+    );
+    const byId = new Map(devices.map((d) => [d.id, d.device_code]));
+    for (const row of rows) {
+      if (row.terminal_id) {
+        row.terminal_no =
+          byId.get(row.terminal_id) ?? row.terminal_id.slice(0, 8);
+      }
+    }
+  }
 
   private async readPosPolicies(
     tx: { $queryRawUnsafe: PrismaService['$queryRawUnsafe'] },
@@ -147,7 +181,7 @@ export class SalesService {
 
   async findAll(schemaName: string, allowedBranchIds: string[]) {
     await this.tenantService.applyTenantSchemaPatches(schemaName);
-    return this.prisma.withTenantSchema(schemaName, (tx) =>
+    const items = await this.prisma.withTenantSchema(schemaName, (tx) =>
       tx.$queryRawUnsafe<SaleListRow[]>(
         `${SalesService.saleListSelect}
          WHERE s.branch_id = ANY($1::uuid[])
@@ -155,6 +189,8 @@ export class SalesService {
         allowedBranchIds,
       ),
     );
+    await this.resolveTerminalCodes(items);
+    return items;
   }
 
   async findAllPaged(
@@ -181,6 +217,9 @@ export class SalesService {
       );
       const page = Math.floor(skip / take) + 1;
       return toPagedResult(items, total, page, take);
+    }).then(async (result) => {
+      await this.resolveTerminalCodes(result.items);
+      return result;
     });
   }
 
@@ -188,15 +227,13 @@ export class SalesService {
     await this.tenantService.applyTenantSchemaPatches(schemaName);
     return this.prisma.withTenantSchema(schemaName, async (tx) => {
       const [row] = await tx.$queryRawUnsafe<SaleListRow[]>(
-        `SELECT s.id, s.branch_id, s.receipt_number, s.total_amount, s.discount, s.tax, s.sale_date,
-                s.customer_id, s.on_account,
-                (SELECT p.method FROM payments p WHERE p.sale_id = s.id ORDER BY p.paid_at ASC NULLS LAST LIMIT 1) AS payment_method
-         FROM sales s
+        `${SalesService.saleListSelect}
          WHERE s.id = $1 AND s.branch_id = ANY($2::uuid[])`,
         id,
         allowedBranchIds,
       );
       if (!row) return null;
+      await this.resolveTerminalCodes([row]);
       const items = await tx.$queryRawUnsafe<SaleItemRow[]>(
         `SELECT si.id, si.sale_id, si.branch_id, si.product_id, si.batch_id, si.uom_id,
                 u.code AS uom_code, u.symbol AS uom_symbol,
@@ -273,6 +310,66 @@ export class SalesService {
     return String(n).padStart(5, '0');
   }
 
+  async findByClientSaleRef(
+    schemaName: string,
+    branchId: string,
+    clientSaleRef: string,
+  ) {
+    return this.prisma.withTenantSchema(schemaName, async (tx) =>
+      this.findSaleByClientRefInTx(tx, branchId, clientSaleRef),
+    );
+  }
+
+  private async findSaleByClientRefInTx(
+    tx: {
+      $queryRawUnsafe: <T = unknown>(
+        query: string,
+        ...values: unknown[]
+      ) => Promise<T>;
+    },
+    branchId: string,
+    clientSaleRef: string,
+  ) {
+    const [existing] = await tx.$queryRawUnsafe<SaleInsertRow[]>(
+      `SELECT id, branch_id, receipt_number, total_amount, discount, tax, sale_date, customer_id, on_account
+       FROM sales WHERE branch_id = $1::uuid AND client_sale_ref = $2::uuid`,
+      branchId,
+      clientSaleRef,
+    );
+    if (!existing) return null;
+    const items = await tx.$queryRawUnsafe<SaleItemRow[]>(
+      `SELECT si.id, si.sale_id, si.branch_id, si.product_id, si.batch_id, si.uom_id,
+              u.code AS uom_code, u.symbol AS uom_symbol,
+              si.quantity, si.entered_quantity, si.conversion_factor_snapshot,
+              si.base_quantity, si.price, si.total, si.misc_charge_kind,
+              si.price_group_id, si.offer_id, si.line_discount, si.discount_source
+       FROM sale_items si
+       LEFT JOIN uoms u ON u.id = si.uom_id
+       WHERE si.sale_id = $1
+       ORDER BY si.id`,
+      existing.id,
+    );
+    const [payRow] = await tx.$queryRawUnsafe<{ method: string | null }[]>(
+      `SELECT method FROM payments WHERE sale_id = $1::uuid ORDER BY paid_at ASC NULLS LAST LIMIT 1`,
+      existing.id,
+    );
+    const [custNameRow] = existing.customer_id
+      ? await tx.$queryRawUnsafe<{ name: string | null }[]>(
+          `SELECT name FROM customers WHERE id = $1::uuid`,
+          existing.customer_id,
+        )
+      : [null];
+    const paymentMethodOut = existing.on_account
+      ? 'customer-credit'
+      : payRow?.method?.trim() || 'cash';
+    return {
+      ...existing,
+      items,
+      payment_method: paymentMethodOut,
+      customer_name: custNameRow?.name ?? null,
+    };
+  }
+
   async create(
     schemaName: string,
     branchId: string,
@@ -284,6 +381,9 @@ export class SalesService {
       onAccount?: boolean;
       customerId?: string;
       posSessionId?: string;
+      clientSaleRef?: string;
+      syncSource?: string;
+      discountApprovalId?: string;
       creditOverride?: { managerUserId: string; reason: string };
       items: Array<{
         productId?: string;
@@ -321,13 +421,34 @@ export class SalesService {
     if (lineSubtotal > 0 && discountAmt > 0) {
       const pct = (discountAmt / lineSubtotal) * 100;
       if (pct > maxPct + 1e-6) {
-        throw new BadRequestException(
-          `Discount exceeds the maximum ${maxPct}% allowed for your role`,
+        const approvalId = dto.discountApprovalId?.trim();
+        if (!approvalId) {
+          throw new BadRequestException(
+            `Discount exceeds the maximum ${maxPct}% allowed for your role`,
+          );
+        }
+        await this.posApprovals.assertApprovedRequest(
+          schemaName,
+          branchId,
+          approvalId,
+          'large_discount',
         );
       }
     }
 
+    const clientSaleRef = dto.clientSaleRef?.trim() || null;
+    const syncSource = dto.syncSource === 'offline' ? 'offline' : 'online';
+
     const result = await this.prisma.withTenantSchema(schemaName, async (tx) => {
+      if (clientSaleRef) {
+        const dup = await this.findSaleByClientRefInTx(
+          tx,
+          branchId,
+          clientSaleRef,
+        );
+        if (dup) return dup;
+      }
+
       await this.lockDates.assertDocumentDateOpen(tx, branchId, new Date());
       const onAccount = Boolean(dto.onAccount);
       const customerIdRaw = dto.customerId?.trim() || null;
@@ -362,11 +483,16 @@ export class SalesService {
       let posSessionId: string | null = null;
       const psRaw = dto.posSessionId?.trim();
       if (psRaw) {
+        const sessionStatuses =
+          syncSource === 'offline'
+            ? ['open', 'paused', 'closed']
+            : ['open'];
         const [sess] = await tx.$queryRawUnsafe<{ id: string }[]>(
           `SELECT id FROM pos_sessions
-           WHERE id = $1::uuid AND branch_id = $2::uuid AND status = 'open'`,
+           WHERE id = $1::uuid AND branch_id = $2::uuid AND status = ANY($3::text[])`,
           psRaw,
           branchId,
+          sessionStatuses,
         );
         if (!sess) {
           throw new BadRequestException(
@@ -383,9 +509,10 @@ export class SalesService {
         `INSERT INTO sales (
            branch_id, pos_session_id, receipt_number, total_amount, discount, tax,
            customer_id, on_account,
-           credit_override_manager_id, credit_override_reason, credit_override_at
+           credit_override_manager_id, credit_override_reason, credit_override_at,
+           client_sale_ref, sync_source
          )
-         VALUES ($1, $2::uuid, $3, $4, COALESCE($5::numeric, 0::numeric), COALESCE($6::numeric, 0::numeric), $7::uuid, $8, $9::uuid, $10, $11)
+         VALUES ($1, $2::uuid, $3, $4, COALESCE($5::numeric, 0::numeric), COALESCE($6::numeric, 0::numeric), $7::uuid, $8, $9::uuid, $10, $11, $12::uuid, $13)
          RETURNING id, branch_id, receipt_number, total_amount, discount, tax, sale_date, customer_id, on_account`,
         branchId,
         posSessionId,
@@ -398,6 +525,8 @@ export class SalesService {
         null,
         null,
         null,
+        clientSaleRef,
+        syncSource,
       );
 
       let cogsTotal = 0;
@@ -905,5 +1034,23 @@ export class SalesService {
       });
     }
     return { deleted: out.deleted };
+  }
+
+  async voidSale(
+    schemaName: string,
+    id: string,
+    branchId: string,
+    allowedBranchIds: string[],
+    approvalId: string,
+    ctx?: SalesMutationContext,
+  ) {
+    await this.posApprovals.assertApprovedRequest(
+      schemaName,
+      branchId,
+      approvalId,
+      'void_sale',
+      (payload) => String(payload.saleId ?? '') === id,
+    );
+    return this.remove(schemaName, id, allowedBranchIds, ctx);
   }
 }

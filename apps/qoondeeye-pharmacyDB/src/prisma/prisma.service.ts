@@ -13,19 +13,31 @@ import {
   resolveDatabaseUrl,
 } from './create-pg-adapter';
 
+type TenantDatabaseDelegate = {
+  withTenantDatabase<T>(
+    schemaName: string,
+    fn: (tx: Prisma.TransactionClient) => Promise<T>,
+  ): Promise<T>;
+  shouldUseDedicatedDatabase(schemaName: string): Promise<boolean>;
+};
+
+type ActiveTenantSchemaResolver = () => string | null;
+
 @Injectable()
 export class PrismaService
   extends PrismaClient
   implements OnModuleInit, OnModuleDestroy
 {
+  private static tenantDatabaseDelegate: TenantDatabaseDelegate | null = null;
+  private static activeTenantSchemaResolver: ActiveTenantSchemaResolver | null =
+    null;
   private readonly logger = new Logger(PrismaService.name);
   private readonly pgPool: Pool;
-
   constructor(config: ConfigService) {
     const url = resolveDatabaseUrl(config);
     if (!url) {
       throw new Error(
-        'Database URL required: set DATABASE_URL (production) or DATABASE_URL_STAGING / DATABASE_URL_LOCAL',
+        'Database URL required: set CONTROL_DATABASE_URL or DATABASE_URL in .env / .env.local',
       );
     }
     const pool = createPgPool(url);
@@ -40,6 +52,17 @@ export class PrismaService
     });
     this.pgPool = pool;
     this.attachSlowQueryLogging();
+  }
+
+  static setTenantDatabaseDelegate(delegate: TenantDatabaseDelegate): void {
+    PrismaService.tenantDatabaseDelegate = delegate;
+  }
+
+  /** Resolves tenant schema from request context for unqualified tenant SQL. */
+  static setActiveTenantSchemaResolver(
+    resolver: ActiveTenantSchemaResolver | null,
+  ): void {
+    PrismaService.activeTenantSchemaResolver = resolver;
   }
 
   private attachSlowQueryLogging(): void {
@@ -90,7 +113,7 @@ export class PrismaService
         CONSTRAINT "pos_devices_pkey" PRIMARY KEY ("id"),
         CONSTRAINT "pos_devices_tenant_id_fkey"
           FOREIGN KEY ("tenant_id")
-          REFERENCES "public"."tenants"("id")
+          REFERENCES "public"."Tenant"("id")
           ON DELETE CASCADE
           ON UPDATE CASCADE
       )`,
@@ -107,6 +130,60 @@ export class PrismaService
       `CREATE INDEX IF NOT EXISTS "pos_devices_tenant_id_device_code_idx"
        ON "public"."pos_devices"("tenant_id", "device_code")`,
     );
+    await this.$executeRawUnsafe(
+      `ALTER TABLE "public"."pos_devices"
+         ADD COLUMN IF NOT EXISTS "terminal_username" VARCHAR(64),
+         ADD COLUMN IF NOT EXISTS "setup_password_hash" TEXT,
+         ADD COLUMN IF NOT EXISTS "binding_status" VARCHAR(20) NOT NULL DEFAULT 'unbound',
+         ADD COLUMN IF NOT EXISTS "device_fingerprint" VARCHAR(128),
+         ADD COLUMN IF NOT EXISTS "last_setup_attempt_at" TIMESTAMP(6),
+         ADD COLUMN IF NOT EXISTS "created_by_user_id" UUID`,
+    );
+    await this.$executeRawUnsafe(
+      `ALTER TABLE "public"."pos_devices"
+         ALTER COLUMN "device_secret_hash" DROP NOT NULL`,
+    );
+    await this.$executeRawUnsafe(
+      `ALTER TABLE "public"."pos_devices"
+         ALTER COLUMN "bound_at" DROP NOT NULL,
+         ALTER COLUMN "bound_at" DROP DEFAULT`,
+    );
+    await this.$executeRawUnsafe(
+      `CREATE UNIQUE INDEX IF NOT EXISTS "pos_devices_terminal_username_key"
+       ON "public"."pos_devices"("terminal_username")
+       WHERE "terminal_username" IS NOT NULL`,
+    );
+    await this.$executeRawUnsafe(
+      `ALTER TABLE "public"."pos_devices"
+         ADD COLUMN IF NOT EXISTS "updated_by_user_id" UUID,
+         ADD COLUMN IF NOT EXISTS "device_name" VARCHAR(255),
+         ADD COLUMN IF NOT EXISTS "device_model" VARCHAR(128),
+         ADD COLUMN IF NOT EXISTS "os_version" VARCHAR(64),
+         ADD COLUMN IF NOT EXISTS "browser_version" VARCHAR(64),
+         ADD COLUMN IF NOT EXISTS "last_ip" INET,
+         ADD COLUMN IF NOT EXISTS "app_version" VARCHAR(32),
+         ADD COLUMN IF NOT EXISTS "hardware_profile" JSONB,
+         ADD COLUMN IF NOT EXISTS "disabled_at" TIMESTAMPTZ,
+         ADD COLUMN IF NOT EXISTS "force_logout_at" TIMESTAMPTZ,
+         ADD COLUMN IF NOT EXISTS "pending_outbox_count" INT DEFAULT 0,
+         ADD COLUMN IF NOT EXISTS "last_heartbeat_at" TIMESTAMPTZ`,
+    );
+    await this.$executeRawUnsafe(
+      `CREATE INDEX IF NOT EXISTS "pos_devices_tenant_id_binding_status_idx"
+       ON "public"."pos_devices"("tenant_id", "binding_status")`,
+    );
+    await this.$executeRawUnsafe(
+      `CREATE INDEX IF NOT EXISTS "pos_devices_tenant_id_branch_id_idx"
+       ON "public"."pos_devices"("tenant_id", "branch_id")`,
+    );
+    await this.$executeRawUnsafe(
+      `CREATE INDEX IF NOT EXISTS "pos_devices_tenant_id_created_at_idx"
+       ON "public"."pos_devices"("tenant_id", "created_at" DESC)`,
+    );
+    await this.$executeRawUnsafe(
+      `CREATE INDEX IF NOT EXISTS "pos_devices_last_heartbeat_idx"
+       ON "public"."pos_devices"("tenant_id", "last_heartbeat_at" DESC)`,
+    );
   }
 
   async onModuleDestroy() {
@@ -115,27 +192,18 @@ export class PrismaService
     this.logger.log('Database disconnected');
   }
 
-  /**
-   * Execute raw SQL with schema context (for tenant operations).
-   * Sets search_path to the tenant schema before running the callback.
-   */
+  /** Execute tenant-scoped work on the tenant's dedicated PostgreSQL database. */
   async withTenantSchema<T>(
     schemaName: string,
     fn: (tx: Prisma.TransactionClient) => Promise<T>,
   ): Promise<T> {
-    // Important: search_path is connection-local. Prisma can use different
-    // pooled connections for successive queries, so we must run tenant-scoped
-    // work inside a single transaction to guarantee the same connection.
-    // COA seed + sale flow can run many statements; default 5s interactive tx limit is too low.
-    return this.$transaction(
-      async (tx) => {
-        await tx.$executeRaw(
-          Prisma.sql`SELECT set_config('search_path', ${schemaName + ',public'}, true)`,
-        );
-        return fn(tx);
-      },
-      { timeout: 60_000, maxWait: 15_000 },
-    );
+    const delegate = PrismaService.tenantDatabaseDelegate;
+    if (!delegate) {
+      throw new Error(
+        'Dedicated tenant database requires TenantPrismaService to be initialized',
+      );
+    }
+    return delegate.withTenantDatabase(schemaName, fn);
   }
 
   /**
@@ -155,11 +223,48 @@ export class PrismaService
     return (this as unknown as PrismaClient).$queryRaw<T>(query, ...values);
   }
 
-  /** Tenant-scoped raw query (unsafe). Use inside withTenantSchema or after set_config. */
-  queryRawUnsafe<T = unknown>(query: string, ...values: unknown[]) {
+  /** Tenant-scoped raw query (unsafe). Routes via tenant DB or search_path when possible. */
+  async queryRawUnsafe<T = unknown>(query: string, ...values: unknown[]) {
+    const schemaName = this.resolveTenantSchemaForRawSql(query);
+    if (schemaName) {
+      return this.runTenantScopedRawQuery<T>(schemaName, (tx) =>
+        tx.$queryRawUnsafe<T>(query, ...values),
+      );
+    }
     return (this as unknown as PrismaClient).$queryRawUnsafe<T>(
       query,
       ...values,
     );
+  }
+
+  /** Tenant-scoped raw execute (unsafe). Routes via tenant DB or search_path when possible. */
+  async executeRawUnsafe(query: string, ...values: unknown[]) {
+    const schemaName = this.resolveTenantSchemaForRawSql(query);
+    if (schemaName) {
+      return this.runTenantScopedRawQuery(schemaName, (tx) =>
+        tx.$executeRawUnsafe(query, ...values),
+      );
+    }
+    return (this as unknown as PrismaClient).$executeRawUnsafe(query, ...values);
+  }
+
+  private resolveTenantSchemaForRawSql(query: string): string | null {
+    return (
+      this.extractSchemaNameFromRawSql(query) ??
+      PrismaService.activeTenantSchemaResolver?.() ??
+      null
+    );
+  }
+
+  private async runTenantScopedRawQuery<T>(
+    schemaName: string,
+    fn: (tx: Prisma.TransactionClient) => Promise<T>,
+  ): Promise<T> {
+    return this.withTenantSchema(schemaName, fn);
+  }
+
+  private extractSchemaNameFromRawSql(query: string): string | null {
+    const match = query.match(/"([a-zA-Z0-9_]+)"\s*\.\s*"/);
+    return match?.[1] ?? null;
   }
 }

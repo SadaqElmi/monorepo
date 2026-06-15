@@ -18,7 +18,7 @@ export default async function Page() {
       getTenantsServer(),
       getDomainsServer(),
     ]);
-    initialTenants = tenants;
+    initialTenants = tenants.items;
     initialDomains = domains;
     serverPrefetched = true;
   } catch {

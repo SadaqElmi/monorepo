@@ -6,6 +6,7 @@ import {
   Param,
   Patch,
   Post,
+  Query,
   Req,
 } from '@nestjs/common';
 import type { FastifyRequest } from 'fastify';
@@ -13,6 +14,9 @@ import { PosSessionsService } from './pos-sessions.service';
 import { TenantContextService } from '../tenant/tenant-context.service';
 import { OpenPosSessionDto } from './dto/open-pos-session.dto';
 import { PatchStatementLineDto } from './dto/patch-statement-line.dto';
+import { ListPosShiftsQueryDto } from './dto/list-pos-shifts.dto';
+import { CurrentPosSessionQueryDto } from './dto/current-pos-session-query.dto';
+import { RequirePermissions } from '../common/security/require-permissions.decorator';
 
 @Controller('pos')
 export class PosSessionsController {
@@ -55,12 +59,62 @@ export class PosSessionsController {
       {
         deviceId: dto.deviceId,
         staffUserId: dto.staffUserId,
+        openingCash: dto.openingCash,
       },
     );
   }
 
+  @Post('sessions/:sessionId/pause')
+  pauseSession(@Param('sessionId') sessionId: string, @Req() req: FastifyRequest) {
+    this.ensureTenant();
+    if (!req.branchId) {
+      throw new BadRequestException('Branch required (x-branch-id header)');
+    }
+    return this.posSessionsService.pauseSession(
+      this.tenantContext.getSchemaName()!,
+      sessionId,
+      req.branchId,
+      req.allowedBranchIds ?? [],
+    );
+  }
+
+  @Post('sessions/:sessionId/resume')
+  resumeSession(@Param('sessionId') sessionId: string, @Req() req: FastifyRequest) {
+    this.ensureTenant();
+    if (!req.branchId) {
+      throw new BadRequestException('Branch required (x-branch-id header)');
+    }
+    return this.posSessionsService.resumeSession(
+      this.tenantContext.getSchemaName()!,
+      sessionId,
+      req.branchId,
+      req.allowedBranchIds ?? [],
+    );
+  }
+
+  @Post('sessions/:sessionId/approve-variance')
+  approveVariance(@Param('sessionId') sessionId: string, @Req() req: FastifyRequest) {
+    this.ensureTenant();
+    if (!req.branchId) {
+      throw new BadRequestException('Branch required (x-branch-id header)');
+    }
+    if (!req.userId) {
+      throw new BadRequestException('Authentication required');
+    }
+    return this.posSessionsService.approveVariance(
+      this.tenantContext.getSchemaName()!,
+      sessionId,
+      req.branchId,
+      req.allowedBranchIds ?? [],
+      req.userId,
+    );
+  }
+
   @Get('sessions/current')
-  getCurrent(@Req() req: FastifyRequest) {
+  getCurrent(
+    @Query() query: CurrentPosSessionQueryDto,
+    @Req() req: FastifyRequest,
+  ) {
     this.ensureTenant();
     if (!req.branchId) {
       throw new BadRequestException('Branch required (x-branch-id header)');
@@ -69,6 +123,19 @@ export class PosSessionsController {
       this.tenantContext.getSchemaName()!,
       req.branchId,
       req.allowedBranchIds ?? [],
+      query.deviceId,
+    );
+  }
+
+  @Get('reports/shifts')
+  @RequirePermissions('view_pos_terminals')
+  listShifts(@Query() query: ListPosShiftsQueryDto, @Req() req: FastifyRequest) {
+    const { tenantId } = this.ensureTenant();
+    return this.posSessionsService.listShifts(
+      tenantId,
+      this.tenantContext.getSchemaName()!,
+      req.allowedBranchIds ?? [],
+      query,
     );
   }
 
@@ -115,7 +182,11 @@ export class PosSessionsController {
   }
 
   @Post('sessions/:sessionId/close')
-  closeSession(@Param('sessionId') sessionId: string, @Req() req: FastifyRequest) {
+  closeSession(
+    @Param('sessionId') sessionId: string,
+    @Body() body: { varianceApprovalId?: string },
+    @Req() req: FastifyRequest,
+  ) {
     this.ensureTenant();
     if (!req.branchId) {
       throw new BadRequestException('Branch required (x-branch-id header)');
@@ -125,6 +196,10 @@ export class PosSessionsController {
       sessionId,
       req.branchId,
       req.allowedBranchIds ?? [],
+      {
+        varianceApprovalId: body?.varianceApprovalId,
+        permissionCodes: req.permissionCodes ?? [],
+      },
     );
   }
 
@@ -166,6 +241,7 @@ export class PosSessionsController {
   @Post('statements/:statementId/post')
   postStatement(
     @Param('statementId') statementId: string,
+    @Body() body: { varianceApprovalId?: string },
     @Req() req: FastifyRequest,
   ) {
     this.ensureTenant();
@@ -178,6 +254,10 @@ export class PosSessionsController {
       req.branchId,
       req.allowedBranchIds ?? [],
       req.userId ?? null,
+      {
+        varianceApprovalId: body?.varianceApprovalId,
+        permissionCodes: req.permissionCodes ?? [],
+      },
     );
   }
 }

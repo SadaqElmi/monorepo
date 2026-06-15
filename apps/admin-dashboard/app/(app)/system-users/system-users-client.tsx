@@ -15,7 +15,6 @@ import {
 } from "lucide-react";
 
 import { AdminCardTableLoading } from "@/components/admin/admin-loading";
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
   Card,
@@ -86,7 +85,10 @@ export default function SystemUsersPage({
     staleTime: ERP_STALE_LIST,
     initialData: serverPrefetched && initialUsers ? initialUsers : undefined,
   });
-  const users = usersQuery.data ?? [];
+  const users = useMemo(
+    () => usersQuery.data ?? [],
+    [usersQuery.data],
+  );
   const loading = usersQuery.isLoading;
   const loadError = usersQuery.error;
   const [error, setError] = useState<string | null>(null);
@@ -431,7 +433,7 @@ export default function SystemUsersPage({
               </div>
               <p className="text-base font-medium">No recent activity</p>
               <p className="max-w-md text-sm text-muted-foreground">
-                Audit logs coming soon. You'll be able to track every
+                Audit logs coming soon. You&apos;ll be able to track every
                 administrative action here for security purposes.
               </p>
             </CardContent>

@@ -29,6 +29,13 @@ import {
 } from "@/components/ui/dialog";
 import { posToast } from "@/lib/pos-toast";
 import { getXReport } from "@/lib/api";
+import { getEffectiveClientBranchId } from "@/lib/branch-access";
+import { CashMovementDialog } from "@/components/cash-movement-dialog";
+import { SupervisorPinDialog } from "@/features/approvals/ui/supervisor-pin-dialog";
+import {
+  isManagerTierRole,
+  maxDiscountPercentForRole,
+} from "@/features/register/model/discount-policy";
 
 /**
  * Three contextual button sets occupy the same footer strip:
@@ -65,7 +72,7 @@ const MODE_GRID: Record<ActionMode, string> = {
   idle: "grid-cols-5",
   lineActions: "grid-cols-7",
   payment: "grid-cols-9",
-  supervisor: "grid-cols-3",
+  supervisor: "grid-cols-5",
 };
 
 function ActionButton({
@@ -126,14 +133,19 @@ export function PosActionRow() {
     triggerTotalAndPay,
     applyLineDiscountPct,
     applyTotalDiscountPct,
+    setDiscountApprovalId,
     setLineComment,
     completePayment,
     goToPayment,
     currentUser,
     posSessionId,
+    posSessionStatus,
+    pausePosShift,
+    resumePosShift,
   } = usePos();
 
   const [isCurrencyDialogOpen, setIsCurrencyDialogOpen] = React.useState(false);
+  const [isCashMovementOpen, setIsCashMovementOpen] = React.useState(false);
   const [isXReportOpen, setIsXReportOpen] = React.useState(false);
   const [xReportLoading, setXReportLoading] = React.useState(false);
   const [xReportBody, setXReportBody] = React.useState<string | null>(null);
@@ -154,6 +166,11 @@ export function PosActionRow() {
   const [isPctDialogOpen, setIsPctDialogOpen] = React.useState(false);
   const [pctDraft, setPctDraft] = React.useState("");
   const [pctKind, setPctKind] = React.useState<"line" | "total" | null>(null);
+  const [supervisorPctOpen, setSupervisorPctOpen] = React.useState(false);
+  const [pendingSupervisorPct, setPendingSupervisorPct] = React.useState<{
+    kind: "line" | "total";
+    pct: number;
+  } | null>(null);
   const [isLineDiscountHintOpen, setIsLineDiscountHintOpen] =
     React.useState(false);
 
@@ -267,6 +284,15 @@ export function PosActionRow() {
       );
       return;
     }
+    const role =
+      isManagerTierRole(currentUser?.role) ? currentUser?.role : "cashier";
+    const maxPct = maxDiscountPercentForRole(role);
+    if (n > maxPct + 1e-9 && pctKind) {
+      setPendingSupervisorPct({ kind: pctKind, pct: n });
+      closePctDialog();
+      setSupervisorPctOpen(true);
+      return;
+    }
     if (pctKind === "line") {
       applyLineDiscountPct(n);
     } else if (pctKind === "total") {
@@ -276,10 +302,33 @@ export function PosActionRow() {
   }, [
     pctDraft,
     pctKind,
+    currentUser?.role,
     applyLineDiscountPct,
     applyTotalDiscountPct,
     closePctDialog,
   ]);
+
+  const applySupervisorApprovedDiscount = React.useCallback(
+    (approvalId?: string) => {
+      if (!pendingSupervisorPct) return;
+      const opts = { supervisorApproved: true as const };
+      if (pendingSupervisorPct.kind === "line") {
+        applyLineDiscountPct(pendingSupervisorPct.pct, opts);
+      } else {
+        applyTotalDiscountPct(pendingSupervisorPct.pct, opts);
+      }
+      if (approvalId) setDiscountApprovalId(approvalId);
+      setPendingSupervisorPct(null);
+      setSupervisorPctOpen(false);
+      posToast.success("Supervisor approved discount");
+    },
+    [
+      pendingSupervisorPct,
+      applyLineDiscountPct,
+      applyTotalDiscountPct,
+      setDiscountApprovalId,
+    ],
+  );
 
   const mode: ActionMode = supervisorMode
     ? "supervisor"
@@ -402,6 +451,23 @@ export function PosActionRow() {
         onClick: handleSupervisorBack,
       },
       {
+        id: "sup-lock",
+        label: posSessionStatus === "paused" ? "Resume" : "Lock",
+        tone: "warning",
+        disabled: !posSessionId,
+        onClick: () => {
+          if (posSessionStatus === "paused") void resumePosShift();
+          else void pausePosShift();
+        },
+      },
+      {
+        id: "sup-close",
+        label: "Close Shift",
+        tone: "danger",
+        href: "/close-shift",
+        disabled: !posSessionId,
+      },
+      {
         id: "sup-z",
         label: "Z-Report",
         tone: "brand",
@@ -413,8 +479,22 @@ export function PosActionRow() {
         tone: "brand",
         onClick: handleXReport,
       },
+      {
+        id: "sup-cash",
+        label: "Cash",
+        tone: "brand",
+        disabled: !posSessionId,
+        onClick: () => setIsCashMovementOpen(true),
+      },
     ],
-    [handleSupervisorBack, handleXReport],
+    [
+      handleSupervisorBack,
+      handleXReport,
+      posSessionId,
+      posSessionStatus,
+      pausePosShift,
+      resumePosShift,
+    ],
   );
 
   const closeXReport = React.useCallback(() => {
@@ -684,6 +764,37 @@ export function PosActionRow() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {posSessionId && currentUser?.tenantSlug ? (
+        <CashMovementDialog
+          open={isCashMovementOpen}
+          onOpenChange={setIsCashMovementOpen}
+          tenantSlug={currentUser.tenantSlug}
+          sessionId={posSessionId}
+          branchId={getEffectiveClientBranchId() ?? ""}
+        />
+      ) : null}
+
+      {currentUser?.tenantSlug ? (
+        <SupervisorPinDialog
+          open={supervisorPctOpen}
+          onOpenChange={(open) => {
+            setSupervisorPctOpen(open);
+            if (!open) setPendingSupervisorPct(null);
+          }}
+          tenantSlug={currentUser.tenantSlug}
+          title="Supervisor approval required"
+          approvalRequest={
+            pendingSupervisorPct
+              ? {
+                  actionType: "large_discount",
+                  payload: { percent: pendingSupervisorPct.pct },
+                }
+              : undefined
+          }
+          onApproved={(s) => applySupervisorApprovedDiscount(s.approvalId)}
+        />
+      ) : null}
     </>
   );
 }

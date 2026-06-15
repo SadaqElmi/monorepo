@@ -34,11 +34,7 @@ import {
 } from "@repo/types";
 import { CurrencyEntryDialog } from "@/components/currency-entry-dialog";
 import { usePos } from "@/components/pos-context";
-import {
-  getSaleById,
-  getSalesPaged,
-  getProductByBarcode,
-} from "@/lib/api";
+import { getSaleById, getSalesPaged, getProductByBarcode } from "@/lib/api";
 import {
   persistPosTransactions,
   syncReceiptSeqFromTransactions,
@@ -86,7 +82,7 @@ export function RegisterScreen() {
     customerCreditSummary,
   } = usePos();
 
-  const handleManagerLoginButton = React.useCallback(() => {
+  const handleSwitchStaff = React.useCallback(() => {
     const isMgr = isManagerTierRole(currentUser?.role);
     if (!isMgr) {
       router.push("/staff-login");
@@ -104,10 +100,10 @@ export function RegisterScreen() {
     setManagerPrivilegesSuspended,
   ]);
 
-  const managerLoginButtonLabel =
+  const managerPrivilegeButtonLabel =
     isManagerTierRole(currentUser?.role) && managerPrivilegesSuspended
-      ? "Manager login"
-      : "Manager login";
+      ? "Switch staff"
+      : "Step down";
 
   const [isTotalDialogOpen, setIsTotalDialogOpen] = React.useState(false);
   /** After user opens the Total strip / breakdown or goes to payment, show amount incl. VAT. */
@@ -148,6 +144,7 @@ export function RegisterScreen() {
     categoryList,
     batches: batchesState,
     productNameById,
+    barcodeToProductId,
   } = catalog;
 
   const salesQuery = useQuery({
@@ -285,7 +282,9 @@ export function RegisterScreen() {
       const scannedPrice =
         p.uomSellingPrice != null ? Number(p.uomSellingPrice) : null;
       const priceValue =
-        scannedPrice != null && Number.isFinite(scannedPrice) && scannedPrice > 0
+        scannedPrice != null &&
+        Number.isFinite(scannedPrice) &&
+        scannedPrice > 0
           ? scannedPrice
           : sellingValue;
       const mapped: PosCatalogProduct = {
@@ -325,8 +324,7 @@ export function RegisterScreen() {
               ? {
                   ...l,
                   qty: l.qty + 1,
-                  baseQty:
-                    (l.qty + 1) * Number(l.conversionFactorToBase ?? 1),
+                  baseQty: (l.qty + 1) * Number(l.conversionFactorToBase ?? 1),
                 }
               : l,
           );
@@ -363,6 +361,15 @@ export function RegisterScreen() {
     async (raw: string) => {
       const code = raw.trim();
       if (!code || !tenantSlug) return;
+      const localProductId = barcodeToProductId[code.toLowerCase()];
+      if (localProductId) {
+        const mapped = catalogProducts.find((p) => p.id === localProductId);
+        if (mapped) {
+          addProductFromApi(mapped);
+          setSearchQuery("");
+          return;
+        }
+      }
       try {
         const p = await getProductByBarcode(tenantSlug, code);
         addProductFromApi(p);
@@ -371,7 +378,7 @@ export function RegisterScreen() {
         /* not found: keep query when resolving from search box */
       }
     },
-    [tenantSlug, addProductFromApi],
+    [tenantSlug, addProductFromApi, barcodeToProductId, catalogProducts],
   );
 
   const tryBarcodeScan = React.useCallback(async () => {
@@ -597,9 +604,7 @@ export function RegisterScreen() {
   const addProduct = (p: PosCatalogProduct) => {
     setCart((prev) => {
       const existing = prev.find(
-        (l) =>
-          l.productId === p.id &&
-          (l.uomId ?? null) === (p.uomId ?? null),
+        (l) => l.productId === p.id && (l.uomId ?? null) === (p.uomId ?? null),
       );
       if (existing) {
         setSelectedLineId(existing.lineId);
@@ -655,7 +660,7 @@ export function RegisterScreen() {
           const nextPrice =
             next.sellingPrice != null
               ? Number(next.sellingPrice)
-              : product?.priceValue ?? l.unitPrice;
+              : (product?.priceValue ?? l.unitPrice);
           const factor = Number(next.conversionFactorToBase ?? 1);
           return {
             ...l,
@@ -989,7 +994,8 @@ export function RegisterScreen() {
                             Customer
                           </div>
                           <div className="truncate text-xs font-semibold text-slate-600 dark:text-slate-300">
-                            {selectedCustomer.name?.trim() || "Unnamed customer"}
+                            {selectedCustomer.name?.trim() ||
+                              "Unnamed customer"}
                             {selectedCustomer.phone
                               ? ` · ${selectedCustomer.phone}`
                               : ""}
@@ -1469,9 +1475,9 @@ export function RegisterScreen() {
                   type="button"
                   variant="secondary"
                   className="h-full w-full aspect-square bg-amber-400 text-slate-900 font-bold text-center flex flex-col items-center justify-center p-4 hover:bg-amber-500 active:scale-[0.98] transition-transform uppercase rounded-none shadow-none border-0 whitespace-normal"
-                  onClick={handleManagerLoginButton}
+                  onClick={handleSwitchStaff}
                 >
-                  {managerLoginButtonLabel}
+                  {managerPrivilegeButtonLabel}
                 </Button>
                 <Button
                   variant="secondary"

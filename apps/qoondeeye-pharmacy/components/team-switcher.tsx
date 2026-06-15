@@ -40,6 +40,8 @@ type TeamSwitcherProps = {
   variant?: "default" | "header";
 };
 
+const EMPTY_BRANCHES: readonly Branch[] = [];
+
 export function TeamSwitcher({ variant = "default" }: TeamSwitcherProps) {
   const resolvedUser = getResolvedStoredUser();
   const tenantSlug = resolvedUser?.tenantSlug ?? "pharmacy1";
@@ -48,7 +50,9 @@ export function TeamSwitcher({ variant = "default" }: TeamSwitcherProps) {
   );
   const assignedBranchId = getAssignedBranchIdFromUser();
   const branchesQuery = useErpBranches(tenantSlug);
-  const branches: Branch[] = branchesQuery.data ?? [];
+  const branchesRef = React.useRef<readonly Branch[]>(EMPTY_BRANCHES);
+  branchesRef.current = branchesQuery.data ?? EMPTY_BRANCHES;
+  const branches = branchesRef.current;
   const loading = branchesQuery.isPending;
   const [activeId, setActiveId] = React.useState<string>("all");
 
@@ -71,13 +75,21 @@ export function TeamSwitcher({ variant = "default" }: TeamSwitcherProps) {
       ) {
         return;
       }
+
+      const branchList = branchesRef.current;
+      const currentId = readBranchId();
+      if (currentId === branchId) {
+        setActiveId(branchId);
+        return;
+      }
+
       try {
         if (branchId === "all") {
           localStorage.setItem("branchId", "all");
           localStorage.setItem("branchName", "All branches");
         } else {
           localStorage.setItem("branchId", branchId);
-          const selectedBranchName = branches
+          const selectedBranchName = branchList
             .find((b) => b.id === branchId)
             ?.name?.trim();
           if (selectedBranchName) {
@@ -94,7 +106,7 @@ export function TeamSwitcher({ variant = "default" }: TeamSwitcherProps) {
       const selectedBranchName =
         branchId === "all"
           ? "All branches"
-          : branches.find((b) => b.id === branchId)?.name?.trim();
+          : branchList.find((b) => b.id === branchId)?.name?.trim();
       window.dispatchEvent(
         new CustomEvent("activeBranchChanged", {
           detail: {
@@ -104,7 +116,7 @@ export function TeamSwitcher({ variant = "default" }: TeamSwitcherProps) {
         }),
       );
     },
-    [assignedBranchId, branches, restrictedToAssignedBranch],
+    [assignedBranchId, restrictedToAssignedBranch],
   );
 
   React.useEffect(() => {

@@ -4,6 +4,7 @@ import { randomBytes } from 'crypto';
 import { PrismaService } from '../prisma/prisma.service';
 import { SaleReturnsService } from '../sale-returns/sale-returns.service';
 import { TenantService } from '../tenant/tenant.service';
+import { PosApprovalsService } from '../pos-approvals/pos-approvals.service';
 
 const PRICE_EPS = 0.02;
 
@@ -99,6 +100,7 @@ export class ReturnVouchersService {
     private readonly prisma: PrismaService,
     private readonly saleReturnsService: SaleReturnsService,
     private readonly tenantService: TenantService,
+    private readonly posApprovals: PosApprovalsService,
   ) {}
 
   private async sumPendingVoucherQty(
@@ -210,9 +212,19 @@ export class ReturnVouchersService {
       confirmedProductId: string;
       scannedUnitPrice?: number;
       refundMethod: string;
+      approvalId: string;
     },
   ) {
     await this.tenantService.applyTenantSchemaPatches(schemaName);
+    await this.posApprovals.assertApprovedRequest(
+      schemaName,
+      branchId,
+      dto.approvalId,
+      'refund',
+      (payload) =>
+        String(payload.voucherId ?? '') === voucherId ||
+        String(payload.returnVoucherId ?? '') === voucherId,
+    );
     return this.prisma.withTenantSchema(schemaName, async (tx) => {
       const [v] = await tx.$queryRawUnsafe<ReturnVoucherLockedRow[]>(
         `SELECT id, branch_id, sale_id, sale_item_id, quantity,

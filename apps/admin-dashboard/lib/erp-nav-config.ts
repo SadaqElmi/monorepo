@@ -21,16 +21,24 @@ export const ADMIN_ERP_NAV_MODULES: ErpNavModule[] = [
     label: "Clients & domains",
     children: [
       { label: "Clients", href: "/tenants" },
+      { label: "Tenant owners", href: "/tenant-owners" },
       { label: "Domains", href: "/domains" },
     ],
   },
   {
     id: "users",
-    label: "Users & staff",
-    children: [
-      { label: "System users", href: "/system-users" },
-      { label: "Staff & roles", href: "/admin/staff" },
-    ],
+    label: "Platform access",
+    children: [{ label: "System users", href: "/system-users" }],
+  },
+  {
+    id: "audit",
+    label: "Audit",
+    children: [{ label: "Admin audit logs", href: "/audit-logs" }],
+  },
+  {
+    id: "retail",
+    label: "Retail",
+    children: [{ label: "Retail operations", href: "/retail-ops" }],
   },
   {
     id: "system",

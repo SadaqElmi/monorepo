@@ -58,6 +58,10 @@ import { erpKeys } from "@/lib/erp-query-keys";
 import { ERP_STALE_STATIC } from "@/lib/erp-query-options";
 import { getDomains } from "@/lib/services/domains";
 import { getTenants } from "@/lib/services/tenants";
+import {
+  getTenantStatusLabel,
+  isTenantSelectableForDomain,
+} from "@/lib/tenant-status";
 
 type FormMode = "create" | "edit";
 
@@ -87,14 +91,20 @@ export default function DomainsPage({
       serverPrefetched && initialDomains ? initialDomains : undefined,
   });
   const tenantsQuery = useQuery({
-    queryKey: erpKeys.adminTenants(),
-    queryFn: () => getTenants(),
+    queryKey: erpKeys.adminTenants({ limit: 100, offset: 0 }),
+    queryFn: async () => (await getTenants({ limit: 100 })).items,
     staleTime: ERP_STALE_STATIC,
     initialData:
       serverPrefetched && initialTenants ? initialTenants : undefined,
   });
-  const domains = domainsQuery.data ?? [];
-  const tenants = tenantsQuery.data ?? [];
+  const domains = useMemo(
+    () => domainsQuery.data ?? [],
+    [domainsQuery.data],
+  );
+  const tenants = useMemo(
+    () => tenantsQuery.data ?? [],
+    [tenantsQuery.data],
+  );
   const loading = domainsQuery.isLoading || tenantsQuery.isLoading;
   const loadError = domainsQuery.error ?? tenantsQuery.error;
   const [error, setError] = useState<string | null>(null);
@@ -120,7 +130,9 @@ export default function DomainsPage({
   );
 
   const tenantOptions = useMemo(() => {
-    return [...tenants].sort((a, b) => a.name.localeCompare(b.name));
+    return [...tenants]
+      .filter((t) => isTenantSelectableForDomain(t.status))
+      .sort((a, b) => a.name.localeCompare(b.name));
   }, [tenants]);
 
   const filteredDomains = useMemo(() => {
@@ -261,7 +273,7 @@ export default function DomainsPage({
                   <SelectItem value="__all__">All Clients</SelectItem>
                   {tenantOptions.map((t) => (
                     <SelectItem key={t.id} value={t.id}>
-                      {t.name}
+                      {t.name} ({getTenantStatusLabel(t.status)})
                     </SelectItem>
                   ))}
                 </SelectContent>
@@ -315,7 +327,7 @@ export default function DomainsPage({
                 <SelectItem value="__all__">All Clients</SelectItem>
                 {tenantOptions.map((t) => (
                   <SelectItem key={t.id} value={t.id}>
-                    {t.name}
+                    {t.name} ({getTenantStatusLabel(t.status)})
                   </SelectItem>
                 ))}
               </SelectContent>
@@ -575,14 +587,14 @@ export default function DomainsPage({
                         <SelectItem value="__none__">Select client…</SelectItem>
                         {tenantOptions.map((t) => (
                           <SelectItem key={t.id} value={t.id}>
-                            {t.name}
+                            {t.name} ({getTenantStatusLabel(t.status)})
                           </SelectItem>
                         ))}
                       </SelectContent>
                     </Select>
                     {formMode === "edit" && (
                       <p className="text-[11px] text-muted-foreground">
-                        Tenant can’t be changed after creation.
+                        Tenant can&apos;t be changed after creation.
                       </p>
                     )}
                   </div>
@@ -603,7 +615,7 @@ export default function DomainsPage({
                       />
                     </div>
                     <p className="text-[11px] text-muted-foreground">
-                      You'll need to point your CNAME record to{" "}
+                      You&apos;ll need to point your CNAME record to{" "}
                       <code>custom.pharmacare.com</code>
                     </p>
                   </div>

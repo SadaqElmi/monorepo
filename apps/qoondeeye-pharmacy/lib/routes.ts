@@ -30,16 +30,28 @@ export const ROUTES = {
     uoms: "/sales/uoms",
     transactionRegister: "/sales/transaction-register",
   },
+  users: {
+    staff: "/users/staff",
+    roles: "/users/roles",
+  },
   configuration: {
-    staff: "/configuration/staff",
-    roles: "/configuration/roles",
+    posTerminals: "/configuration/pos-terminals",
+    posDevices: "/configuration/pos-devices",
+    posSecurity: "/configuration/pos-security",
+    posCenter: "/configuration/pos-center",
+    posAnalytics: "/configuration/pos-analytics",
+    posAudit: "/configuration/pos-audit",
+    posShifts: "/configuration/pos-shifts",
+    posApprovals: "/operations/pos-approvals",
   },
   accounting: {
     root: "/accounting",
     monitoring: "/accounting/monitoring",
     controlCenter: "/accounting/control-center",
     importCenter: "/administration/import-center",
+    auditTrail: "/accounting/audit-trail",
     posStatement: "/accounting/pos-statement",
+    cashMovements: "/accounting/cash-movements",
   },
 } as const;
 
@@ -53,4 +65,28 @@ export function inventoryTransferDetailPath(
 
 export function transactionRegisterDetailPath(registerId: string) {
   return `${ROUTES.sales.transactionRegister}/${encodeURIComponent(registerId)}`;
+}
+
+export function posStatementPath(opts?: {
+  sessionId?: string;
+  branchId?: string;
+}) {
+  const params = new URLSearchParams();
+  if (opts?.sessionId) params.set("sessionId", opts.sessionId);
+  if (opts?.branchId) params.set("branchId", opts.branchId);
+  const qs = params.toString();
+  return qs
+    ? `${ROUTES.accounting.posStatement}?${qs}`
+    : ROUTES.accounting.posStatement;
+}
+
+export function posTerminalActivityPath(terminalId: string) {
+  return `${ROUTES.configuration.posTerminals}/${encodeURIComponent(terminalId)}`;
+}
+
+export function auditTrailPath(opts?: { table?: "pos_auth" }) {
+  if (opts?.table === "pos_auth") {
+    return `${ROUTES.accounting.auditTrail}?table=pos_auth`;
+  }
+  return ROUTES.accounting.auditTrail;
 }

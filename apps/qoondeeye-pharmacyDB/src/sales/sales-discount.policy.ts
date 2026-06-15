@@ -13,6 +13,8 @@ export function maxSaleDiscountPercentForRole(
     return POS_MAX_DISCOUNT_PCT_MANAGER_TIER;
   }
   const r = normalizeRole(role);
-  if (r === 'admin') return POS_MAX_DISCOUNT_PCT_MANAGER_TIER;
+  if (r === 'admin' || r === 'manager' || r === 'pharmacist') {
+    return POS_MAX_DISCOUNT_PCT_MANAGER_TIER;
+  }
   return POS_MAX_DISCOUNT_PCT_CASHIER_TIER;
 }

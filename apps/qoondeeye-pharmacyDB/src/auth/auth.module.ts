@@ -1,15 +1,22 @@
 import { Module } from '@nestjs/common';
 import { JwtModule } from '@nestjs/jwt';
 import { ConfigModule, ConfigService } from '@nestjs/config';
+import { AppRedisModule } from '../cache/redis.module';
+import { AccountingModule } from '../accounting/accounting.module';
 import { PrismaModule } from '../prisma/prisma.module';
 import { TenantModule } from '../tenant/tenant.module';
 import { AuthService } from '../auth/auth.service';
 import { AuthController } from '../auth/auth.controller';
 import { JwtStrategy } from '../auth/jwt.strategy';
+import { PosAuthRateLimitService } from './pos-auth-rate-limit.service';
+import { PosAuditService } from './pos-audit.service';
+import { PosRefreshTokenService } from './pos-refresh-token.service';
 
 @Module({
   imports: [
     ConfigModule,
+    AppRedisModule,
+    AccountingModule,
     PrismaModule,
     TenantModule,
     JwtModule.registerAsync({
@@ -30,8 +37,8 @@ import { JwtStrategy } from '../auth/jwt.strategy';
       },
     }),
   ],
-  providers: [AuthService, JwtStrategy],
+  providers: [AuthService, JwtStrategy, PosAuthRateLimitService, PosAuditService, PosRefreshTokenService],
   controllers: [AuthController],
-  exports: [AuthService],
+  exports: [AuthService, PosAuditService, PosRefreshTokenService],
 })
 export class AuthModule {}

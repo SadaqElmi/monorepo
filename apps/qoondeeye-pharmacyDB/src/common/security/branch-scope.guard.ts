@@ -13,6 +13,7 @@ function isPublicBranchRoute(path: string): boolean {
     path.startsWith('/api/tenants') ||
     path.startsWith('/api/domains') ||
     path.startsWith('/api/system-users') ||
+    path.startsWith('/api/admin/') ||
     path === '/api'
   );
 }

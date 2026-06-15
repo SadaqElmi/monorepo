@@ -79,6 +79,8 @@ export function saleToPosTransaction(
     subtotal,
     tax,
     total,
+    storeNo: sale.store_no?.trim() || null,
+    terminalNo: sale.terminal_no?.trim() || null,
   };
 }
 

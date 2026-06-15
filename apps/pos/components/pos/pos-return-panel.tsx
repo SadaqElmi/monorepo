@@ -41,6 +41,7 @@ import {
   type Sale,
   type SaleItem,
 } from "@/lib/api";
+import { SupervisorPinDialog } from "@/features/approvals/ui/supervisor-pin-dialog";
 import { usePosCatalog } from "@/hooks/use-pos-catalog";
 
 const UUID_RE =
@@ -116,6 +117,10 @@ export function PosReturnPanel({
   const [finalizeSuccess, setFinalizeSuccess] = React.useState<string | null>(
     null,
   );
+  const [refundApprovalId, setRefundApprovalId] = React.useState<string | null>(
+    null,
+  );
+  const [supervisorOpen, setSupervisorOpen] = React.useState(false);
 
   const catalog = usePosCatalog(tenantSlug);
   const productNames = catalog.productNameById;
@@ -211,7 +216,7 @@ export function PosReturnPanel({
     }
   };
 
-  const runFinalize = async () => {
+  const runFinalize = async (approvalId?: string) => {
     if (!tenantSlug) return;
     setFinalizeError(null);
     setFinalizeSuccess(null);
@@ -225,6 +230,11 @@ export function PosReturnPanel({
       setFinalizeError("Confirm the product (scan / resolve barcode first).");
       return;
     }
+    const effectiveApprovalId = approvalId ?? refundApprovalId;
+    if (!effectiveApprovalId) {
+      setSupervisorOpen(true);
+      return;
+    }
     const item = sale?.items?.find((i) => i.product_id === resolvedProductId);
     const unitPrice = item ? num(item.price) : undefined;
     setFinalizeLoading(true);
@@ -234,7 +244,9 @@ export function PosReturnPanel({
         confirmedProductId: resolvedProductId,
         scannedUnitPrice: unitPrice,
         refundMethod,
+        approvalId: effectiveApprovalId,
       });
+      setRefundApprovalId(null);
       setFinalizeSuccess(
         `Return completed. Refund ${Number(result.refundAmount).toFixed(2)} (${refundMethod}).`,
       );
@@ -527,6 +539,28 @@ export function PosReturnPanel({
           </Button>
         </CardContent>
       </Card>
+
+      {tenantSlug ? (
+        <SupervisorPinDialog
+          open={supervisorOpen}
+          onOpenChange={setSupervisorOpen}
+          tenantSlug={tenantSlug}
+          title="Supervisor approval for refund"
+          approvalRequest={{
+            actionType: "refund",
+            payload: {
+              voucherId: voucherIdInput.trim(),
+              returnVoucherId: voucherIdInput.trim(),
+            },
+          }}
+          onApproved={(s) => {
+            if (s.approvalId) {
+              setRefundApprovalId(s.approvalId);
+              void runFinalize(s.approvalId);
+            }
+          }}
+        />
+      ) : null}
     </div>
   );
 }

@@ -1,4 +1,3 @@
-import 'dotenv/config';
 import { ValidationPipe } from '@nestjs/common';
 import { NestFactory } from '@nestjs/core';
 import {
@@ -25,6 +24,7 @@ function getCorsOrigins(): string[] {
     'http://localhost:3002',
     'https://pos.qoondeeye.online',
     'https://pharmcare.qoondeeye.online',
+    'https://qoondeeye-admin.qoondeeye.online',
   ];
 }
 
@@ -48,6 +48,8 @@ async function bootstrap() {
       'Authorization',
       'X-Tenant',
       'x-tenant',
+      'X-Tenant-Subdomain',
+      'x-tenant-subdomain',
       'x-branch-id',
       'X-Idempotency-Key',
       'x-request-id',

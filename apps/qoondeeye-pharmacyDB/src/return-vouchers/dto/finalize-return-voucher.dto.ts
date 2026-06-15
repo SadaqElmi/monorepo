@@ -14,4 +14,8 @@ export class FinalizeReturnVoucherDto {
 
   @IsString()
   refundMethod!: string;
+
+  /** Approved `refund` supervisor request for this voucher. */
+  @IsUUID()
+  approvalId!: string;
 }
