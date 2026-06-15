@@ -1,12 +1,24 @@
-/**
- * Centralized API endpoint prefixes for the admin dashboard.
- */
+/** Toggle target: comment one block and uncomment the other. */
+//export const getBaseUrl = () => {
+//  const value = process.env.NEXT_PUBLIC_API_URL_LOCAL?.trim();
+//  if (!value) {
+//    throw new Error(
+//      "NEXT_PUBLIC_API_URL_LOCAL is not set. Configure it in .env.local or your deployment Key Vault.",
+//    );
+//  }
+//  return value.replace(/\/$/, "");
+//};
 
-export const getBaseUrl = () =>
-  process.env.NEXT_PUBLIC_API_URL_LOCAL ?? "http://localhost:5555";
+export const getBaseUrl = () => {
+  const value = process.env.NEXT_PUBLIC_API_URL?.trim();
+  if (!value) {
+    throw new Error(
+      "NEXT_PUBLIC_API_URL is not set. Configure it in .env.local or your deployment Key Vault.",
+    );
+  }
+  return value.replace(/\/$/, "");
+};
 
-//process.env.NEXT_PUBLIC_API_URL ??
-//"https://backendserver-production-0793.up.railway.app";
 export const API_BASE = getBaseUrl();
 
 export const AUTH_PREFIX = `${API_BASE}/api/auth`;
