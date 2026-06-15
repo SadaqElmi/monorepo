@@ -23,6 +23,48 @@ export const erpKeys = {
     ["erp", "returns", tenant, facet] as const,
   staff: (tenant: string, facet: string) =>
     ["erp", "staff", tenant, facet] as const,
+  posTerminals: (
+    tenant: string,
+    facet: string,
+    filters?: {
+      page?: number;
+      limit?: number;
+      q?: string;
+      branchId?: string;
+      status?: string;
+      bindingStatus?: string;
+    },
+  ) =>
+    ["erp", "pos-terminals", tenant, facet, filters ?? {}] as const,
+  posTerminal: (tenant: string, id: string) =>
+    ["erp", "pos-terminal", tenant, id] as const,
+  posTerminalActivity: (tenant: string, id: string, page?: number) =>
+    ["erp", "pos-terminal-activity", tenant, id, page ?? 1] as const,
+  posShifts: (
+    tenant: string,
+    facet: string,
+    filters?: {
+      page?: number;
+      limit?: number;
+      branchId?: string;
+      deviceId?: string;
+      status?: string;
+      from?: string;
+      to?: string;
+    },
+  ) => ["erp", "pos-shifts", tenant, facet, filters ?? {}] as const,
+  posGlobalAudit: (
+    tenant: string,
+    facet: string,
+    filters?: {
+      page?: number;
+      limit?: number;
+      deviceId?: string;
+      action?: string;
+      from?: string;
+      to?: string;
+    },
+  ) => ["erp", "pos-global-audit", tenant, facet, filters ?? {}] as const,
   chartOfAccounts: (tenant: string, facet: string, branchId?: string) =>
     ["erp", "chart-of-accounts", tenant, facet, branchId ?? ""] as const,
   accounts: (tenant: string, facet: string, branchId?: string) =>

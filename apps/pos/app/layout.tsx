@@ -4,7 +4,7 @@ import "./globals.css";
 import { Footer } from "@/components/footer";
 import { TooltipProvider } from "@/components/ui/tooltip";
 
-const geist = Geist({subsets:['latin'],variable:'--font-sans'});
+const geist = Geist({ subsets: ["latin"], variable: "--font-sans" });
 
 const geistMono = Geist_Mono({
   variable: "--font-geist-mono",
@@ -19,6 +19,8 @@ export const metadata: Metadata = {
 import { BranchReconcileHost } from "@/components/branch-reconcile-host";
 import { GlobalErrorBoundary } from "@/components/global-error-boundary";
 import { PosCatalogSync } from "@/components/pos-catalog-sync";
+import { OfflineStatusBanner } from "@/components/offline-status-banner";
+import { PosHeartbeatHost } from "@/components/pos-heartbeat-host";
 import { PosProvider } from "@/components/pos-context";
 import { QueryClientProvider } from "@/components/query-provider";
 import { Toaster } from "@/components/ui/sonner";
@@ -31,20 +33,24 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en" className={cn("h-full", "font-sans", geist.variable)}>
-      <body className={`${geist.variable} ${geistMono.variable} h-full flex flex-col overflow-hidden`}>
+      <body
+        className={`${geist.variable} ${geistMono.variable} h-full flex flex-col overflow-hidden`}
+      >
         <QueryClientProvider>
           <GlobalErrorBoundary>
-          <BranchReconcileHost />
-          <PosCatalogSync />
-          <PosProvider>
-            <TooltipProvider>
-              <main className="flex min-h-0 flex-1 flex-col overflow-y-auto">
-                {children}
-              </main>
-            </TooltipProvider>
-            <Footer />
-            <Toaster position="top-center" />
-          </PosProvider>
+            <BranchReconcileHost />
+            <PosCatalogSync />
+            <PosProvider>
+              <PosHeartbeatHost />
+              <TooltipProvider>
+                <main className="flex min-h-0 flex-1 flex-col overflow-y-auto">
+                  <OfflineStatusBanner />
+                  {children}
+                </main>
+              </TooltipProvider>
+              <Footer />
+              <Toaster position="top-center" />
+            </PosProvider>
           </GlobalErrorBoundary>
         </QueryClientProvider>
       </body>

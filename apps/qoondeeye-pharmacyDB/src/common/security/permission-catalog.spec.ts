@@ -24,6 +24,13 @@ describe('permission-catalog', () => {
     expect(hasEffectivePermission(['view_products'], 'edit_role')).toBe(false);
   });
 
+  it('includes POS supervisor approval permission', () => {
+    expect(ALL_PERMISSION_CODES).toContain('pos_approve_variance');
+    expect(hasEffectivePermission(['pos_approve_variance'], 'pos_approve_variance')).toBe(
+      true,
+    );
+  });
+
   it('every alias coarse code exists in catalog or is legacy', () => {
     for (const alias of COARSE_PERMISSION_ALIASES) {
       expect(

@@ -24,13 +24,10 @@ CREATE UNIQUE INDEX IF NOT EXISTS idx_inventory_product_branch_unique ON "${sche
 `;
 }
 
-const url =
-  process.env.DATABASE_URL_LOCAL ??
-  process.env.DATABASE_URL_STAGING ??
-  process.env.DATABASE_URL;
+const url = process.env.DATABASE_URL;
 
 if (!url) {
-  console.error('Set DATABASE_URL_LOCAL (or DATABASE_URL) in .env');
+  console.error('Set DATABASE_URL in .env or .env.local');
   process.exit(1);
 }
 

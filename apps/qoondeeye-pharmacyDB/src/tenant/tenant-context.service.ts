@@ -1,12 +1,8 @@
 import { Injectable } from '@nestjs/common';
-import type { Tenant } from '@prisma/client';
 import { AsyncLocalStorage } from 'node:async_hooks';
+import type { TenantContextPayload } from './tenant.types';
 
-/** Fields required for request-scoped tenant routing (subset of Prisma `Tenant`). */
-export type TenantContextPayload = Pick<
-  Tenant,
-  'id' | 'name' | 'schemaName' | 'status'
->;
+export type { TenantContextPayload } from './tenant.types';
 
 @Injectable()
 export class TenantContextService {
@@ -50,6 +46,10 @@ export class TenantContextService {
 
   getSchemaName(): string | null {
     return this.getTenant()?.schemaName ?? null;
+  }
+
+  getTenantId(): string | null {
+    return this.getTenant()?.id ?? null;
   }
 
   setSystem(isSystem = true) {

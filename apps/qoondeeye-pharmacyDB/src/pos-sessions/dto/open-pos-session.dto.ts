@@ -1,4 +1,5 @@
-import { IsOptional, IsUUID } from 'class-validator';
+import { IsNumber, IsOptional, IsUUID, Min } from 'class-validator';
+import { Type } from 'class-transformer';
 
 export class OpenPosSessionDto {
   @IsOptional()
@@ -8,4 +9,10 @@ export class OpenPosSessionDto {
   @IsOptional()
   @IsUUID()
   staffUserId?: string;
+
+  @IsOptional()
+  @Type(() => Number)
+  @IsNumber({ maxDecimalPlaces: 2 })
+  @Min(0)
+  openingCash?: number;
 }

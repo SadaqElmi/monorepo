@@ -12,13 +12,22 @@ export type PosSessionCurrentResponse = {
   status: string;
   opened_at: string;
   closed_at: string | null;
+  opening_cash?: number;
   hasPostedStatement?: boolean;
 } | null;
+
+function currentSessionUrl(): string {
+  const binding = getPosDeviceBinding();
+  const deviceId = binding?.deviceId?.trim();
+  if (!deviceId) return `${PREFIX}/sessions/current`;
+  const params = new URLSearchParams({ deviceId });
+  return `${PREFIX}/sessions/current?${params.toString()}`;
+}
 
 export async function getCurrentPosSession(
   tenantSlug: string,
 ): Promise<PosSessionCurrentResponse> {
-  return jsonPos<PosSessionCurrentResponse>(`${PREFIX}/sessions/current`, {
+  return jsonPos<PosSessionCurrentResponse>(currentSessionUrl(), {
     method: "GET",
     tenantSlug,
   });
@@ -26,7 +35,7 @@ export async function getCurrentPosSession(
 
 export async function openPosSession(
   tenantSlug: string,
-  body?: { deviceId?: string; staffUserId?: string },
+  body?: { deviceId?: string; staffUserId?: string; openingCash?: number },
 ): Promise<{
   id: string;
   branch_id: string;
@@ -86,8 +95,22 @@ export async function patchPosStatementLine(
 export async function postPosStatement(
   tenantSlug: string,
   statementId: string,
+  opts?: { varianceApprovalId?: string },
 ): Promise<unknown> {
   return jsonPos(`${PREFIX}/statements/${statementId}/post`, {
+    method: "POST",
+    tenantSlug,
+    body: opts?.varianceApprovalId
+      ? JSON.stringify({ varianceApprovalId: opts.varianceApprovalId })
+      : undefined,
+  });
+}
+
+export async function approvePosShiftVariance(
+  tenantSlug: string,
+  sessionId: string,
+): Promise<unknown> {
+  return jsonPos(`${PREFIX}/sessions/${sessionId}/approve-variance`, {
     method: "POST",
     tenantSlug,
   });
@@ -116,8 +139,32 @@ export async function getZReport(
 export async function closePosSession(
   tenantSlug: string,
   sessionId: string,
+  opts?: { varianceApprovalId?: string },
 ): Promise<unknown> {
   return jsonPos(`${PREFIX}/sessions/${sessionId}/close`, {
+    method: "POST",
+    tenantSlug,
+    body: opts?.varianceApprovalId
+      ? JSON.stringify({ varianceApprovalId: opts.varianceApprovalId })
+      : undefined,
+  });
+}
+
+export async function pausePosSession(
+  tenantSlug: string,
+  sessionId: string,
+): Promise<{ id: string; status: string }> {
+  return jsonPos(`${PREFIX}/sessions/${sessionId}/pause`, {
+    method: "POST",
+    tenantSlug,
+  });
+}
+
+export async function resumePosSession(
+  tenantSlug: string,
+  sessionId: string,
+): Promise<{ id: string; status: string }> {
+  return jsonPos(`${PREFIX}/sessions/${sessionId}/resume`, {
     method: "POST",
     tenantSlug,
   });

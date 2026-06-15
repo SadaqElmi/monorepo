@@ -17,6 +17,8 @@ export {
   getXReport,
   getZReport,
   closePosSession,
+  pausePosSession,
+  resumePosSession,
 } from "./services/pos-sessions";
 export { getBatches, type Batch } from "./services/batches";
 export { getCategories, type Category } from "./services/categories";

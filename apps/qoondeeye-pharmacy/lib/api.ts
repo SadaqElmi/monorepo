@@ -24,3 +24,4 @@ export * from "./services/patient-loans";
 export * from "./services/accounting";
 export * from "./services/transfers";
 export * from "./services/pos-sessions";
+export * from "./services/pos-terminals";

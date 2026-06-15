@@ -1,0 +1,1099 @@
+"use client";
+
+import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useMemo, useState } from "react";
+import {
+  Edit2,
+  Eye,
+  EyeOff,
+  Loader2,
+  Mail,
+  Search,
+  Trash2,
+  User,
+  UserPlus,
+  Users2,
+  Download,
+  ShieldAlert,
+} from "lucide-react";
+import { format } from "date-fns";
+import Link from "next/link";
+import { toast } from "sonner";
+
+import { getStoredUser } from "@/lib/auth-client";
+import { useErpBranches } from "@/hooks/queries/use-erp-branches";
+import { useErpBranchFacet } from "@/hooks/use-erp-branch-facet";
+import { erpKeys } from "@/lib/erp-query-keys";
+import { ERP_STALE_LIST, ERP_STALE_STATIC } from "@/lib/erp-query-options";
+import { UsersModuleShell } from "@/components/users/users-module-shell";
+import { ROUTES } from "@/lib/routes";
+import { ConfigurationErrorBanner } from "@/components/configuration/configuration-status-banner";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
+import { Checkbox } from "@/components/ui/checkbox";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
+import { cn } from "@/lib/utils";
+import {
+  ALL_PERMISSIONS,
+  PERMISSION_FULL_LABEL,
+  PERMISSION_GROUP_LABELS,
+  PERMISSION_GROUPS,
+  type PermissionGroupId,
+  type PermissionName,
+} from "@/lib/permissions";
+import {
+  type StaffMember,
+  type Role,
+  createStaff,
+  deleteStaff,
+  getStaff,
+  getRoles,
+  updateStaff,
+} from "@/lib/api";
+
+type FormMode = "create" | "edit";
+
+type EditableStaff = {
+  id: string;
+  name: string;
+  staffId: string;
+  email: string;
+  role: string;
+  password?: string;
+  pin?: string;
+  branchId?: string;
+};
+
+function normalizeRoleKey(name: string | null | undefined) {
+  return (name ?? "").trim().toLowerCase();
+}
+
+/** Roles that sign in at the POS with Staff ID + PIN (matches backend AuthService / StaffService). */
+const POS_SIGN_IN_ROLES = new Set([
+  "cashier",
+  "manager",
+  "admin",
+  "pharmacist",
+]);
+
+function roleUsesPosSignIn(role: string | null | undefined): boolean {
+  return POS_SIGN_IN_ROLES.has(normalizeRoleKey(role));
+}
+
+/** Native select styling — reliable inside Dialog (Radix Select traps focus). */
+const nativeSelectClassName = cn(
+  "flex h-10 w-full rounded-lg border border-input bg-background px-3 py-2 text-sm shadow-xs",
+  "outline-none focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50",
+  "disabled:cursor-not-allowed disabled:opacity-50",
+);
+
+function findRoleForMember(member: StaffMember, roles: Role[]): Role | undefined {
+  const key = normalizeRoleKey(member.role);
+  if (!key) return undefined;
+  return roles.find((r) => normalizeRoleKey(r.name) === key);
+}
+
+function permissionSetForRole(role: Role | undefined): Set<PermissionName> {
+  const set = new Set<PermissionName>();
+  if (!role?.permissions?.length) return set;
+  for (const p of role.permissions) {
+    if (ALL_PERMISSIONS.includes(p as PermissionName)) {
+      set.add(p as PermissionName);
+    }
+  }
+  return set;
+}
+
+function staffStatusLabel(role: Role | undefined): string {
+  if (!role) return "Unassigned";
+  if (role.active === false) return "Inactive role";
+  return "Active";
+}
+
+function getRoleBadgeClass(role: string | null | undefined) {
+  if (!role?.trim()) {
+    return "border-transparent bg-muted text-muted-foreground";
+  }
+  const r = role.toLowerCase();
+  if (r.includes("admin") || r.includes("manager")) {
+    return "border-transparent bg-primary/15 text-primary";
+  }
+  if (r.includes("cashier")) {
+    return "border-transparent bg-amber-500/15 text-amber-800 dark:text-amber-300";
+  }
+  return "border-transparent bg-secondary text-secondary-foreground";
+}
+
+export default function PharmacyStaffPage() {
+  const queryClient = useQueryClient();
+  const branchFacet = useErpBranchFacet();
+  const [tenantSlug] = useState(() => getStoredUser()?.tenantSlug ?? "");
+
+  const staffQuery = useQuery({
+    queryKey: erpKeys.staff(tenantSlug, branchFacet),
+    queryFn: () => getStaff(tenantSlug),
+    enabled: Boolean(tenantSlug && branchFacet),
+    staleTime: ERP_STALE_LIST,
+  });
+  const rolesQuery = useQuery({
+    queryKey: erpKeys.roles(tenantSlug, branchFacet),
+    queryFn: () => getRoles(tenantSlug),
+    enabled: Boolean(tenantSlug && branchFacet),
+    staleTime: ERP_STALE_STATIC,
+  });
+  const branchesQuery = useErpBranches(tenantSlug, {
+    enabled: Boolean(tenantSlug && branchFacet),
+    configuration: true,
+  });
+
+  const staff = staffQuery.data ?? [];
+  const roleRecords = rolesQuery.data ?? [];
+  const branches = branchesQuery.data ?? [];
+  const loading =
+    staffQuery.isPending || rolesQuery.isPending || branchesQuery.isPending;
+  const loadError =
+    staffQuery.error ?? rolesQuery.error ?? branchesQuery.error;
+  const [error, setError] = useState<string | null>(null);
+  const displayError =
+    error ??
+    (loadError instanceof Error
+      ? loadError.message
+      : loadError
+        ? "Failed to load staff"
+        : null);
+
+  const [formOpen, setFormOpen] = useState(false);
+  const [formMode, setFormMode] = useState<FormMode>("create");
+  const [activeStaff, setActiveStaff] = useState<EditableStaff | null>(null);
+  const [saving, setSaving] = useState(false);
+  const [showPassword, setShowPassword] = useState(false);
+  const [removePin, setRemovePin] = useState(false);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
+
+  const [searchTerm, setSearchTerm] = useState("");
+  const [roleFilter, setRoleFilter] = useState("all");
+  const [branchFilter, setBranchFilter] = useState("all");
+  const [page, setPage] = useState(1);
+  const [pageLength] = useState(15);
+
+  const roleNames = useMemo(
+    () =>
+      [...roleRecords.filter((r) => r.active !== false).map((r) => r.name)].sort(
+        (a, b) => a.localeCompare(b, undefined, { sensitivity: "base" }),
+      ),
+    [roleRecords],
+  );
+
+  const sortedStaff = useMemo(
+    () =>
+      [...staff].sort((a, b) =>
+        (a.name ?? "").localeCompare(b.name ?? "", undefined, {
+          sensitivity: "base",
+        }),
+      ),
+    [staff],
+  );
+
+  const filteredStaff = useMemo(() => {
+    const q = searchTerm.trim().toLowerCase();
+    return sortedStaff.filter((member) => {
+      const roleMatch =
+        roleFilter === "all" ||
+        normalizeRoleKey(member.role) === normalizeRoleKey(roleFilter);
+      const branchMatch =
+        branchFilter === "all" ||
+        (branchFilter === "none" && !member.branch_id) ||
+        member.branch_id === branchFilter;
+      const searchMatch =
+        !q ||
+        (member.name ?? "").toLowerCase().includes(q) ||
+        (member.email ?? "").toLowerCase().includes(q) ||
+        (member.staff_id ?? "").toLowerCase().includes(q) ||
+        (member.role ?? "").toLowerCase().includes(q);
+      return roleMatch && branchMatch && searchMatch;
+    });
+  }, [sortedStaff, searchTerm, roleFilter, branchFilter]);
+
+  const totalPages = Math.max(1, Math.ceil(filteredStaff.length / pageLength));
+  const safePage = Math.min(Math.max(1, page), totalPages);
+  const paginatedStaff = useMemo(() => {
+    const start = (safePage - 1) * pageLength;
+    return filteredStaff.slice(start, start + pageLength);
+  }, [filteredStaff, safePage, pageLength]);
+
+  const handleSearch = (value: string) => {
+    setSearchTerm(value);
+    setPage(1);
+  };
+
+  const handleOpenCreate = () => {
+    if (!tenantSlug) {
+      setError("Unable to determine pharmacy. Please sign in again.");
+      return;
+    }
+    setFormMode("create");
+    setActiveStaff({
+      id: "",
+      name: "",
+      staffId: "",
+      email: "",
+      role: "",
+      password: "",
+      pin: "",
+      branchId: "",
+    });
+    setShowPassword(false);
+    setRemovePin(false);
+    setFormOpen(true);
+  };
+
+  const handleOpenEdit = (member: StaffMember) => {
+    setFormMode("edit");
+    setActiveStaff({
+      id: member.id,
+      name: member.name ?? "",
+      staffId: member.staff_id ?? "",
+      email: member.email ?? "",
+      role: member.role ?? "",
+      password: "",
+      pin: "",
+      branchId: member.branch_id ?? "",
+    });
+    setShowPassword(false);
+    setRemovePin(false);
+    setFormOpen(true);
+  };
+
+  const handleCloseForm = () => {
+    if (saving) return;
+    setFormOpen(false);
+    setActiveStaff(null);
+  };
+
+  const handleChange = (field: keyof EditableStaff, value: string) => {
+    setActiveStaff((prev) => (prev ? { ...prev, [field]: value } : prev));
+  };
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!activeStaff || !tenantSlug) return;
+
+    try {
+      setSaving(true);
+      setError(null);
+
+      const roleName = activeStaff.role.trim();
+      const usesPosSignIn = roleUsesPosSignIn(roleName);
+      const roleOk =
+        !roleName ||
+        roleNames.length === 0 ||
+        roleNames.some((r) => r.toLowerCase() === roleName.toLowerCase());
+      if (!roleOk) {
+        setError(
+          `Role "${roleName}" does not exist for this pharmacy. Create it in Roles first (or pick an existing role from the list).`,
+        );
+        return;
+      }
+
+      if (formMode === "create") {
+        if (!activeStaff.password?.trim() || activeStaff.password.length < 6) {
+          setError("Password is required (min 6 characters).");
+          return;
+        }
+
+        if (usesPosSignIn) {
+          if (!activeStaff.staffId.trim()) {
+            setError("Staff ID is required for POS sign-in.");
+            return;
+          }
+          const pin = activeStaff.pin?.trim() ?? "";
+          if (pin.length < 4) {
+            setError(
+              "A POS PIN (4–12 digits) is required for cashier, manager, admin, and pharmacist roles.",
+            );
+            return;
+          }
+        }
+
+        await createStaff(tenantSlug, {
+          name: activeStaff.name.trim() || undefined,
+          staffId: activeStaff.staffId.trim() || undefined,
+          email: activeStaff.email.trim() || undefined,
+          password: activeStaff.password?.trim() || undefined,
+          role: roleName || undefined,
+          pin: usesPosSignIn ? activeStaff.pin?.trim() : undefined,
+          branchId: activeStaff.branchId?.trim() || undefined,
+        });
+      } else {
+        const payload: Parameters<typeof updateStaff>[2] = {
+          name: activeStaff.name.trim() || undefined,
+          staffId: activeStaff.staffId.trim() || undefined,
+          email: activeStaff.email.trim() || undefined,
+          password: activeStaff.password?.trim() || undefined,
+          role: roleName || undefined,
+          branchId: activeStaff.branchId?.trim() || undefined,
+        };
+        if (usesPosSignIn) {
+          if (removePin) payload.pin = "";
+          else if (activeStaff.pin?.trim())
+            payload.pin = activeStaff.pin.trim();
+        }
+        await updateStaff(tenantSlug, activeStaff.id, payload);
+      }
+
+      await queryClient.invalidateQueries({ queryKey: ["erp", "staff"] });
+      setFormOpen(false);
+      setActiveStaff(null);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to save staff");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleDelete = async (id: string) => {
+    if (!tenantSlug) return;
+    if (
+      !window.confirm(
+        "Remove this team member? They will no longer be able to sign in.",
+      )
+    ) {
+      return;
+    }
+
+    try {
+      setDeletingId(id);
+      setError(null);
+      await deleteStaff(tenantSlug, id);
+      await queryClient.invalidateQueries({ queryKey: ["erp", "staff"] });
+      toast.success("Team member removed");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to remove staff");
+    } finally {
+      setDeletingId(null);
+    }
+  };
+
+  const handleExportStaff = () => {
+    if (!filteredStaff.length) {
+      toast.error("No rows to export");
+      return;
+    }
+    const permHeaders = ALL_PERMISSIONS.map((p) => PERMISSION_FULL_LABEL[p]);
+    const headers = [
+      "Name",
+      "Staff ID",
+      "Email",
+      "Role",
+      "Branch",
+      "Added",
+      ...permHeaders,
+    ];
+    const rows = filteredStaff.map((member) => {
+      const role = findRoleForMember(member, roleRecords);
+      const permSet = permissionSetForRole(role);
+      const branchName =
+        branches.find((b) => b.id === member.branch_id)?.name ?? "";
+      const added = member.created_at
+        ? format(new Date(member.created_at), "yyyy-MM-dd")
+        : "";
+      return [
+        member.name ?? "",
+        member.staff_id ?? "",
+        member.email ?? "",
+        member.role ?? "",
+        branchName,
+        added,
+        ...ALL_PERMISSIONS.map((p) => (permSet.has(p) ? "yes" : "")),
+      ];
+    });
+    const csvRows = [
+      headers.join(","),
+      ...rows.map((cells) =>
+        cells.map((c) => `"${String(c).replace(/"/g, '""')}"`).join(","),
+      ),
+    ];
+    const blob = new Blob([csvRows.join("\n")], {
+      type: "text/csv;charset=utf-8;",
+    });
+    const link = document.createElement("a");
+    const url = URL.createObjectURL(blob);
+    link.href = url;
+    link.download = `staff_${format(new Date(), "dd-MM-yyyy")}.csv`;
+    link.click();
+    URL.revokeObjectURL(url);
+    toast.success("Exported staff");
+  };
+
+  const formRoleUsesPosSignIn =
+    formOpen && activeStaff
+      ? roleUsesPosSignIn(activeStaff.role)
+      : false;
+
+  const uniqueRolesForFilter = useMemo(
+    () =>
+      [
+        ...new Set(
+          staff.map((s) => s.role).filter((r): r is string => Boolean(r?.trim())),
+        ),
+      ].sort((a, b) => a.localeCompare(b, undefined, { sensitivity: "base" })),
+    [staff],
+  );
+
+  return (
+    <TooltipProvider delayDuration={200}>
+      <UsersModuleShell
+        title="Staff & users"
+        description="Manage pharmacy accounts, branch assignments, and sign-in credentials. Access is controlled by the role assigned to each person."
+        stat={{
+          icon: Users2,
+          value: `${staff.length} member${staff.length === 1 ? "" : "s"}`,
+        }}
+        headerEnd={
+          <Button
+            size="sm"
+            className="gap-1.5 rounded-full shadow-sm"
+            onClick={handleOpenCreate}
+          >
+            <UserPlus className="h-4 w-4" />
+            <span className="hidden sm:inline">Add team member</span>
+            <span className="sm:hidden">Add</span>
+          </Button>
+        }
+      >
+        {displayError ? (
+          <ConfigurationErrorBanner message={displayError} />
+        ) : null}
+
+        <Card className="overflow-hidden border shadow-sm">
+          <CardHeader className="space-y-4 border-b bg-muted/20 px-4 py-5 sm:px-6">
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+              <div>
+                <CardTitle className="text-lg">Team directory</CardTitle>
+                <CardDescription className="mt-1 max-w-2xl">
+                  Everyone listed here can sign in to your pharmacy. Permissions
+                  are inherited from their assigned role.
+                </CardDescription>
+              </div>
+              <Button
+                variant="outline"
+                size="sm"
+                className="w-fit shrink-0 gap-1.5"
+                asChild
+              >
+                <Link href={ROUTES.users.roles}>
+                  <ShieldAlert className="h-3.5 w-3.5" />
+                  Manage roles
+                </Link>
+              </Button>
+            </div>
+
+            <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+              <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap">
+                <Select
+                  value={roleFilter}
+                  onValueChange={(v) => {
+                    setRoleFilter(v);
+                    setPage(1);
+                  }}
+                >
+                  <SelectTrigger className="w-full bg-background sm:w-[180px]">
+                    <SelectValue placeholder="Role" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">All roles</SelectItem>
+                    {uniqueRolesForFilter.map((r) => (
+                      <SelectItem key={r} value={r}>
+                        {r}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+
+                <Select
+                  value={branchFilter}
+                  onValueChange={(v) => {
+                    setBranchFilter(v);
+                    setPage(1);
+                  }}
+                >
+                  <SelectTrigger className="w-full bg-background sm:w-[180px]">
+                    <SelectValue placeholder="Branch" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">All branches</SelectItem>
+                    <SelectItem value="none">Unassigned</SelectItem>
+                    {branches.map((b) => (
+                      <SelectItem key={b.id} value={b.id}>
+                        {b.name?.trim() || b.id}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+
+                <div className="relative min-w-[200px] flex-1 max-w-md">
+                  <Search className="absolute left-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+                  <Input
+                    placeholder="Search name, email, Staff ID…"
+                    value={searchTerm}
+                    onChange={(e) => handleSearch(e.target.value)}
+                    className="bg-background pl-9"
+                  />
+                </div>
+              </div>
+
+              <Button
+                variant="outline"
+                size="sm"
+                className="gap-1.5"
+                type="button"
+                onClick={handleExportStaff}
+              >
+                <Download className="h-4 w-4" />
+                Export CSV
+              </Button>
+            </div>
+          </CardHeader>
+
+          <CardContent className="p-0">
+            {loading ? (
+              <div className="flex items-center justify-center gap-2 py-20 text-sm text-muted-foreground">
+                <Loader2 className="h-5 w-5 animate-spin" />
+                Loading team…
+              </div>
+            ) : sortedStaff.length === 0 ? (
+              <div className="flex flex-col items-center justify-center gap-3 px-6 py-20 text-center">
+                <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-primary/10 text-primary">
+                  <Users2 className="h-7 w-7" />
+                </div>
+                <p className="text-sm font-medium">No team members yet</p>
+                <p className="max-w-sm text-sm text-muted-foreground">
+                  Add employees so they can sign in and help run your pharmacy.
+                </p>
+                <Button className="mt-2 gap-2" onClick={handleOpenCreate}>
+                  <UserPlus className="h-4 w-4" />
+                  Add first team member
+                </Button>
+              </div>
+            ) : (
+              <>
+                <div className="relative overflow-x-auto">
+                        <table className="w-max min-w-full border-collapse text-left text-sm">
+                          <thead>
+                            <tr className="border-b bg-muted/50 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                              <th className="sticky left-0 z-20 min-w-[200px] bg-muted/95 px-4 py-3 backdrop-blur-sm">
+                                Member
+                              </th>
+                              <th className="whitespace-nowrap px-3 py-3">
+                                Staff ID
+                              </th>
+                              <th className="min-w-[140px] px-3 py-3">
+                                Email
+                              </th>
+                              <th className="whitespace-nowrap px-3 py-3">
+                                Role
+                              </th>
+                              <th className="whitespace-nowrap px-3 py-3">
+                                Branch
+                              </th>
+                              <th className="whitespace-nowrap px-3 py-3">
+                                Status
+                              </th>
+                              <th className="whitespace-nowrap px-3 py-3">
+                                Added
+                              </th>
+                              <th className="sticky right-0 z-20 min-w-[96px] bg-muted/95 px-3 py-3 text-right backdrop-blur-sm">
+                                Actions
+                              </th>
+                            </tr>
+                          </thead>
+                          <tbody className="divide-y divide-border/60">
+                            {paginatedStaff.map((member) => {
+                              const role = findRoleForMember(
+                                member,
+                                roleRecords,
+                              );
+                              const branchLabel =
+                                branches.find((b) => b.id === member.branch_id)
+                                  ?.name ?? "—";
+
+                              return (
+                                <tr
+                                  key={member.id}
+                                  className="transition-colors hover:bg-muted/40"
+                                >
+                                  <td className="sticky left-0 z-10 bg-background px-4 py-3 shadow-[4px_0_12px_-8px_rgba(0,0,0,0.25)]">
+                                    <div className="flex items-center gap-3">
+                                      <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary">
+                                        <User className="h-4 w-4" />
+                                      </div>
+                                      <div className="min-w-0">
+                                        <p className="truncate font-medium">
+                                          {member.name || "—"}
+                                        </p>
+                                        <p className="truncate font-mono text-[11px] text-muted-foreground">
+                                          {member.id.slice(0, 8)}…
+                                        </p>
+                                      </div>
+                                    </div>
+                                  </td>
+                                  <td className="whitespace-nowrap px-3 py-3 font-mono text-xs">
+                                    {member.staff_id || "—"}
+                                  </td>
+                                  <td className="max-w-[180px] px-3 py-3">
+                                    <span className="flex items-center gap-1.5 truncate text-muted-foreground">
+                                      <Mail className="h-3.5 w-3.5 shrink-0" />
+                                      <span className="truncate">
+                                        {member.email || "—"}
+                                      </span>
+                                    </span>
+                                  </td>
+                                  <td className="whitespace-nowrap px-3 py-3">
+                                    <Badge
+                                      variant="outline"
+                                      className={cn(
+                                        "border-transparent text-xs font-medium",
+                                        getRoleBadgeClass(member.role),
+                                      )}
+                                    >
+                                      {member.role?.trim() || "Unassigned"}
+                                    </Badge>
+                                  </td>
+                                  <td className="whitespace-nowrap px-3 py-3 text-xs text-muted-foreground">
+                                    {branchLabel}
+                                  </td>
+                                  <td className="whitespace-nowrap px-3 py-3">
+                                    <Badge
+                                      variant={
+                                        staffStatusLabel(role) === "Active"
+                                          ? "secondary"
+                                          : "outline"
+                                      }
+                                      className="text-xs"
+                                    >
+                                      {staffStatusLabel(role)}
+                                    </Badge>
+                                  </td>
+                                  <td className="whitespace-nowrap px-3 py-3 text-xs text-muted-foreground">
+                                    {member.created_at
+                                      ? format(
+                                          new Date(member.created_at),
+                                          "MMM d, yyyy",
+                                        )
+                                      : "—"}
+                                  </td>
+                                  <td className="sticky right-0 z-10 bg-background px-3 py-2 text-right shadow-[-4px_0_12px_-8px_rgba(0,0,0,0.25)]">
+                                    <div className="flex justify-end gap-1">
+                                      <Button
+                                        variant="ghost"
+                                        size="icon"
+                                        className="h-8 w-8 rounded-lg text-primary hover:bg-primary/10"
+                                        onClick={() =>
+                                          handleOpenEdit(member)
+                                        }
+                                        title="Edit"
+                                      >
+                                        <Edit2 className="h-4 w-4" />
+                                      </Button>
+                                      <Button
+                                        variant="ghost"
+                                        size="icon"
+                                        className="h-8 w-8 rounded-lg text-destructive hover:bg-destructive/10"
+                                        onClick={() =>
+                                          handleDelete(member.id)
+                                        }
+                                        disabled={deletingId === member.id}
+                                        title="Remove"
+                                      >
+                                        {deletingId === member.id ? (
+                                          <Loader2 className="h-4 w-4 animate-spin" />
+                                        ) : (
+                                          <Trash2 className="h-4 w-4" />
+                                        )}
+                                      </Button>
+                                    </div>
+                                  </td>
+                                </tr>
+                              );
+                            })}
+                          </tbody>
+                        </table>
+                      </div>
+
+                      {filteredStaff.length === 0 && sortedStaff.length > 0 && (
+                        <p className="py-8 text-center text-sm text-muted-foreground">
+                          No team members match your filters.
+                        </p>
+                      )}
+
+                {totalPages > 1 && (
+                  <div className="flex flex-col gap-2 border-t px-4 py-4 sm:flex-row sm:items-center sm:justify-between sm:px-6">
+                          <p className="text-sm text-muted-foreground">
+                            Showing{" "}
+                            {(safePage - 1) * pageLength + 1}–
+                            {Math.min(
+                              safePage * pageLength,
+                              filteredStaff.length,
+                            )}{" "}
+                            of {filteredStaff.length}
+                          </p>
+                          <div className="flex items-center gap-2">
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              disabled={safePage <= 1}
+                              onClick={() =>
+                                setPage((p) =>
+                                  Math.max(
+                                    1,
+                                    Math.min(p, totalPages) - 1,
+                                  ),
+                                )
+                              }
+                            >
+                              Previous
+                            </Button>
+                            <span className="text-sm tabular-nums text-muted-foreground">
+                              Page {safePage} / {totalPages}
+                            </span>
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              disabled={safePage >= totalPages}
+                              onClick={() =>
+                                setPage((p) =>
+                                  Math.min(
+                                    totalPages,
+                                    Math.min(p, totalPages) + 1,
+                                  ),
+                                )
+                              }
+                            >
+                              Next
+                            </Button>
+                          </div>
+                  </div>
+                )}
+              </>
+            )}
+          </CardContent>
+        </Card>
+
+        <Dialog
+          open={formOpen && Boolean(activeStaff)}
+          onOpenChange={(open) => {
+            if (!open) handleCloseForm();
+          }}
+        >
+          <DialogContent className="max-h-[90vh] max-w-md overflow-y-auto sm:max-w-lg">
+            <DialogHeader>
+              <DialogTitle>
+                {formMode === "create"
+                  ? "Add team member"
+                  : "Edit team member"}
+              </DialogTitle>
+              <DialogDescription>
+                {formMode === "create"
+                  ? "They will be able to sign in with this pharmacy."
+                  : "Update name, email, role, password, or POS PIN."}
+              </DialogDescription>
+            </DialogHeader>
+            {activeStaff ? (
+              <form onSubmit={handleSubmit} className="space-y-4">
+                <div className="space-y-2">
+                  <Label htmlFor="staff-name">Full name</Label>
+                  <div className="relative">
+                    <User className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+                    <Input
+                      id="staff-name"
+                      value={activeStaff.name}
+                      onChange={(e) => handleChange("name", e.target.value)}
+                      placeholder="e.g. Jane Doe"
+                      className="h-10 rounded-lg pl-10"
+                    />
+                  </div>
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="staff-pos-id">Staff ID</Label>
+                  <Input
+                    id="staff-pos-id"
+                    type="text"
+                    value={activeStaff.staffId}
+                    onChange={(e) => handleChange("staffId", e.target.value)}
+                    placeholder="e.g. frontdesk.main"
+                    required={formRoleUsesPosSignIn}
+                    className="h-10 rounded-lg font-mono"
+                  />
+                  <p className="text-xs text-muted-foreground">
+                    Used at the POS register with PIN (cashier, manager, admin,
+                    pharmacist).
+                  </p>
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="staff-email">Email (optional)</Label>
+                  <div className="relative">
+                    <Mail className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+                    <Input
+                      id="staff-email"
+                      type="email"
+                      value={activeStaff.email}
+                      onChange={(e) => handleChange("email", e.target.value)}
+                      placeholder="staff@pharmacy.com"
+                      className="h-10 rounded-lg pl-10"
+                    />
+                  </div>
+                  <p className="text-xs text-muted-foreground">
+                    Optional contact address; not used as the POS Staff ID.
+                  </p>
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="staff-role">Role</Label>
+                  <select
+                    id="staff-role"
+                    className={nativeSelectClassName}
+                    value={
+                      activeStaff.role?.trim() ? activeStaff.role : "__none__"
+                    }
+                    onChange={(e) => {
+                      const next =
+                        e.target.value === "__none__" ? "" : e.target.value;
+                      setActiveStaff((prev) =>
+                        prev
+                          ? {
+                              ...prev,
+                              role: next,
+                              pin: roleUsesPosSignIn(next) ? prev.pin : "",
+                            }
+                          : prev,
+                      );
+                      if (!roleUsesPosSignIn(next)) {
+                        setRemovePin(false);
+                      }
+                    }}
+                  >
+                    <option value="__none__">Unassigned</option>
+                    {roleNames.map((name) => (
+                      <option key={name} value={name}>
+                        {name}
+                      </option>
+                    ))}
+                  </select>
+                  <p className="text-xs text-muted-foreground">
+                    Pick an active role. Edit permissions on the{" "}
+                    <Link href={ROUTES.users.roles} className="underline">
+                      Roles
+                    </Link>{" "}
+                    page.
+                  </p>
+                  {activeStaff.role?.trim() ? (
+                    <div className="rounded-lg border bg-muted/20 p-3">
+                      <p className="mb-2 text-xs font-medium text-muted-foreground">
+                        Role permissions (read-only)
+                      </p>
+                      <div className="max-h-48 space-y-2 overflow-y-auto text-xs">
+                        {(
+                          Object.keys(PERMISSION_GROUPS) as PermissionGroupId[]
+                        ).map((groupId) => {
+                          const selectedRole = roleRecords.find(
+                            (r) =>
+                              normalizeRoleKey(r.name) ===
+                              normalizeRoleKey(activeStaff.role),
+                          );
+                          const permSet = permissionSetForRole(selectedRole);
+                          const groupPerms = PERMISSION_GROUPS[groupId].filter(
+                            (p) => permSet.has(p),
+                          );
+                          if (!groupPerms.length) return null;
+                          return (
+                            <div key={groupId}>
+                              <p className="font-medium">
+                                {PERMISSION_GROUP_LABELS[groupId]}
+                              </p>
+                              <ul className="mt-1 list-inside list-disc text-muted-foreground">
+                                {groupPerms.map((p) => (
+                                  <li key={p}>{PERMISSION_FULL_LABEL[p]}</li>
+                                ))}
+                              </ul>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  ) : null}
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="staff-branch">Assigned branch</Label>
+                  {branchesQuery.isPending ? (
+                    <p className="text-sm text-muted-foreground">
+                      Loading branches…
+                    </p>
+                  ) : branches.length === 0 ? (
+                    <p className="text-sm text-muted-foreground">
+                      No branches available. Create a branch under Inventory →
+                      Branches first.
+                    </p>
+                  ) : (
+                    <select
+                      id="staff-branch"
+                      className={nativeSelectClassName}
+                      value={
+                        activeStaff.branchId?.trim()
+                          ? activeStaff.branchId
+                          : "__none__"
+                      }
+                      onChange={(e) =>
+                        handleChange(
+                          "branchId",
+                          e.target.value === "__none__" ? "" : e.target.value,
+                        )
+                      }
+                    >
+                      <option value="__none__">Unassigned</option>
+                      {branches.map((branch) => (
+                        <option key={branch.id} value={branch.id}>
+                          {branch.name?.trim() || branch.id}
+                        </option>
+                      ))}
+                    </select>
+                  )}
+                  <p className="text-xs text-muted-foreground">
+                    Cashier, staff, and manager users must be assigned to one
+                    branch.
+                  </p>
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="staff-password">
+                    {formMode === "create"
+                      ? "Password (min 6 characters)"
+                      : "New password (leave blank to keep current)"}
+                  </Label>
+                  <div className="relative">
+                    <Input
+                      id="staff-password"
+                      type={showPassword ? "text" : "password"}
+                      value={activeStaff.password ?? ""}
+                      onChange={(e) => handleChange("password", e.target.value)}
+                      placeholder={
+                        formMode === "create" ? "••••••••" : "Optional"
+                      }
+                      required={formMode === "create"}
+                      minLength={formMode === "create" ? 6 : undefined}
+                      className="h-10 rounded-lg pr-10"
+                    />
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="icon-sm"
+                      onClick={() => setShowPassword((p) => !p)}
+                      className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                      aria-label="Toggle password visibility"
+                    >
+                      {showPassword ? (
+                        <EyeOff className="h-4 w-4" />
+                      ) : (
+                        <Eye className="h-4 w-4" />
+                      )}
+                    </Button>
+                  </div>
+                </div>
+                {formRoleUsesPosSignIn && (
+                  <div className="space-y-2">
+                    <Label htmlFor="staff-pin">
+                      {formMode === "create"
+                        ? "POS PIN (4–12 digits)"
+                        : "New POS PIN (optional)"}
+                    </Label>
+                    <Input
+                      id="staff-pin"
+                      inputMode="numeric"
+                      autoComplete="off"
+                      disabled={formMode === "edit" && removePin}
+                      value={activeStaff.pin ?? ""}
+                      onChange={(e) =>
+                        handleChange(
+                          "pin",
+                          e.target.value.replace(/\D/g, "").slice(0, 12),
+                        )
+                      }
+                      placeholder={formMode === "create" ? "e.g. 1234" : "••••"}
+                      className="h-10 rounded-lg font-mono tracking-widest"
+                    />
+                    <p className="text-xs text-muted-foreground">
+                      {formMode === "create"
+                        ? "Sign in at the POS with Staff ID and this PIN. Permissions follow the assigned role."
+                        : "Leave blank to keep the current PIN."}
+                    </p>
+                    {formMode === "edit" && (
+                      <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                        <Checkbox
+                          id="staff-remove-pin"
+                          checked={removePin}
+                          onCheckedChange={(checked) => {
+                            const next = checked === true;
+                            setRemovePin(next);
+                            if (next) handleChange("pin", "");
+                          }}
+                        />
+                        <Label
+                          htmlFor="staff-remove-pin"
+                          className="cursor-pointer text-xs text-muted-foreground"
+                        >
+                          Remove PIN (cannot use POS until a new PIN is set)
+                        </Label>
+                      </div>
+                    )}
+                  </div>
+                )}
+                <DialogFooter className="gap-2 pt-2 sm:gap-0">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={handleCloseForm}
+                    disabled={saving}
+                  >
+                    Cancel
+                  </Button>
+                  <Button type="submit" disabled={saving}>
+                    {saving ? (
+                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    ) : null}
+                    {formMode === "create" ? "Add member" : "Save changes"}
+                  </Button>
+                </DialogFooter>
+              </form>
+            ) : null}
+          </DialogContent>
+        </Dialog>
+      </UsersModuleShell>
+    </TooltipProvider>
+  );
+}

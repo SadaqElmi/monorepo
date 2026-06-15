@@ -32,6 +32,7 @@ import type {
 import { permissionForImportType } from './types/import.types';
 import { resolveImportAllowedBranchIds } from './import-branch-scope.util';
 import { PermissionGuard } from '../common/security/permission.guard';
+import { userHasPermissions } from '../common/security/permission-resolve.util';
 import { RequirePermissions } from '../common/security/require-permissions.decorator';
 
 @Controller('imports')
@@ -262,17 +263,6 @@ export class ImportController {
     );
   }
 
-  @Get('diagnostics/schema-health')
-  async schemaHealth(@Query('patch') patch = 'false') {
-    const { schema } = this.ensureTenant();
-    if (patch === 'true' || patch === '1') {
-      await this.tenantService.applyTenantSchemaPatches(schema, {
-        force: true,
-      });
-    }
-    return this.tenantService.getTenantSchemaHealth(schema);
-  }
-
   @Get('center/dashboard')
   @RequirePermissions('view_import_center')
   async importCenterDashboard(
@@ -381,7 +371,7 @@ export class ImportController {
     const { schema } = this.ensureTenant();
     const { job, handler } = await this.resolveHandlerForJob(schema, jobId);
     const perm = permissionForImportType(job.importType);
-    if (!(req.permissionCodes ?? []).includes(perm)) {
+    if (!userHasPermissions(req, perm)) {
       throw new BadRequestException(`Missing permission: ${perm}`);
     }
     const ctx = await this.buildImportContext(req);

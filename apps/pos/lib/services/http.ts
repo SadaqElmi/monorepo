@@ -11,6 +11,13 @@ import {
   getClientBranchIdHeaderForApi,
   getEffectiveClientBranchId,
 } from "@/lib/branch-access";
+import { getPosDeviceCredential } from "@/lib/device-client";
+import {
+  clearRefreshToken,
+  getStoredRefreshToken,
+  setRefreshToken,
+} from "@/lib/auth-client";
+import { AUTH_PREFIX } from "./endpoints";
 
 export type JsonHeaders = Record<string, string>;
 const AUTH_TOKEN_COOKIE = "auth_token";
@@ -51,6 +58,59 @@ function getAuthTokenFromCookie(): string | null {
   } catch {
     return null;
   }
+}
+
+function setAuthTokenCookie(token: string) {
+  if (typeof document === "undefined") return;
+  const maxAge = 7 * 24 * 60 * 60;
+  document.cookie = `${AUTH_TOKEN_COOKIE}=${encodeURIComponent(token)}; path=/; max-age=${maxAge}; SameSite=Lax`;
+}
+
+function getTenantSlugFromHeaders(headers: Record<string, string>): string | null {
+  const entry = Object.entries(headers).find(
+    ([k]) => k.toLowerCase() === "x-tenant",
+  );
+  return entry?.[1]?.trim() || null;
+}
+
+let refreshInFlight: Promise<string | null> | null = null;
+
+async function rotateAccessToken(tenantSlug: string): Promise<string | null> {
+  const refreshToken = getStoredRefreshToken();
+  const deviceCredential = getPosDeviceCredential();
+  if (!refreshToken || !deviceCredential) return null;
+
+  if (!refreshInFlight) {
+    refreshInFlight = fetch(`${AUTH_PREFIX}/pos/refresh`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      credentials: "include",
+      body: JSON.stringify({
+        refreshToken,
+        tenantSlug,
+        deviceCredential,
+      }),
+    })
+      .then(async (res) => {
+        if (!res.ok) throw new Error("refresh failed");
+        const data = (await res.json()) as {
+          token: string;
+          refreshToken: string;
+        };
+        setAuthTokenCookie(data.token);
+        setRefreshToken(data.refreshToken);
+        return data.token;
+      })
+      .catch(() => {
+        clearRefreshToken();
+        return null;
+      })
+      .finally(() => {
+        refreshInFlight = null;
+      });
+  }
+
+  return refreshInFlight;
 }
 
 function mergeClientHeaders(
@@ -110,13 +170,15 @@ function throwApiError(res: Response, data: unknown): never {
 
 export type JsonFetchOptions = RequestInit & {
   tenantSlug?: string;
+  /** Internal: skip refresh retry to avoid loops. */
+  _skipRefresh?: boolean;
 };
 
 export async function jsonFetch<TResponse>(
   url: string,
   init?: JsonFetchOptions,
 ): Promise<TResponse> {
-  const { tenantSlug, ...requestInit } = init ?? {};
+  const { tenantSlug, _skipRefresh, ...requestInit } = init ?? {};
   const mergedHeaders = mergeClientHeaders(requestInit, { tenantSlug });
 
   let res: Response;
@@ -134,6 +196,22 @@ export async function jsonFetch<TResponse>(
     );
     logApiErrorForSupport(err);
     throw err;
+  }
+
+  if (res.status === 401 && !_skipRefresh) {
+    const slug =
+      tenantSlug?.trim() ||
+      getTenantSlugFromHeaders(mergedHeaders) ||
+      undefined;
+    if (slug) {
+      const newToken = await rotateAccessToken(slug);
+      if (newToken) {
+        return jsonFetch<TResponse>(url, {
+          ...init,
+          _skipRefresh: true,
+        });
+      }
+    }
   }
 
   if (res.status === 204) {
@@ -153,7 +231,7 @@ export async function blobFetch(
   url: string,
   init?: JsonFetchOptions,
 ): Promise<Blob> {
-  const { tenantSlug, ...requestInit } = init ?? {};
+  const { tenantSlug, _skipRefresh, ...requestInit } = init ?? {};
   const mergedHeaders = mergeClientHeaders(requestInit, { tenantSlug });
 
   let res: Response;
@@ -171,6 +249,19 @@ export async function blobFetch(
     );
     logApiErrorForSupport(err);
     throw err;
+  }
+
+  if (res.status === 401 && !_skipRefresh) {
+    const slug =
+      tenantSlug?.trim() ||
+      getTenantSlugFromHeaders(mergedHeaders) ||
+      undefined;
+    if (slug) {
+      const newToken = await rotateAccessToken(slug);
+      if (newToken) {
+        return blobFetch(url, { ...init, _skipRefresh: true });
+      }
+    }
   }
 
   if (!res.ok) {
@@ -193,5 +284,15 @@ export async function authPost<TResponse>(
       ...headers,
     },
     body: JSON.stringify(body),
+  });
+}
+
+export async function authGet<TResponse>(
+  url: string,
+  headers?: JsonHeaders,
+): Promise<TResponse> {
+  return jsonFetch<TResponse>(url, {
+    method: "GET",
+    headers,
   });
 }

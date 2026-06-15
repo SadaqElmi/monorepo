@@ -20,7 +20,7 @@ const password = process.env.SUPER_ADMIN_PASSWORD?.trim();
 async function main() {
   if (!url) {
     throw new Error(
-      'Set DATABASE_URL or DATABASE_URL_STAGING / DATABASE_URL_LOCAL (see prisma.config.ts)',
+      'Set DATABASE_URL in .env or .env.local (see load-env profile)',
     );
   }
   if (!email || !password) {

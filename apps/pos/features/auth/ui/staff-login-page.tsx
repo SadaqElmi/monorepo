@@ -18,18 +18,10 @@ import { setAuthToken, type StoredUser } from "@/lib/auth-client";
 import { formatApiErrorForUser } from "@/lib/services/http";
 import { usePos } from "@/components/pos-context";
 import { getPosDeviceCredential } from "@/lib/device-client";
-import { staffLogin, pinLogin } from "@/lib/services/auth";
-import {
-  pinLoginSchema,
-  staffLoginSchema,
-  validateForSubmit,
-} from "@/lib/validation";
+import { staffLogin } from "@/lib/services/auth";
+import { staffLoginSchema, validateForSubmit } from "@/lib/validation";
 import { prefetchPosRegisterData } from "@/lib/prefetch-register-data";
 import { POS_BRAND_COLOR } from "@/features/register/model/constants";
-
-const POS_LOGIN_MODE = (
-  process.env.NEXT_PUBLIC_POS_DEVICE_LOGIN_MODE ?? "dual"
-).toLowerCase();
 
 export function StaffLoginPage() {
   const router = useRouter();
@@ -84,63 +76,36 @@ export function StaffLoginPage() {
       }
 
       const deviceCredential = getPosDeviceCredential();
-      if (!deviceCredential && POS_LOGIN_MODE === "device") {
-        setError("Device is not enrolled. Rebind this POS terminal.");
+      if (!deviceCredential) {
+        setError("Terminal is not configured. Reconfigure this POS terminal.");
         return;
       }
 
-      const fallbackTenant = (
-        localStorage.getItem("posTenantSlug") ??
-        process.env.NEXT_PUBLIC_DEFAULT_TENANT ??
-        ""
-      ).trim();
-      if (!deviceCredential && !fallbackTenant) {
-        setError("Device is not enrolled. Rebind this POS terminal.");
+      const validated = validateForSubmit(staffLoginSchema, {
+        staffId: id,
+        pin,
+        deviceCredential,
+        ...(branchId ? { branchId } : {}),
+      });
+      if (!validated.ok) {
+        setError(validated.message);
         return;
       }
 
-      let res: Awaited<ReturnType<typeof staffLogin>>;
-      if (deviceCredential && POS_LOGIN_MODE !== "legacy") {
-        const validated = validateForSubmit(staffLoginSchema, {
-          staffId: id,
-          pin,
-          deviceCredential,
-          ...(branchId ? { branchId } : {}),
-        });
-        if (!validated.ok) {
-          setError(validated.message);
-          return;
-        }
-        res = await staffLogin(
-          validated.data.staffId,
-          validated.data.pin,
-          validated.data.deviceCredential,
-          validated.data.branchId,
-        );
-      } else {
-        const validated = validateForSubmit(pinLoginSchema, {
-          pin,
-          tenant: fallbackTenant,
-          ...(branchId ? { branchId } : {}),
-          ...(id ? { staffId: id } : {}),
-        });
-        if (!validated.ok) {
-          setError(validated.message);
-          return;
-        }
-        res = await pinLogin(
-          validated.data.pin,
-          validated.data.tenant,
-          validated.data.branchId,
-          validated.data.staffId,
-        );
-      }
+      const res = await staffLogin(
+        validated.data.staffId,
+        validated.data.pin,
+        validated.data.deviceCredential,
+        validated.data.branchId,
+      );
 
       const user: StoredUser = {
         id: res.user.id,
         email: res.user.email ?? "",
         name: res.user.name,
-        ...(id.trim() ? { staffId: id.trim() } : {}),
+        ...(res.staffId?.trim() || res.user.staffId?.trim() || id.trim()
+          ? { staffId: (res.staffId ?? res.user.staffId ?? id).trim() }
+          : {}),
         userType: "tenant",
         role: res.role,
         tenantId: res.tenantId ?? undefined,
@@ -150,7 +115,7 @@ export function StaffLoginPage() {
         canViewAllBranches: res.canViewAllBranches,
       };
 
-      setAuthToken(res.token, user);
+      setAuthToken(res.token, user, res.refreshToken);
       setManagerPrivilegesSuspended(false);
       try {
         localStorage.setItem("posLastStaffId", id);
@@ -295,18 +260,18 @@ export function StaffLoginPage() {
 
       <div className="flex flex-wrap items-center justify-center gap-x-6 gap-y-2 text-center text-xs">
         <Link
-          href="/login"
-          className="font-medium underline underline-offset-3"
-          style={{ color: POS_BRAND_COLOR }}
-        >
-          Manager sign in (email)
-        </Link>
-        <Link
           href="/"
           className="inline-flex items-center gap-1 text-muted-foreground hover:text-foreground"
         >
           <ArrowLeft className="h-3 w-3" />
           Back to terminal
+        </Link>
+        <Link
+          href="/setup"
+          className="font-medium underline underline-offset-3"
+          style={{ color: POS_BRAND_COLOR }}
+        >
+          Terminal setup (server URL)
         </Link>
       </div>
     </div>

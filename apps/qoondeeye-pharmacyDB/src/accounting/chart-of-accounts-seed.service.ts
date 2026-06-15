@@ -467,6 +467,19 @@ const COA_SEED_ROWS: CoaSeedRow[] = [
 
 @Injectable()
 export class ChartOfAccountsSeedService {
+  /** Seed default COA when a branch has no accounts yet (e.g. created before seeding). */
+  async ensureAccountsForBranchIfEmpty(
+    tx: Prisma.TransactionClient,
+    branchId: string,
+  ): Promise<void> {
+    const [row] = await tx.$queryRawUnsafe<Array<{ c: number }>>(
+      `SELECT COUNT(*)::int AS c FROM chart_of_accounts WHERE branch_id = $1::uuid`,
+      branchId,
+    );
+    if (Number(row?.c ?? 0) > 0) return;
+    await this.ensureAccountsForBranch(tx, branchId);
+  }
+
   /**
    * Idempotent seed of GL accounts for a branch. Returns account id by posting key.
    */

@@ -28,34 +28,6 @@ export class LoginDto {
 
 /**
  * Keep in sync with:
- * packages/validation/src/auth.ts — pinLoginSchema
- */
-/** Cashier fast login: PIN + pharmacy slug (and optional branch) */
-export class PinLoginDto {
-  @IsString()
-  @MinLength(4)
-  @MaxLength(12)
-  @Matches(/^\d+$/, { message: 'PIN must contain digits only' })
-  pin!: string;
-
-  @IsString()
-  @MinLength(1)
-  tenant!: string;
-
-  @IsOptional()
-  @IsUUID()
-  branchId?: string;
-
-  /** When set, only this staff member (staff_id or user UUID) may match the PIN. */
-  @IsOptional()
-  @IsString()
-  @MinLength(1)
-  @MaxLength(120)
-  staffId?: string;
-}
-
-/**
- * Keep in sync with:
  * packages/validation/src/auth.ts — staffLoginSchema
  */
 /** Device-bound POS login: staff identifier + PIN + device credential */
@@ -77,55 +49,6 @@ export class StaffLoginDto {
   @IsOptional()
   @IsUUID()
   branchId?: string;
-}
-
-/**
- * Keep in sync with:
- * packages/validation/src/auth.ts — posDeviceEnrollSchema
- */
-/** Manager enrollment for POS device binding */
-export class PosDeviceEnrollDto {
-  @IsString()
-  @MinLength(1)
-  tenant!: string;
-
-  @IsEmail()
-  email!: string;
-
-  @IsString()
-  @MinLength(6)
-  password!: string;
-
-  @IsOptional()
-  @IsString()
-  @MinLength(1)
-  deviceCode?: string;
-
-  @IsOptional()
-  @IsString()
-  @MinLength(1)
-  displayName?: string;
-
-  @IsOptional()
-  @IsUUID()
-  branchId?: string;
-}
-
-export class PosDeviceRevokeDto {
-  @IsString()
-  @MinLength(1)
-  tenant!: string;
-
-  @IsEmail()
-  email!: string;
-
-  @IsString()
-  @MinLength(6)
-  password!: string;
-
-  @IsString()
-  @MinLength(1)
-  deviceCode!: string;
 }
 
 /** Pharmacy owner signup: creates tenant + first user (admin) */

@@ -56,16 +56,46 @@ export async function getSaleByReceiptNumber(
   });
 }
 
+export type CreateSaleOptions = {
+  idempotencyKey?: string;
+  clientSaleRef?: string;
+};
+
 export async function createSale(
   tenantSlug: string,
   input: CreateSaleInput,
+  options?: CreateSaleOptions,
 ): Promise<Sale> {
+  const headers: JsonHeaders = {
+    "Content-Type": "application/json",
+    "X-Tenant": tenantSlug,
+  };
+  if (options?.idempotencyKey) {
+    headers["x-idempotency-key"] = options.idempotencyKey;
+  }
+  const body: CreateSaleInput = {
+    ...input,
+    clientSaleRef: options?.clientSaleRef ?? input.clientSaleRef,
+    syncSource: input.syncSource ?? "online",
+  };
   return jsonFetch<Sale>(SALES_PREFIX, {
+    method: "POST",
+    headers,
+    body: JSON.stringify(body),
+  });
+}
+
+export async function voidSale(
+  tenantSlug: string,
+  saleId: string,
+  approvalId: string,
+): Promise<{ deleted: boolean }> {
+  return jsonFetch<{ deleted: boolean }>(`${SALES_PREFIX}/${saleId}/void`, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
       "X-Tenant": tenantSlug,
     } as JsonHeaders,
-    body: JSON.stringify(input),
+    body: JSON.stringify({ approvalId }),
   });
 }

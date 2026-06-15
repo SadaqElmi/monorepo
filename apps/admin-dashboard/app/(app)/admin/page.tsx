@@ -20,7 +20,7 @@ export default async function Page() {
       getSystemUsersServer(),
     ]);
     initialDashboard = {
-      tenants,
+      tenants: tenants.items,
       domains,
       systemUsers,
       lastUpdatedAt: new Date().toISOString(),

@@ -3,7 +3,6 @@ const { PrismaClient } = require('@prisma/client');
 async function main() {
   process.env.DATABASE_URL =
     process.env.DATABASE_URL ||
-    process.env.DATABASE_URL_LOCAL ||
     'postgresql://postgres:sadaq123@localhost:5432/QoondeeyeDB';
   const p = new PrismaClient();
   try {

@@ -109,9 +109,22 @@ export class CreateSaleDto {
   posSessionId?: string;
 
   @IsOptional()
+  @IsUUID()
+  clientSaleRef?: string;
+
+  @IsOptional()
+  @IsIn(['online', 'offline'])
+  syncSource?: string;
+
+  @IsOptional()
   @ValidateNested()
   @Type(() => SaleCreditOverrideDto)
   creditOverride?: SaleCreditOverrideDto;
+
+  /** Approved `large_discount` request when cart discount exceeds role cap. */
+  @IsOptional()
+  @IsUUID()
+  discountApprovalId?: string;
 
   @IsArray()
   @ArrayMinSize(1)

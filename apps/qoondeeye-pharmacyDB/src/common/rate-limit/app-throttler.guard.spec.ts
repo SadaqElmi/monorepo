@@ -6,13 +6,16 @@ import { resolveRateLimitTier, shouldSkipRateLimitPath } from './rate-limit-path
 describe('rate limit paths', () => {
   it('skips health and SSE', () => {
     expect(shouldSkipRateLimitPath('/api', 'GET')).toBe(true);
+    expect(shouldSkipRateLimitPath('/api/health', 'GET')).toBe(true);
+    expect(shouldSkipRateLimitPath('/api/health/control-db', 'GET')).toBe(true);
     expect(shouldSkipRateLimitPath('/api/inventory/stream', 'GET')).toBe(true);
     expect(shouldSkipRateLimitPath('/api/sales', 'POST')).toBe(false);
   });
 
   it('classifies login routes', () => {
     expect(resolveRateLimitTier('/api/auth/login', 'POST')).toBe('login');
-    expect(resolveRateLimitTier('/api/auth/pin-login', 'POST')).toBe('pin');
+    expect(resolveRateLimitTier('/api/auth/staff-login', 'POST')).toBe('staff');
+    expect(resolveRateLimitTier('/api/auth/pos/setup', 'POST')).toBe('authOther');
   });
 });
 

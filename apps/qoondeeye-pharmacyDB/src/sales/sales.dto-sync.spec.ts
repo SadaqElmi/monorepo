@@ -55,5 +55,21 @@ describe('Sales DTO sync', () => {
       expectDtoZodAgree(createSaleSchema, CreateSaleDto, {}, false);
       expectDtoInvalid(CreateSaleDto, {});
     });
+
+    it('accepts offline sync metadata', () => {
+      const clientSaleRef = 'a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11';
+      expectDtoValid(CreateSaleDto, {
+        clientSaleRef,
+        syncSource: 'offline',
+        items: [{ productId, quantity: 1 }],
+      });
+    });
+
+    it('rejects invalid syncSource', () => {
+      expectDtoInvalid(CreateSaleDto, {
+        syncSource: 'queued',
+        items: [{ productId, quantity: 1 }],
+      });
+    });
   });
 });

@@ -12,11 +12,14 @@ import {
   writeProfitLossXlsx,
 } from './report-export.generator';
 import { ReportExportJobsService } from './report-export-jobs.service';
+import { listActiveTenantSchemas } from '../tenant/tenant-control.repository';
 import { TenantService } from '../tenant/tenant.service';
+import { isMissingRelationError } from '../tenant/tenant-sql-errors';
 
 @Injectable()
 export class ReportExportWorkerService {
   private readonly logger = new Logger(ReportExportWorkerService.name);
+  private readonly missingSchemaWarned = new Set<string>();
 
   constructor(
     private readonly prisma: PrismaService,
@@ -35,16 +38,22 @@ export class ReportExportWorkerService {
    */
   @Cron('*/25 * * * * *')
   async drainExportJobs(): Promise<void> {
-    const tenants = await this.prisma.tenant.findMany({
-      where: { status: 'active' },
-      select: { schemaName: true },
-    });
+    const tenants = await listActiveTenantSchemas(this.prisma);
     for (const { schemaName } of tenants) {
       try {
         await this.tenantService.applyTenantSchemaPatches(schemaName);
         await this.jobs.releaseStaleProcessingJobs(schemaName);
         await this.processOneJob(schemaName);
       } catch (e) {
+        if (isMissingRelationError(e)) {
+          if (!this.missingSchemaWarned.has(schemaName)) {
+            this.missingSchemaWarned.add(schemaName);
+            this.logger.warn(
+              `Export worker skipped ${schemaName}: tenant ERP tables missing (run tenant migrate)`,
+            );
+          }
+          continue;
+        }
         this.logger.warn(
           `Export worker error for schema ${schemaName}: ${
             e instanceof Error ? e.message : String(e)

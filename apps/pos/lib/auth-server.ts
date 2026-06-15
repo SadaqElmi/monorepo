@@ -37,7 +37,7 @@ export const getServerSession = cache(readServerSession);
 export async function requireServerSession(): Promise<ServerSession> {
   const session = await getServerSession();
   if (!session?.token || !session.tenantSlug) {
-    redirect("/login");
+    redirect("/staff-login");
   }
   return session;
 }

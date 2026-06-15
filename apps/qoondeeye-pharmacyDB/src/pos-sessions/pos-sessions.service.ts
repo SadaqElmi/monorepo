@@ -19,6 +19,11 @@ import { BatchesService } from '../batches/batches.service';
 import { CategoriesService } from '../categories/categories.service';
 import { ProductsService } from '../products/products.service';
 import { UomsService } from '../uoms/uoms.service';
+import {
+  POS_VARIANCE_APPROVAL_THRESHOLD,
+  PosApprovalsService,
+} from '../pos-approvals/pos-approvals.service';
+import { hasEffectivePermission } from '../common/security/permission-catalog';
 
 function round2(n: number): number {
   return Math.round((n + Number.EPSILON) * 100) / 100;
@@ -63,7 +68,66 @@ export class PosSessionsService {
     private readonly batchesService: BatchesService,
     private readonly categoriesService: CategoriesService,
     private readonly uomsService: UomsService,
+    private readonly posApprovals: PosApprovalsService,
   ) {}
+
+  private async assertVarianceApprovedIfNeeded(
+    schemaName: string,
+    tx: Prisma.TransactionClient,
+    sessionId: string,
+    branchId: string,
+    varianceApprovalId?: string | null,
+    permissionCodes?: string[],
+  ) {
+    const [totals] = await tx.$queryRawUnsafe<{ total: string }[]>(
+      `SELECT COALESCE(SUM(ABS(psl.difference)), 0)::text AS total
+       FROM pos_statements ps
+       INNER JOIN pos_statement_lines psl ON psl.statement_id = ps.id
+       WHERE ps.session_id = $1::uuid AND ps.status = 'posted'`,
+      sessionId,
+    );
+    const totalVariance = Math.abs(Number(totals?.total ?? 0));
+    if (totalVariance <= POS_VARIANCE_APPROVAL_THRESHOLD) return;
+
+    const [session] = await tx.$queryRawUnsafe<
+      { variance_approved_at: Date | null }[]
+    >(
+      `SELECT variance_approved_at FROM pos_sessions WHERE id = $1::uuid AND branch_id = $2::uuid`,
+      sessionId,
+      branchId,
+    );
+    if (session?.variance_approved_at) return;
+
+    if (
+      hasEffectivePermission(permissionCodes ?? [], 'pos_approve_variance')
+    ) {
+      return;
+    }
+
+    if (varianceApprovalId) {
+      const { approvedBy } = await this.posApprovals.assertApprovedRequest(
+        schemaName,
+        branchId,
+        varianceApprovalId,
+        'cash_variance',
+        (payload) => String(payload.sessionId ?? '') === sessionId,
+      );
+      if (approvedBy) {
+        await tx.$queryRawUnsafe(
+          `UPDATE pos_sessions
+           SET variance_approved_by = $2::uuid, variance_approved_at = NOW()
+           WHERE id = $1::uuid`,
+          sessionId,
+          approvedBy,
+        );
+      }
+      return;
+    }
+
+    throw new BadRequestException(
+      'Cash variance exceeds threshold and requires supervisor approval before closing',
+    );
+  }
 
   /** Products, batches, and categories for the register in one response. */
   async getRegisterCatalog(
@@ -104,23 +168,43 @@ export class PosSessionsService {
     schemaName: string,
     branchId: string,
     allowedBranchIds: string[],
-    input: { deviceId?: string | null; staffUserId?: string | null },
+    input: {
+      deviceId?: string | null;
+      staffUserId?: string | null;
+      openingCash?: number;
+    },
   ) {
     this.ensureBranch(branchId, allowedBranchIds);
     await this.tenantService.applyTenantSchemaPatches(schemaName);
+    const openingCash = input.openingCash ?? 0;
+    const deviceId = input.deviceId?.trim() ? input.deviceId : null;
 
     try {
       return await this.prisma.withTenantSchema(schemaName, async (tx) => {
-        const [existing] = await tx.$queryRawUnsafe<{ id: string }[]>(
-          `SELECT id FROM pos_sessions
-           WHERE branch_id = $1::uuid AND status = 'open'
-           LIMIT 1`,
-          branchId,
-        );
-        if (existing) {
-          throw new ConflictException(
-            'An open POS session already exists for this branch. Close it before opening a new one.',
+        if (deviceId) {
+          const [existingDevice] = await tx.$queryRawUnsafe<{ id: string }[]>(
+            `SELECT id FROM pos_sessions
+             WHERE device_id = $1::uuid AND status IN ('open', 'paused')
+             LIMIT 1`,
+            deviceId,
           );
+          if (existingDevice) {
+            throw new ConflictException(
+              'An open POS session already exists for this terminal.',
+            );
+          }
+        } else {
+          const [existing] = await tx.$queryRawUnsafe<{ id: string }[]>(
+            `SELECT id FROM pos_sessions
+             WHERE branch_id = $1::uuid AND status = 'open'
+             LIMIT 1`,
+            branchId,
+          );
+          if (existing) {
+            throw new ConflictException(
+              'An open POS session already exists for this branch. Close it before opening a new one.',
+            );
+          }
         }
 
         const [row] = await tx.$queryRawUnsafe<
@@ -132,15 +216,33 @@ export class PosSessionsService {
             status: string;
             opened_at: Date;
             closed_at: Date | null;
+            opening_cash: string | null;
           }[]
         >(
-          `INSERT INTO pos_sessions (branch_id, device_id, staff_user_id, status)
-           VALUES ($1::uuid, $2::uuid, $3::uuid, 'open')
-           RETURNING id, branch_id, device_id, staff_user_id, status, opened_at, closed_at`,
+          `INSERT INTO pos_sessions (branch_id, device_id, staff_user_id, status, opening_cash)
+           VALUES ($1::uuid, $2::uuid, $3::uuid, 'open', $4)
+           RETURNING id, branch_id, device_id, staff_user_id, status, opened_at, closed_at, opening_cash`,
           branchId,
-          input.deviceId?.trim() ? input.deviceId : null,
+          deviceId,
           input.staffUserId?.trim() ? input.staffUserId : null,
+          openingCash,
         );
+
+        void this.auditLog.appendInSchema(schemaName, {
+          branchId,
+          actorUserId: input.staffUserId?.trim() ? input.staffUserId : null,
+          tableName: 'pos_auth',
+          recordId: deviceId ?? row.id,
+          action: 'pos_shift_opened',
+          newPayload: {
+            sessionId: row.id,
+            openingCash,
+            deviceId,
+          },
+          entityType: 'pos_auth',
+          entityId: deviceId ?? row.id,
+        });
+
         return row;
       });
     } catch (e) {
@@ -163,17 +265,29 @@ export class PosSessionsService {
     schemaName: string,
     branchId: string,
     allowedBranchIds: string[],
+    deviceId?: string | null,
   ) {
     this.ensureBranch(branchId, allowedBranchIds);
     await this.tenantService.applyTenantSchemaPatches(schemaName);
+    const scopedDeviceId = deviceId?.trim() ? deviceId : null;
     return this.prisma.withTenantSchema(schemaName, async (tx) => {
-      const [session] = await tx.$queryRawUnsafe<PosSessionFullRow[]>(
-        `SELECT id, branch_id, device_id, staff_user_id, status, opened_at, closed_at
-         FROM pos_sessions
-         WHERE branch_id = $1::uuid AND status = 'open'
-         ORDER BY opened_at DESC
-         LIMIT 1`,
-        branchId,
+      const [session] = await tx.$queryRawUnsafe<
+        (PosSessionFullRow & { opening_cash: string | null })[]
+      >(
+        scopedDeviceId
+          ? `SELECT id, branch_id, device_id, staff_user_id, status, opened_at, closed_at,
+                    opening_cash::text
+             FROM pos_sessions
+             WHERE device_id = $1::uuid AND status IN ('open', 'paused')
+             ORDER BY opened_at DESC
+             LIMIT 1`
+          : `SELECT id, branch_id, device_id, staff_user_id, status, opened_at, closed_at,
+                    opening_cash::text
+             FROM pos_sessions
+             WHERE branch_id = $1::uuid AND status IN ('open', 'paused')
+             ORDER BY opened_at DESC
+             LIMIT 1`,
+        scopedDeviceId ?? branchId,
       );
       if (!session) return null;
 
@@ -188,9 +302,182 @@ export class PosSessionsService {
 
       return {
         ...session,
+        opening_cash: Number(session.opening_cash ?? 0),
         hasPostedStatement: Boolean(postedSt?.id),
       };
     });
+  }
+
+  async listShifts(
+    tenantId: string,
+    schemaName: string,
+    allowedBranchIds: string[],
+    options?: {
+      page?: number;
+      limit?: number;
+      branchId?: string;
+      deviceId?: string;
+      staffUserId?: string;
+      status?: string;
+      from?: string;
+      to?: string;
+    },
+  ) {
+    await this.tenantService.applyTenantSchemaPatches(schemaName);
+    const page = Math.max(1, options?.page ?? 1);
+    const limit = Math.min(100, Math.max(1, options?.limit ?? 25));
+    const offset = (page - 1) * limit;
+
+    const conditions: string[] = [];
+    const params: unknown[] = [];
+    let idx = 1;
+
+    if (options?.branchId) {
+      this.ensureBranch(options.branchId, allowedBranchIds);
+      conditions.push(`ps.branch_id = $${idx}::uuid`);
+      params.push(options.branchId);
+      idx += 1;
+    } else if (allowedBranchIds.length > 0) {
+      conditions.push(`ps.branch_id = ANY($${idx}::uuid[])`);
+      params.push(allowedBranchIds);
+      idx += 1;
+    }
+
+    if (options?.deviceId) {
+      conditions.push(`ps.device_id = $${idx}::uuid`);
+      params.push(options.deviceId);
+      idx += 1;
+    }
+    if (options?.staffUserId) {
+      conditions.push(`ps.staff_user_id = $${idx}::uuid`);
+      params.push(options.staffUserId);
+      idx += 1;
+    }
+    if (options?.status) {
+      conditions.push(`ps.status = $${idx}`);
+      params.push(options.status);
+      idx += 1;
+    }
+    if (options?.from) {
+      conditions.push(`ps.opened_at >= $${idx}::timestamptz`);
+      params.push(options.from);
+      idx += 1;
+    }
+    if (options?.to) {
+      conditions.push(`ps.opened_at <= $${idx}::timestamptz`);
+      params.push(options.to);
+      idx += 1;
+    }
+
+    const whereSql = conditions.length ? conditions.join(' AND ') : 'TRUE';
+
+    const selectSql = `
+      SELECT ps.id, ps.branch_id, ps.device_id, ps.staff_user_id, ps.status,
+             ps.opening_cash::text, ps.closing_cash::text,
+             ps.opened_at, ps.closed_at, ps.variance_approved_at, ps.variance_approved_by,
+             b.name AS branch_name,
+             COALESCE(
+               NULLIF(TRIM(u.name), ''),
+               NULLIF(TRIM(u.staff_id), ''),
+               NULLIF(TRIM(u.email), ''),
+               NULL
+             ) AS staff_name,
+             COALESCE((
+               SELECT SUM(ABS(psl.difference))
+               FROM pos_statements pst
+               JOIN pos_statement_lines psl ON psl.statement_id = pst.id
+               WHERE pst.session_id = ps.id AND pst.status = 'posted'
+             ), 0)::text AS total_variance,
+             (
+               SELECT pst.status
+               FROM pos_statements pst
+               WHERE pst.session_id = ps.id
+               ORDER BY pst.created_at DESC
+               LIMIT 1
+             ) AS statement_status
+      FROM pos_sessions ps
+      LEFT JOIN branches b ON b.id = ps.branch_id
+      LEFT JOIN users u ON u.id = ps.staff_user_id
+      WHERE ${whereSql}
+      ORDER BY ps.opened_at DESC
+      LIMIT $${idx} OFFSET $${idx + 1}`;
+
+    const countSql = `SELECT COUNT(*)::bigint AS count FROM pos_sessions ps WHERE ${whereSql}`;
+
+    const [countRow, rows] = await this.prisma.withTenantSchema(
+      schemaName,
+      async (tx) =>
+        Promise.all([
+          tx.$queryRawUnsafe<Array<{ count: bigint }>>(countSql, ...params),
+          tx.$queryRawUnsafe<
+            Array<{
+              id: string;
+              branch_id: string;
+              device_id: string | null;
+              staff_user_id: string | null;
+              status: string;
+              opening_cash: string | null;
+              closing_cash: string | null;
+              opened_at: Date;
+              closed_at: Date | null;
+              variance_approved_at: Date | null;
+              variance_approved_by: string | null;
+              branch_name: string | null;
+              staff_name: string | null;
+              total_variance: string;
+              statement_status: string | null;
+            }>
+          >(selectSql, ...params, limit, offset),
+        ]),
+    );
+
+    const deviceIds = [
+      ...new Set(rows.map((r) => r.device_id).filter((id): id is string => Boolean(id))),
+    ];
+    const deviceNames = await this.loadDeviceDisplayNames(tenantId, deviceIds);
+
+    return {
+      items: rows.map((r) => ({
+        id: r.id,
+        branchId: r.branch_id,
+        branchName: r.branch_name?.trim() ?? null,
+        deviceId: r.device_id,
+        deviceName: r.device_id ? (deviceNames.get(r.device_id) ?? null) : null,
+        staffUserId: r.staff_user_id,
+        staffName: r.staff_name?.trim() ?? null,
+        status: r.status,
+        openingCash: Number(r.opening_cash ?? 0),
+        closingCash: r.closing_cash != null ? Number(r.closing_cash) : null,
+        openedAt: r.opened_at.toISOString(),
+        closedAt: r.closed_at?.toISOString() ?? null,
+        totalVariance: Number(r.total_variance ?? 0),
+        varianceApproved: Boolean(r.variance_approved_at),
+        varianceApprovedAt: r.variance_approved_at?.toISOString() ?? null,
+        statementStatus: r.statement_status,
+      })),
+      total: Number(countRow[0]?.count ?? 0),
+      page,
+      limit,
+    };
+  }
+
+  private async loadDeviceDisplayNames(
+    tenantId: string,
+    deviceIds: string[],
+  ): Promise<Map<string, string>> {
+    if (!deviceIds.length) return new Map();
+    const rows = await this.prisma.$queryRawUnsafe<
+      Array<{ id: string; display_name: string | null }>
+    >(
+      `SELECT id, display_name
+       FROM "public"."pos_devices"
+       WHERE tenant_id = $1::uuid AND id = ANY($2::uuid[])`,
+      tenantId,
+      deviceIds,
+    );
+    return new Map(
+      rows.map((r) => [r.id, r.display_name?.trim() || 'POS terminal']),
+    );
   }
 
   async openStatement(
@@ -355,6 +642,7 @@ export class PosSessionsService {
     branchId: string,
     allowedBranchIds: string[],
     actorUserId?: string | null,
+    opts?: { varianceApprovalId?: string; permissionCodes?: string[] },
   ) {
     this.ensureBranch(branchId, allowedBranchIds);
     await this.tenantService.applyTenantSchemaPatches(schemaName);
@@ -373,6 +661,15 @@ export class PosSessionsService {
         tx,
         stmt.session_id,
         branchId,
+      );
+
+      await this.assertVarianceApprovedIfNeeded(
+        schemaName,
+        tx,
+        session.id,
+        branchId,
+        opts?.varianceApprovalId,
+        opts?.permissionCodes,
       );
 
       const lines = await tx.$queryRawUnsafe<
@@ -520,13 +817,14 @@ export class PosSessionsService {
     sessionId: string,
     branchId: string,
     allowedBranchIds: string[],
+    opts?: { varianceApprovalId?: string; permissionCodes?: string[] },
   ) {
     this.ensureBranch(branchId, allowedBranchIds);
     await this.tenantService.applyTenantSchemaPatches(schemaName);
 
     return this.prisma.withTenantSchema(schemaName, async (tx) => {
       const session = await this.loadSessionOrThrow(tx, sessionId, branchId);
-      if (session.status !== 'open') {
+      if (session.status !== 'open' && session.status !== 'paused') {
         throw new BadRequestException('Session is already closed');
       }
 
@@ -542,6 +840,15 @@ export class PosSessionsService {
         );
       }
 
+      await this.assertVarianceApprovedIfNeeded(
+        schemaName,
+        tx,
+        sessionId,
+        branchId,
+        opts?.varianceApprovalId,
+        opts?.permissionCodes,
+      );
+
       await tx.$queryRawUnsafe(
         `UPDATE pos_sessions
          SET status = 'closed', closed_at = NOW()
@@ -549,12 +856,108 @@ export class PosSessionsService {
         sessionId,
       );
 
+      void this.auditLog.appendInSchema(schemaName, {
+        branchId,
+        tableName: 'pos_auth',
+        recordId: session.device_id ?? sessionId,
+        action: 'pos_shift_closed',
+        newPayload: { sessionId },
+        entityType: 'pos_auth',
+        entityId: session.device_id ?? sessionId,
+      });
+
       const [row] = await tx.$queryRawUnsafe<PosSessionFullRow[]>(
         `SELECT id, branch_id, device_id, staff_user_id, status, opened_at, closed_at
          FROM pos_sessions WHERE id = $1::uuid`,
         sessionId,
       );
       return row;
+    });
+  }
+
+  async pauseSession(
+    schemaName: string,
+    sessionId: string,
+    branchId: string,
+    allowedBranchIds: string[],
+  ) {
+    this.ensureBranch(branchId, allowedBranchIds);
+    return this.prisma.withTenantSchema(schemaName, async (tx) => {
+      const session = await this.loadOpenSessionOrThrow(tx, sessionId, branchId);
+      await tx.$queryRawUnsafe(
+        `UPDATE pos_sessions SET status = 'paused', paused_at = NOW() WHERE id = $1::uuid`,
+        session.id,
+      );
+      void this.auditLog.appendInSchema(schemaName, {
+        branchId,
+        tableName: 'pos_auth',
+        recordId: session.device_id ?? session.id,
+        action: 'pos_shift_paused',
+        newPayload: { sessionId: session.id },
+        entityType: 'pos_auth',
+        entityId: session.device_id ?? session.id,
+      });
+      return { id: session.id, status: 'paused' };
+    });
+  }
+
+  async resumeSession(
+    schemaName: string,
+    sessionId: string,
+    branchId: string,
+    allowedBranchIds: string[],
+  ) {
+    this.ensureBranch(branchId, allowedBranchIds);
+    return this.prisma.withTenantSchema(schemaName, async (tx) => {
+      const session = await this.loadSessionOrThrow(tx, sessionId, branchId);
+      if (session.status !== 'paused') {
+        throw new BadRequestException('Session is not paused');
+      }
+      await tx.$queryRawUnsafe(
+        `UPDATE pos_sessions SET status = 'open', reopened_at = NOW() WHERE id = $1::uuid`,
+        session.id,
+      );
+      void this.auditLog.appendInSchema(schemaName, {
+        branchId,
+        tableName: 'pos_auth',
+        recordId: session.device_id ?? session.id,
+        action: 'pos_shift_resumed',
+        newPayload: { sessionId: session.id },
+        entityType: 'pos_auth',
+        entityId: session.device_id ?? session.id,
+      });
+      return { id: session.id, status: 'open' };
+    });
+  }
+
+  async approveVariance(
+    schemaName: string,
+    sessionId: string,
+    branchId: string,
+    allowedBranchIds: string[],
+    approverUserId: string,
+  ) {
+    this.ensureBranch(branchId, allowedBranchIds);
+    return this.prisma.withTenantSchema(schemaName, async (tx) => {
+      const session = await this.loadSessionOrThrow(tx, sessionId, branchId);
+      await tx.$queryRawUnsafe(
+        `UPDATE pos_sessions
+         SET variance_approved_by = $2::uuid, variance_approved_at = NOW()
+         WHERE id = $1::uuid`,
+        session.id,
+        approverUserId,
+      );
+      void this.auditLog.appendInSchema(schemaName, {
+        branchId,
+        actorUserId: approverUserId,
+        tableName: 'pos_auth',
+        recordId: session.device_id ?? session.id,
+        action: 'pos_variance_approved',
+        newPayload: { sessionId: session.id },
+        entityType: 'pos_auth',
+        entityId: session.device_id ?? session.id,
+      });
+      return { id: session.id, approved: true };
     });
   }
 
@@ -579,12 +982,13 @@ export class PosSessionsService {
       {
         id: string;
         branch_id: string;
+        device_id: string | null;
         status: string;
         opened_at: Date;
         closed_at: Date | null;
       }[]
     >(
-      `SELECT id, branch_id, status, opened_at, closed_at
+      `SELECT id, branch_id, device_id, status, opened_at, closed_at
        FROM pos_sessions
        WHERE id = $1::uuid AND branch_id = $2::uuid`,
       sessionId,

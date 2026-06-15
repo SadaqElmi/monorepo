@@ -1,6 +1,8 @@
 "use client";
 
 import * as React from "react";
+import Link from "next/link";
+import { useSearchParams } from "next/navigation";
 import { keepPreviousData, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Loader2 } from "lucide-react";
 
@@ -31,11 +33,36 @@ import {
 import { getResolvedStoredUser } from "@/lib/auth-client";
 import { getBranchQueryKeyFacet } from "@/lib/query-branch-key";
 import { getAuditTrailPaged } from "@/lib/services/accounting";
+import { ROUTES } from "@/lib/routes";
 
 const LIMIT_OPTIONS = [50, 100, 200, 500] as const;
 
+function formatAuditActor(row: {
+  actor_name?: string | null;
+  actor_user_id?: string | null;
+}): string {
+  const name = row.actor_name?.trim();
+  if (name) return name;
+  return row.actor_user_id ? "Unknown user" : "System";
+}
+
+function formatAuditRecordLabel(row: {
+  record_label?: string | null;
+  record_id?: string;
+  table_name?: string;
+  action?: string;
+}): string {
+  const label = row.record_label?.trim();
+  if (label) return label;
+  if (row.table_name && row.action) {
+    return `${row.table_name} · ${row.action}`;
+  }
+  return "—";
+}
+
 export default function AuditTrailPage() {
   const queryClient = useQueryClient();
+  const searchParams = useSearchParams();
   const [tenantSlug] = React.useState(
     () => getResolvedStoredUser()?.tenantSlug?.trim() ?? "",
   );
@@ -45,6 +72,17 @@ export default function AuditTrailPage() {
   );
   const [limit, setLimit] = React.useState<number>(50);
   const [page, setPage] = React.useState(1);
+  const [tableName, setTableName] = React.useState<string>(() => {
+    if (typeof window === "undefined") return "all";
+    const params = new URLSearchParams(window.location.search);
+    return params.get("table") === "pos_auth" ? "pos_auth" : "all";
+  });
+
+  React.useEffect(() => {
+    if (searchParams.get("table") === "pos_auth") {
+      setTableName("pos_auth");
+    }
+  }, [searchParams]);
 
   const syncBranch = React.useCallback(() => {
     try {
@@ -89,7 +127,7 @@ export default function AuditTrailPage() {
 
   React.useEffect(() => {
     setPage(1);
-  }, [limit, branchId]);
+  }, [limit, branchId, tableName]);
 
   const auditQuery = useQuery({
     queryKey: [
@@ -100,11 +138,15 @@ export default function AuditTrailPage() {
       branchFacet,
       page,
       limit,
+      tableName,
     ],
     enabled: Boolean(branchId),
     placeholderData: keepPreviousData,
     queryFn: ({ signal }) =>
-      getAuditTrailPaged(tenantSlug, branchId!, page, limit, { signal }),
+      getAuditTrailPaged(tenantSlug, branchId!, page, limit, {
+        signal,
+        tableName: tableName === "pos_auth" ? "pos_auth" : undefined,
+      }),
   });
 
   const rows = auditQuery.data?.items ?? [];
@@ -131,12 +173,17 @@ export default function AuditTrailPage() {
       ) : null}
 
       <Card>
-        <CardHeader>
-          <CardTitle>Audit trail</CardTitle>
-          <CardDescription>
-            Recent changes recorded in audit logs for this branch (and global
-            rows where applicable).
-          </CardDescription>
+        <CardHeader className="flex flex-row items-start justify-between gap-4 space-y-0">
+          <div>
+            <CardTitle>Audit trail</CardTitle>
+            <CardDescription>
+              Recent changes recorded in audit logs for this branch (and global
+              rows where applicable).
+            </CardDescription>
+          </div>
+          <Button asChild variant="outline" size="sm">
+            <Link href={ROUTES.configuration.posAudit}>POS audit log</Link>
+          </Button>
         </CardHeader>
         <CardContent className="space-y-4">
           <div className="flex flex-wrap items-end gap-3">
@@ -155,6 +202,18 @@ export default function AuditTrailPage() {
                       {n}
                     </SelectItem>
                   ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="grid gap-2">
+              <Label>Source</Label>
+              <Select value={tableName} onValueChange={setTableName}>
+                <SelectTrigger className="w-[160px]">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All tables</SelectItem>
+                  <SelectItem value="pos_auth">POS auth only</SelectItem>
                 </SelectContent>
               </Select>
             </div>
@@ -226,11 +285,14 @@ export default function AuditTrailPage() {
                       </TableCell>
                       <TableCell className="text-xs">{r.action}</TableCell>
                       <TableCell className="text-xs">{r.table_name}</TableCell>
-                      <TableCell className="font-mono text-xs">
-                        {r.record_id?.slice(0, 12)}…
+                      <TableCell
+                        className="text-xs"
+                        title={r.record_label ? r.record_id : undefined}
+                      >
+                        {formatAuditRecordLabel(r)}
                       </TableCell>
-                      <TableCell className="text-xs text-muted-foreground">
-                        {r.actor_user_id?.slice(0, 8) ?? "—"}
+                      <TableCell className="text-xs">
+                        {formatAuditActor(r)}
                       </TableCell>
                     </TableRow>
                   ))}

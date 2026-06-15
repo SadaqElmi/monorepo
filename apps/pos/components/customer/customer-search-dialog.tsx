@@ -14,6 +14,8 @@ import {
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { useDebouncedValue } from "@/hooks/use-debounced-value";
+import { useNetworkStatus } from "@/hooks/use-network-status";
+import { searchCachedCustomers } from "@/lib/offline/customer-cache";
 import { searchCustomers } from "@/lib/services/customers";
 import type { CustomerSummary } from "@repo/types";
 import { cn } from "@/lib/utils";
@@ -44,6 +46,7 @@ export function CustomerSearchDialog({
   const [loading, setLoading] = React.useState(false);
   const [highlight, setHighlight] = React.useState(0);
   const debouncedQuery = useDebouncedValue(query, 300);
+  const { isOffline } = useNetworkStatus();
 
   React.useEffect(() => {
     if (!open) {
@@ -62,7 +65,25 @@ export function CustomerSearchDialog({
     }
     let cancelled = false;
     setLoading(true);
-    searchCustomers(tenantSlug, q)
+    const load = isOffline
+      ? searchCachedCustomers(q).then((cached) =>
+          cached.map((c) => ({
+            id: c.id,
+            name: c.name,
+            phone: c.phone ?? null,
+          })),
+        )
+      : searchCustomers(tenantSlug, q).catch(() =>
+          searchCachedCustomers(q).then((cached) =>
+            cached.map((c) => ({
+              id: c.id,
+              name: c.name,
+              phone: c.phone ?? null,
+            })),
+          ),
+        );
+
+    load
       .then((rows) => {
         if (!cancelled) {
           setResults(rows);
@@ -78,7 +99,7 @@ export function CustomerSearchDialog({
     return () => {
       cancelled = true;
     };
-  }, [debouncedQuery, open, tenantSlug]);
+  }, [debouncedQuery, open, tenantSlug, isOffline]);
 
   const pick = (customer: CustomerSummary) => {
     onSelect(customer);

@@ -1,6 +1,5 @@
 export type RateLimitTier =
   | 'login'
-  | 'pin'
   | 'staff'
   | 'authOther'
   | 'public'
@@ -46,7 +45,6 @@ export function resolveRateLimitTier(
   }
 
   if (isLoginPath(path, m)) return 'login';
-  if (path === '/api/auth/pin-login' && m === 'POST') return 'pin';
   if (path === '/api/auth/staff-login' && m === 'POST') return 'staff';
 
   if (path.startsWith('/api/auth/') && m === 'POST') return 'authOther';
@@ -69,6 +67,7 @@ export function shouldSkipRateLimitPath(pathname: string, method: string): boole
   const m = method.toUpperCase();
   if (m === 'OPTIONS') return true;
   if (path === '/api' && m === 'GET') return true;
+  if (path.startsWith('/api/health')) return true;
   if (path === '/api/inventory/stream' && m === 'GET') return true;
   return false;
 }

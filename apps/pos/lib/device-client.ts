@@ -1,5 +1,6 @@
 export type PosDeviceBinding = {
   deviceId: string;
+  terminalId: string;
   deviceCode: string;
   tenantId: string;
   tenantSlug: string;
@@ -12,6 +13,8 @@ export type PosDeviceBinding = {
 const POS_DEVICE_BINDING_KEY = "posDeviceBinding";
 const POS_DEVICE_CREDENTIAL_KEY = "posDeviceCredential";
 const POS_DEVICE_CODE_KEY = "posDeviceCode";
+const POS_SERVER_URL_KEY = "posServerUrl";
+const POS_DEVICE_FINGERPRINT_KEY = "posDeviceFingerprint";
 
 function randomDeviceCode() {
   return `POS-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
@@ -27,6 +30,42 @@ export function getOrCreatePosDeviceCode(): string {
     return generated;
   } catch {
     return randomDeviceCode();
+  }
+}
+
+export function getPosServerUrl(): string {
+  if (typeof window === "undefined") return "";
+  try {
+    return (
+      localStorage.getItem(POS_SERVER_URL_KEY)?.trim() ||
+      process.env.NEXT_PUBLIC_API_URL ||
+      process.env.NEXT_PUBLIC_API_URL_LOCAL ||
+      "https://api.qoondeeye.online"
+    );
+  } catch {
+    return "https://api.qoondeeye.online";
+  }
+}
+
+export function savePosServerUrl(serverUrl: string) {
+  if (typeof window === "undefined") return;
+  try {
+    localStorage.setItem(POS_SERVER_URL_KEY, serverUrl.trim());
+  } catch {
+    // ignore
+  }
+}
+
+export function getOrCreateDeviceFingerprint(): string {
+  if (typeof window === "undefined") return "pos-unknown";
+  try {
+    const existing = localStorage.getItem(POS_DEVICE_FINGERPRINT_KEY)?.trim();
+    if (existing) return existing;
+    const generated = `fp-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
+    localStorage.setItem(POS_DEVICE_FINGERPRINT_KEY, generated);
+    return generated;
+  } catch {
+    return `fp-${Date.now().toString(36)}`;
   }
 }
 

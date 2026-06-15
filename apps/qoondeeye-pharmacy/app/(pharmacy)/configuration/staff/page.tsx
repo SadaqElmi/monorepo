@@ -1,8 +1,5 @@
-import { requireServerPermission } from "@/lib/auth-server";
+import { redirect } from "next/navigation";
 
-import Client from "./configuration-staff-client";
-
-export default async function Page() {
-  await requireServerPermission("view_staff");
-  return <Client />;
+export default function ConfigurationStaffRedirectPage() {
+  redirect("/users/staff");
 }

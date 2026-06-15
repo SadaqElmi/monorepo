@@ -67,9 +67,11 @@ export async function requireServerPermission(
 ): Promise<ServerSession> {
   const session = await requireServerSession();
   const permissions = session.permissions ?? [];
-  const isAdmin = session.role?.toLowerCase() === "admin";
+  const role = session.role?.toLowerCase();
   const canAccess =
-    isAdmin || hasEffectivePermission(permissions, permission);
+    role === "admin" ||
+    role === "manager" ||
+    hasEffectivePermission(permissions, permission);
   if (!canAccess) {
     redirect("/dashboard");
   }

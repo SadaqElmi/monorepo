@@ -6,11 +6,11 @@ import Client from "./tenants-client";
 export default async function Page() {
   await requireSystemSession();
 
-  let initialTenants = null;
+  let initialData = null;
   let serverPrefetched = false;
 
   try {
-    initialTenants = await getTenantsServer();
+    initialData = await getTenantsServer();
     serverPrefetched = true;
   } catch {
     /* client refetch */
@@ -18,7 +18,7 @@ export default async function Page() {
 
   return (
     <Client
-      initialTenants={initialTenants}
+      initialData={initialData}
       serverPrefetched={serverPrefetched}
     />
   );

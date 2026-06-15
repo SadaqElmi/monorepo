@@ -94,6 +94,9 @@ export const PERMISSION_CATALOG: PermissionDefinition[] = [
   { code: 'delete_role', group: 'administration', label: 'Delete roles', description: 'Delete unused custom roles.', action: 'delete' },
   { code: 'assign_role', group: 'administration', label: 'Assign roles', description: 'Assign roles to staff.', action: 'action' },
   { code: 'edit_branch', group: 'administration', label: 'Edit branches', description: 'Edit branch settings (non lock-date).', action: 'update' },
+  { code: 'view_pos_terminals', group: 'administration', label: 'View POS terminals', description: 'View POS terminal registry and status.', action: 'view' },
+  { code: 'manage_pos_terminals', group: 'administration', label: 'Manage POS terminals', description: 'Create, edit, and revoke POS terminals.', action: 'action' },
+  { code: 'pos_approve_variance', group: 'administration', label: 'Approve POS variance', description: 'Approve shift cash variance and supervisor actions.', action: 'action' },
   { code: 'change_lock_date', group: 'administration', label: 'Change lock date', description: 'Change accounting lock dates.', action: 'action' },
   // Imports
   { code: 'import_products', group: 'imports', label: 'Import products', description: 'Import products via spreadsheet.', action: 'action' },
@@ -140,6 +143,8 @@ export const COARSE_PERMISSION_ALIASES: ReadonlyArray<{
       'edit_role',
       'delete_role',
       'assign_role',
+      'view_pos_terminals',
+      'manage_pos_terminals',
     ],
   },
   {

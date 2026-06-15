@@ -6,6 +6,7 @@
 const AUTH_TOKEN_KEY = "auth_token";
 const AUTH_USER_KEY = "auth_user";
 const AUTH_USER_COOKIE = "auth_user";
+const AUTH_REFRESH_KEY = "pos_refresh_token";
 const COOKIE_MAX_AGE_DAYS = 7;
 
 export type StoredUser = {
@@ -32,7 +33,7 @@ function cookieOptions(maxAge: number) {
   return `path=/; max-age=${maxAge}; SameSite=Lax`;
 }
 
-export function setAuthToken(token: string, user: StoredUser) {
+export function setAuthToken(token: string, user: StoredUser, refreshToken?: string) {
   if (typeof document === "undefined") return;
   const maxAge = COOKIE_MAX_AGE_DAYS * 24 * 60 * 60;
   document.cookie = `${AUTH_TOKEN_KEY}=${encodeURIComponent(token)}; ${cookieOptions(maxAge)}`;
@@ -61,6 +62,36 @@ export function setAuthToken(token: string, user: StoredUser) {
   } catch {
     // ignore
   }
+  if (refreshToken) {
+    setRefreshToken(refreshToken);
+  }
+}
+
+export function setRefreshToken(token: string) {
+  if (typeof window === "undefined") return;
+  try {
+    localStorage.setItem(AUTH_REFRESH_KEY, token);
+  } catch {
+    // ignore
+  }
+}
+
+export function getStoredRefreshToken(): string | null {
+  if (typeof window === "undefined") return null;
+  try {
+    return localStorage.getItem(AUTH_REFRESH_KEY);
+  } catch {
+    return null;
+  }
+}
+
+export function clearRefreshToken() {
+  if (typeof window === "undefined") return;
+  try {
+    localStorage.removeItem(AUTH_REFRESH_KEY);
+  } catch {
+    // ignore
+  }
 }
 
 export function clearAuthToken() {
@@ -68,6 +99,7 @@ export function clearAuthToken() {
   const zero = "path=/; max-age=0";
   document.cookie = `${AUTH_TOKEN_KEY}=; ${zero}`;
   document.cookie = `${AUTH_USER_COOKIE}=; ${zero}`;
+  clearRefreshToken();
   try {
     sessionStorage.removeItem(AUTH_USER_KEY);
   } catch {
@@ -84,6 +116,12 @@ export function getStoredUser(): StoredUser | null {
   } catch {
     return null;
   }
+}
+
+/** Staff PIN login complete — matches PosSessionGate (sessionStorage, not cookie fallback). */
+export function isPosStaffSessionActive(): boolean {
+  const user = getStoredUser();
+  return user?.userType === "tenant" && Boolean(user.tenantSlug?.trim());
 }
 
 function parseAuthUserFromDocumentCookie(): AuthCookiePayload | null {

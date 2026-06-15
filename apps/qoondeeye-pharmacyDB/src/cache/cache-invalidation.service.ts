@@ -1,5 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
+import { getTenantIdBySchemaName } from '../tenant/tenant-control.repository';
 import {
   branchStatsBranchTags,
   catalogBranchTags,
@@ -21,11 +22,7 @@ export class CacheInvalidationService {
   ) {}
 
   async resolveTenantIdBySchema(schemaName: string): Promise<string | null> {
-    const row = await this.prisma.tenant.findUnique({
-      where: { schemaName },
-      select: { id: true },
-    });
-    return row?.id ?? null;
+    return getTenantIdBySchemaName(this.prisma, schemaName);
   }
 
   /**

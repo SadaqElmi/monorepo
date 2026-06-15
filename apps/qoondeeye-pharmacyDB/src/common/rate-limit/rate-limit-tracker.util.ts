@@ -53,16 +53,6 @@ export function buildRateLimitTracker(
         tracker: `tenant:${slug}:email:${email}:ip:${ip}`,
       };
     }
-    case 'pin': {
-      const terminal =
-        readBodyField(req, 'staffId') ??
-        readBodyField(req, 'branchId') ??
-        'anon';
-      return {
-        tier,
-        tracker: `tenant:${tenantSlug}:terminal:${terminal}:ip:${ip}`,
-      };
-    }
     case 'staff': {
       const deviceId = parseDeviceIdFromCredential(
         readBodyField(req, 'deviceCredential'),

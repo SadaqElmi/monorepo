@@ -2,8 +2,8 @@ export {
   formatZodError,
   parseInput,
   validateForSubmit,
-  pinLoginSchema,
   staffLoginSchema,
-  type PinLoginInput,
+  posSetupSchema,
   type StaffLoginInput,
+  type PosSetupInput,
 } from "@repo/validation";

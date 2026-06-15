@@ -19,6 +19,24 @@ describe('assertHasPermission', () => {
     ).not.toThrow();
   });
 
+  it('allows super_admin without permission codes', () => {
+    expect(() =>
+      assertHasPermission(
+        mockReq({ userRole: 'super_admin', permissionCodes: [] }),
+        'create_staff',
+      ),
+    ).not.toThrow();
+  });
+
+  it('allows isSuperAdmin flag without permission codes', () => {
+    expect(() =>
+      assertHasPermission(
+        mockReq({ isSuperAdmin: true, permissionCodes: [] }),
+        'create_staff',
+      ),
+    ).not.toThrow();
+  });
+
   it('throws when permission is missing', () => {
     expect(() =>
       assertHasPermission(mockReq({ permissionCodes: ['edit_product'] }), 'delete_product'),
@@ -53,6 +71,19 @@ describe('PermissionGuard', () => {
       }),
     } as never;
     jest.spyOn(guard['reflector'], 'getAllAndOverride').mockReturnValue(['manage_users']);
+    expect(guard.canActivate(ctx)).toBe(true);
+  });
+
+  it('bypasses for super_admin role', () => {
+    const ctx = {
+      getHandler: () => ({}),
+      getClass: () => ({}),
+      switchToHttp: () => ({
+        getRequest: () =>
+          mockReq({ userRole: 'super_admin', isSuperAdmin: true, permissionCodes: [] }),
+      }),
+    } as never;
+    jest.spyOn(guard['reflector'], 'getAllAndOverride').mockReturnValue(['create_staff']);
     expect(guard.canActivate(ctx)).toBe(true);
   });
 

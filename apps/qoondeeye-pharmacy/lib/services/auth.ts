@@ -1,7 +1,6 @@
 import {
   loginSchema,
   parseInput,
-  pinLoginSchema,
 } from "@/lib/validation";
 
 import { AUTH_PREFIX } from "./endpoints";
@@ -49,31 +48,6 @@ export async function login(
     ...(tenant?.trim() ? { tenant: tenant.trim() } : {}),
   });
   return jsonFetch<LoginResponse>(`${AUTH_PREFIX}/login`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(body),
-  });
-}
-
-/** POS sign-in (PIN + pharmacy slug). Optional staffId scopes login to that staff row. */
-export async function pinLogin(
-  pin: string,
-  tenant: string,
-  branchId?: string,
-  staffId?: string,
-): Promise<LoginResponse> {
-  // Team switcher persists "all" for all-branches; pin-login DTO only accepts a UUID or omitted field.
-  const trimmed = branchId?.trim();
-  const resolvedBranchId =
-    trimmed && trimmed.toLowerCase() !== "all" ? trimmed : undefined;
-  const sid = staffId?.trim();
-  const body = parseInput(pinLoginSchema, {
-    pin,
-    tenant: tenant.trim(),
-    ...(resolvedBranchId ? { branchId: resolvedBranchId } : {}),
-    ...(sid ? { staffId: sid } : {}),
-  });
-  return jsonFetch<LoginResponse>(`${AUTH_PREFIX}/pin-login`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(body),
@@ -145,4 +119,3 @@ export async function tenantSignUp(
     { "X-Tenant": tenantSlug },
   );
 }
-

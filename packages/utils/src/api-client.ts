@@ -14,6 +14,40 @@ export const RATE_LIMIT_USER_MESSAGE =
 export const BRANCH_ACCESS_DENIED_MESSAGE =
   "You do not have access to this branch. Switch to your assigned branch or ask an administrator.";
 
+export const TENANT_SUSPENDED_MESSAGE =
+  "This pharmacy account is not available right now. It may be suspended or still being set up. Contact your administrator.";
+
+export const TENANT_NOT_FOUND_MESSAGE =
+  "Pharmacy not found. Check your tenant code or sign-in URL.";
+
+export const TENANT_MISMATCH_MESSAGE =
+  "Your session does not match this pharmacy. Sign out and sign in again.";
+
+export const TENANT_TERMINAL_MISMATCH_MESSAGE =
+  "Tenant code does not match this terminal. Check the code from your manager.";
+
+export const RESERVED_TENANT_SUBDOMAIN_MESSAGE =
+  "This subdomain is reserved and cannot be used.";
+
+const TENANT_ERROR_MESSAGES: Record<string, string> = {
+  TENANT_SUSPENDED: TENANT_SUSPENDED_MESSAGE,
+  TENANT_NOT_FOUND: TENANT_NOT_FOUND_MESSAGE,
+  TENANT_MISMATCH: TENANT_MISMATCH_MESSAGE,
+  TENANT_TERMINAL_MISMATCH: TENANT_TERMINAL_MISMATCH_MESSAGE,
+  RESERVED_TENANT_SUBDOMAIN: RESERVED_TENANT_SUBDOMAIN_MESSAGE,
+};
+
+export function mapTenantErrorMessage(message: string): string | undefined {
+  const trimmed = message.trim();
+  if (TENANT_ERROR_MESSAGES[trimmed]) {
+    return TENANT_ERROR_MESSAGES[trimmed];
+  }
+  for (const [code, friendly] of Object.entries(TENANT_ERROR_MESSAGES)) {
+    if (trimmed.includes(code)) return friendly;
+  }
+  return undefined;
+}
+
 export class ApiError extends Error {
   readonly status: number;
   readonly requestId?: string;
@@ -93,15 +127,21 @@ export function buildPagedQuery(
 
 export function parseNestErrorMessage(data: unknown, fallback: string): string {
   if (!data || typeof data !== "object") return fallback;
+  const errorCode = (data as { error?: unknown }).error;
+  if (typeof errorCode === "string") {
+    const mapped = mapTenantErrorMessage(errorCode);
+    if (mapped) return mapped;
+  }
   const msg = (data as { message?: unknown }).message;
-  if (typeof msg === "string" && msg.trim()) return msg.trim();
-  if (Array.isArray(msg)) {
+  let raw = fallback;
+  if (typeof msg === "string" && msg.trim()) raw = msg.trim();
+  else if (Array.isArray(msg)) {
     const parts = msg.filter(
       (m): m is string => typeof m === "string" && m.trim().length > 0,
     );
-    if (parts.length) return parts.join(", ");
+    if (parts.length) raw = parts.join(", ");
   }
-  return fallback;
+  return mapTenantErrorMessage(raw) ?? raw;
 }
 
 export function getHeaderValue(
@@ -157,6 +197,8 @@ export function friendlyStatusMessage(status: number): string {
 export function formatApiErrorForUser(error: unknown): string {
   if (error instanceof ApiError) {
     if (error.isBranchAccessDenied) return BRANCH_ACCESS_DENIED_MESSAGE;
+    const tenantMessage = mapTenantErrorMessage(error.message);
+    if (tenantMessage) return tenantMessage;
     if (error.isNetworkError) {
       return "Cannot reach the server. Check your internet connection and that the API URL is correct.";
     }
@@ -177,6 +219,8 @@ export function formatApiErrorForUser(error: unknown): string {
     if (/access denied to this branch/i.test(error.message)) {
       return BRANCH_ACCESS_DENIED_MESSAGE;
     }
+    const tenantMessage = mapTenantErrorMessage(error.message);
+    if (tenantMessage) return tenantMessage;
     return error.message || "Something went wrong.";
   }
   return "Something went wrong.";
