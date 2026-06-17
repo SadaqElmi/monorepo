@@ -91,9 +91,9 @@ export class AuthService {
     password: string;
     tenant?: string;
   }): Promise<LoginResponse> {
-    // 1) Try system user (super_admin)
+    // 1) Try system user (super_admin). Same email may also exist as a tenant owner.
     const systemUser = await this.prisma.systemUser.findUnique({
-      where: { email: input.email },
+      where: { email: input.email.trim() },
     });
     if (systemUser) {
       const match = await bcrypt.compare(input.password, systemUser.password);
@@ -121,7 +121,6 @@ export class AuthService {
           canViewAllBranches: true,
         };
       }
-      throw new UnauthorizedException('Invalid credentials');
     }
 
     // 2) Try tenant user: resolve pharmacy from user's email (each user belongs to one tenant)
@@ -171,8 +170,8 @@ export class AuthService {
             , u.branch_id
          FROM "users" u
          LEFT JOIN "roles" r ON u.role_id = r.id
-         WHERE u.email = $1`,
-        input.email,
+         WHERE lower(u.email) = lower($1)`,
+        input.email.trim(),
       );
 
       if (!user?.email || !user.password) {
@@ -691,8 +690,8 @@ export class AuthService {
           tenant.schemaName,
           (tx) =>
             tx.$queryRawUnsafe<{ id: string }[]>(
-              `SELECT id FROM "users" WHERE email = $1 LIMIT 1`,
-              email,
+              `SELECT id FROM "users" WHERE lower(email) = lower($1) LIMIT 1`,
+              email.trim(),
             ),
         );
         await this.markTenantDatabaseHealth(tenant.id, 'connected');
@@ -970,13 +969,6 @@ export class AuthService {
     password: string;
     phone?: string;
   }): Promise<RegisterResponse> {
-    const existingSystemEmail = await this.prisma.systemUser.findUnique({
-      where: { email: input.email },
-    });
-    if (existingSystemEmail) {
-      throw new BadRequestException('Email already in use');
-    }
-
     let tenant: { id: string; schemaName: string; name: string };
     try {
       tenant = await this.tenantService.create({
@@ -1223,8 +1215,8 @@ export class AuthService {
                 r.name AS role_name
          FROM "users" u
          LEFT JOIN "roles" r ON u.role_id = r.id
-         WHERE u.email = $1`,
-        input.email,
+         WHERE lower(u.email) = lower($1)`,
+        input.email.trim(),
       );
 
       if (!user) {
