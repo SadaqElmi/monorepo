@@ -53,6 +53,7 @@ export async function finalizeReturnVoucher(
     confirmedProductId: string;
     scannedUnitPrice?: number;
     refundMethod: string;
+    approvalId: string;
   },
 ): Promise<FinalizeReturnVoucherResult> {
   return jsonFetch<FinalizeReturnVoucherResult>(

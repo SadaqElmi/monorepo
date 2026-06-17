@@ -4,54 +4,83 @@ import {
   Get,
   Post,
   Param,
-  Patch,
   Delete,
+  GoneException,
+  Req,
   UsePipes,
   ValidationPipe,
+  UseGuards,
+  Query,
 } from '@nestjs/common';
-import { TenantService } from './tenant.service';
-import { CreateTenantDto } from './dto/create-tenant.dto';
-import { UpdateTenantDto } from './dto/update-tenant.dto';
+import type { FastifyRequest } from 'fastify';
+import { AdminTenantsService } from '../admin-tenants/admin-tenants.service';
+import { CreateAdminTenantDto } from '../admin-tenants/dto/create-admin-tenant.dto';
+import { AdminPermissionGuard } from '../common/security/admin-permission.guard';
+import { RequireAdminPermissions } from '../common/security/require-admin-permissions.decorator';
+
+const LEGACY_MUTATION_MESSAGE =
+  'Legacy /api/tenants mutations are disabled. Use /api/admin/tenants instead.';
 
 @Controller('tenants')
+@UseGuards(AdminPermissionGuard)
 export class TenantsController {
-  constructor(private readonly tenantService: TenantService) {}
+  constructor(private readonly adminTenantsService: AdminTenantsService) {}
 
   @Get()
-  async findAll() {
-    return this.tenantService.findAll();
+  @RequireAdminPermissions('view_tenants')
+  findAll(
+    @Query('limit') limit?: string,
+    @Query('offset') offset?: string,
+    @Query('search') search?: string,
+  ) {
+    return this.adminTenantsService.listTenants({
+      limit: limit ? Number(limit) : undefined,
+      offset: offset ? Number(offset) : undefined,
+      search,
+    });
   }
 
   @Get(':id')
-  async findOne(@Param('id') id: string) {
-    return this.tenantService.findOne(id);
+  @RequireAdminPermissions('view_tenants')
+  findOne(@Param('id') id: string) {
+    return this.adminTenantsService.getTenant(id);
   }
 
   @Post()
   @UsePipes(new ValidationPipe({ whitelist: true }))
-  async create(@Body() dto: CreateTenantDto) {
-    return this.tenantService.create({
-      name: dto.name,
-      domain: dto.domain,
-      schemaName: dto.schemaName,
-      domains: dto.domains,
-    });
+  @RequireAdminPermissions('create_tenant')
+  create(
+    @Body() dto: CreateAdminTenantDto,
+    @Req() req: FastifyRequest,
+  ) {
+    return this.adminTenantsService.createTenant(dto, this.actor(req));
   }
 
-  @Patch(':id')
-  @UsePipes(new ValidationPipe({ whitelist: true }))
-  async update(@Param('id') id: string, @Body() dto: UpdateTenantDto) {
-    return this.tenantService.update(id, dto);
+  @Post(':id/abandon')
+  @RequireAdminPermissions('update_tenant_status')
+  abandonFailed() {
+    throw new GoneException(LEGACY_MUTATION_MESSAGE);
   }
 
   /** Registered before `:id` so `schema/foo` is not captured as an id. */
   @Delete('schema/:schemaName')
-  async removeBySchema(@Param('schemaName') schemaName: string) {
-    return this.tenantService.removeBySchemaName(schemaName);
+  @RequireAdminPermissions('update_tenant_status')
+  removeBySchema() {
+    throw new GoneException(LEGACY_MUTATION_MESSAGE);
   }
 
   @Delete(':id')
-  async remove(@Param('id') id: string) {
-    return this.tenantService.remove(id);
+  @RequireAdminPermissions('update_tenant_status')
+  remove() {
+    throw new GoneException(LEGACY_MUTATION_MESSAGE);
+  }
+
+  private actor(req: FastifyRequest) {
+    const userAgent = req.headers['user-agent'];
+    return {
+      adminUserId: req.userId ?? null,
+      ipAddress: req.ip ?? null,
+      userAgent: Array.isArray(userAgent) ? userAgent[0] : userAgent ?? null,
+    };
   }
 }

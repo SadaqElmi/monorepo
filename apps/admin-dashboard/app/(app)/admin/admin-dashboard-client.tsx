@@ -3,22 +3,22 @@
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useMemo, useState, type ReactNode } from "react";
 import {
-  ArrowUpRight,
   Bell,
   Globe2,
   HelpCircle,
   Loader2,
-  MoreVertical,
   Plus,
   RefreshCcw,
   Search,
   ShieldCheck,
+  Store,
   UserCheck,
   UserCog,
   UserX,
 } from "lucide-react";
 
 import { AdminDashboardLoading } from "@/components/admin/admin-loading";
+import { RetailOpsSnapshot } from "@/components/retail/retail-ops-snapshot";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
@@ -28,13 +28,6 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
 import { Input } from "@/components/ui/input";
 import {
   Table,
@@ -51,12 +44,20 @@ import {
   getDomains,
   getSystemUsers,
   getTenants,
-  updateTenant,
 } from "@/lib/api";
 import { erpKeys } from "@/lib/erp-query-keys";
 import { ERP_STALE_LIST } from "@/lib/erp-query-options";
+import { getTenantStatusLabel } from "@/lib/tenant-status";
 
-type StatusFilter = "all" | "active" | "suspended" | "inactive";
+type StatusFilter =
+  | "all"
+  | "active"
+  | "pending_setup"
+  | "suspended"
+  | "inactive"
+  | "provisioning_failed"
+  | "migration_failed"
+  | "failed";
 
 type AdminDashboardData = {
   tenants: Tenant[];
@@ -65,7 +66,7 @@ type AdminDashboardData = {
   lastUpdatedAt: string;
 };
 
-function formatDate(value?: string): string {
+function formatDate(value?: string | null): string {
   if (!value) return "—";
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return "—";
@@ -89,13 +90,13 @@ export default function AdminDashboardPage({
   const dashboardQuery = useQuery({
     queryKey: erpKeys.adminDashboard(),
     queryFn: async (): Promise<AdminDashboardData> => {
-      const [tenantRows, domainRows, systemUserRows] = await Promise.all([
-        getTenants(),
+      const [tenantResult, domainRows, systemUserRows] = await Promise.all([
+        getTenants({ limit: 100 }),
         getDomains(),
         getSystemUsers(),
       ]);
       return {
-        tenants: tenantRows,
+        tenants: tenantResult.items,
         domains: domainRows,
         systemUsers: systemUserRows,
         lastUpdatedAt: new Date().toISOString(),
@@ -106,24 +107,30 @@ export default function AdminDashboardPage({
       serverPrefetched && initialDashboard ? initialDashboard : undefined,
   });
 
-  const tenants = dashboardQuery.data?.tenants ?? [];
-  const domains = dashboardQuery.data?.domains ?? [];
-  const systemUsers = dashboardQuery.data?.systemUsers ?? [];
+  const tenants = useMemo(
+    () => dashboardQuery.data?.tenants ?? [],
+    [dashboardQuery.data?.tenants],
+  );
+  const domains = useMemo(
+    () => dashboardQuery.data?.domains ?? [],
+    [dashboardQuery.data?.domains],
+  );
+  const systemUsers = useMemo(
+    () => dashboardQuery.data?.systemUsers ?? [],
+    [dashboardQuery.data?.systemUsers],
+  );
   const lastUpdatedAt = dashboardQuery.data?.lastUpdatedAt ?? null;
   const loading = dashboardQuery.isLoading;
   const refreshing = dashboardQuery.isFetching && !dashboardQuery.isLoading;
   const loadError = dashboardQuery.error;
-  const [error, setError] = useState<string | null>(null);
   const displayError =
-    error ??
-    (loadError instanceof Error
+    loadError instanceof Error
       ? loadError.message
       : loadError
         ? "Failed to load platform overview"
-        : null);
+        : null;
   const [query, setQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState<StatusFilter>("all");
-  const [updatingTenantId, setUpdatingTenantId] = useState<string | null>(null);
 
   const refreshDashboard = () => {
     void queryClient.invalidateQueries({ queryKey: erpKeys.adminDashboard() });
@@ -147,8 +154,10 @@ export default function AdminDashboardPage({
           tenant.name,
           tenant.id,
           tenant.schemaName,
+          tenant.slug,
+          tenant.ownerName,
+          tenant.ownerEmail,
           tenant.status,
-          ...(tenant.domains?.map((domain) => domain.domain) ?? []),
         ]
           .filter(Boolean)
           .join(" ")
@@ -187,26 +196,18 @@ export default function AdminDashboardPage({
   const suspendedClients = tenants.filter(
     (tenant) => tenant.status === "suspended",
   ).length;
+  const provisioningClients = tenants.filter(
+    (tenant) => tenant.status === "pending_setup",
+  ).length;
+  const failedClients = tenants.filter(
+    (tenant) =>
+      tenant.status === "migration_failed" ||
+      tenant.status === "provisioning_failed",
+  ).length;
   const totalDomains = domains.length;
   const totalSystemUsers = systemUsers.length;
   const activeShare =
     totalClients === 0 ? 0 : Math.round((activeClients / totalClients) * 100);
-
-  const handleToggleTenantStatus = async (tenant: Tenant) => {
-    const nextStatus = tenant.status === "active" ? "suspended" : "active";
-    try {
-      setUpdatingTenantId(tenant.id);
-      setError(null);
-      await updateTenant(tenant.id, { status: nextStatus });
-      await queryClient.invalidateQueries({ queryKey: erpKeys.adminDashboard() });
-    } catch (err) {
-      setError(
-        err instanceof Error ? err.message : "Failed to update tenant status",
-      );
-    } finally {
-      setUpdatingTenantId(null);
-    }
-  };
 
   return (
     <div className="flex min-h-0 flex-1 flex-col">
@@ -281,6 +282,12 @@ export default function AdminDashboardPage({
                 New Domain
               </a>
             </Button>
+            <Button asChild variant="outline" size="sm" className="rounded-full">
+              <a href="/retail-ops">
+                <Store className="mr-1 h-4 w-4" />
+                Retail ops
+              </a>
+            </Button>
           </div>
         </div>
 
@@ -315,8 +322,11 @@ export default function AdminDashboardPage({
             [
               ["all", "All"],
               ["active", "Active"],
+              ["pending_setup", "Pending"],
               ["suspended", "Suspended"],
               ["inactive", "Inactive"],
+              ["migration_failed", "Failed"],
+              ["provisioning_failed", "Provisioning failed"],
             ] as const
           ).map(([value, label]) => (
             <Button
@@ -348,7 +358,7 @@ export default function AdminDashboardPage({
           <AdminDashboardLoading />
         ) : (
           <>
-        <section className="grid gap-4 md:grid-cols-2 lg:grid-cols-5">
+        <section className="grid gap-4 md:grid-cols-2 lg:grid-cols-6">
           <KpiCard
             icon={<ShieldCheck className="h-4 w-4" />}
             iconClassName="bg-blue-500/10 text-blue-600"
@@ -376,6 +386,14 @@ export default function AdminDashboardPage({
             trendTone={suspendedClients === 0 ? "up" : "flat"}
           />
           <KpiCard
+            icon={<Loader2 className="h-4 w-4" />}
+            iconClassName="bg-blue-500/10 text-blue-600"
+            label="Provisioning"
+            value={String(provisioningClients)}
+            trend={failedClients > 0 ? `${failedClients} failed` : "In progress"}
+            trendTone={failedClients > 0 ? "flat" : "flat"}
+          />
+          <KpiCard
             icon={<Globe2 className="h-4 w-4" />}
             iconClassName="bg-primary/10 text-primary"
             label="Total Domains"
@@ -392,6 +410,8 @@ export default function AdminDashboardPage({
             trendTone="flat"
           />
         </section>
+
+        <RetailOpsSnapshot />
 
         <section className="grid gap-6 xl:grid-cols-2">
           <Card className="ring-1 ring-foreground/10">
@@ -422,7 +442,8 @@ export default function AdminDashboardPage({
                     <TableRow className="bg-muted/40">
                       <TableHead>Client Name</TableHead>
                       <TableHead>Status</TableHead>
-                      <TableHead>Domains</TableHead>
+                      <TableHead>Database</TableHead>
+                      <TableHead>POS terminals</TableHead>
                       <TableHead>Created</TableHead>
                       <TableHead className="text-right">Actions</TableHead>
                     </TableRow>
@@ -441,49 +462,25 @@ export default function AdminDashboardPage({
                         <TableCell>
                           <Badge
                             variant={
-                              client.status === "active" ? "success" : "destructive"
+                              client.status === "active" ? "success" : "secondary"
                             }
                           >
-                            {client.status}
+                            {getTenantStatusLabel(client.status)}
                           </Badge>
                         </TableCell>
                         <TableCell className="font-medium">
-                          {client.domains?.length ?? 0}
+                          {client.hasDatabaseUrl ? "Configured" : "Missing"}
+                        </TableCell>
+                        <TableCell className="font-medium">
+                          {client.posTerminalCount}
                         </TableCell>
                         <TableCell className="text-muted-foreground">
                           {formatDate(client.createdAt)}
                         </TableCell>
                         <TableCell className="text-right">
-                          <DropdownMenu>
-                            <DropdownMenuTrigger asChild>
-                              <Button
-                                variant="ghost"
-                                size="icon-sm"
-                                className="rounded-full"
-                                disabled={updatingTenantId === client.id}
-                              >
-                                {updatingTenantId === client.id ? (
-                                  <Loader2 className="h-4 w-4 animate-spin" />
-                                ) : (
-                                  <MoreVertical className="h-4 w-4" />
-                                )}
-                                <span className="sr-only">Actions</span>
-                              </Button>
-                            </DropdownMenuTrigger>
-                            <DropdownMenuContent align="end">
-                              <DropdownMenuItem asChild>
-                                <a href="/tenants">Open client</a>
-                              </DropdownMenuItem>
-                              <DropdownMenuSeparator />
-                              <DropdownMenuItem
-                                onClick={() => void handleToggleTenantStatus(client)}
-                              >
-                                {client.status === "active"
-                                  ? "Suspend client"
-                                  : "Reactivate client"}
-                              </DropdownMenuItem>
-                            </DropdownMenuContent>
-                          </DropdownMenu>
+                          <Button asChild variant="ghost" size="sm">
+                            <a href="/tenants">View control</a>
+                          </Button>
                         </TableCell>
                       </TableRow>
                     ))}
@@ -542,20 +539,8 @@ export default function AdminDashboardPage({
                           {formatDate(domainRow.createdAt)}
                         </TableCell>
                         <TableCell className="text-right">
-                          <Button
-                            asChild
-                            variant="ghost"
-                            size="icon-sm"
-                            className="rounded-full"
-                          >
-                            <a
-                              href={`https://${domainRow.domain}`}
-                              target="_blank"
-                              rel="noreferrer"
-                            >
-                              <ArrowUpRight className="h-4 w-4" />
-                              <span className="sr-only">Open</span>
-                            </a>
+                          <Button asChild variant="ghost" size="sm">
+                            <a href="/domains">View mapping</a>
                           </Button>
                         </TableCell>
                       </TableRow>

@@ -28,10 +28,13 @@ function isSystemUser(payload: AuthPayload | null): boolean {
 const protectedPrefixes = [
   "/admin",
   "/tenants",
+  "/tenant-owners",
   "/domains",
   "/system-users",
   "/notifications",
+  "/audit-logs",
   "/reports",
+  "/retail-ops",
 ];
 
 export function proxy(request: NextRequest) {
@@ -72,9 +75,11 @@ export const config = {
     "/login",
     "/admin/:path*",
     "/tenants/:path*",
+    "/tenant-owners/:path*",
     "/domains/:path*",
     "/system-users/:path*",
     "/notifications/:path*",
+    "/audit-logs/:path*",
     "/reports/:path*",
   ],
 };

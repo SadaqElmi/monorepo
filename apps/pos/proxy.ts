@@ -23,21 +23,15 @@ function getAuthPayload(request: NextRequest): AuthPayload | null {
 /**
  * Edge auth gate for the standalone POS app (cookie parity with qoondeeye-pharmacy proxy).
  */
+/** Routes that show terminal setup or the idle launcher without a cashier JWT. */
+function isPublicTerminalRoute(pathname: string): boolean {
+  return pathname === "/" || pathname === "/staff-login" || pathname === "/setup";
+}
+
 export function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl;
 
-  if (pathname === "/login") {
-    const token = request.cookies.get(AUTH_TOKEN_KEY)?.value;
-    if (token) {
-      const payload = getAuthPayload(request);
-      if (payload?.id) {
-        return NextResponse.redirect(new URL("/staff-login", request.url));
-      }
-    }
-    return NextResponse.next();
-  }
-
-  if (pathname === "/staff-login") {
+  if (isPublicTerminalRoute(pathname)) {
     return NextResponse.next();
   }
 
@@ -56,13 +50,13 @@ export function proxy(request: NextRequest) {
 export const config = {
   matcher: [
     "/",
+    "/setup",
     "/z-report",
     "/z-report/:path*",
     "/transactions",
     "/transactions/:path*",
     "/suspended",
     "/suspended/:path*",
-    "/login",
     "/staff-login",
   ],
 };

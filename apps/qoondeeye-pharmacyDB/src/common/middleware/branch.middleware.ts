@@ -14,6 +14,8 @@ import {
 import { getAuthTokenFromHeaders } from '../security/auth-token.util';
 import { ALL_ACCOUNTING_PERMISSIONS } from '../security/accounting-permissions';
 import { requestPathname } from '../http/request-pathname';
+import { tenantHasDedicatedDatabase } from '../../tenant/tenant-storage';
+import { toTenantContextPayload } from '../../tenant/tenant.types';
 
 type JwtPayload =
   | {
@@ -118,7 +120,8 @@ export class BranchMiddleware implements NestMiddleware {
     const sync = this.resolveSchemaNameSync(req);
     if (sync) return sync;
 
-    const headerRaw = req.headers['x-tenant'];
+    const headerRaw =
+      req.headers['x-tenant-subdomain'] ?? req.headers['x-tenant'];
     const slug =
       typeof headerRaw === 'string'
         ? headerRaw.trim()
@@ -127,14 +130,25 @@ export class BranchMiddleware implements NestMiddleware {
           : '';
     if (!slug) return null;
 
-    const tenant = await this.tenantService.findBySchemaNameInsensitive(slug);
+    const tenant =
+      (await this.tenantService.findBySubdomain(slug)) ??
+      (await this.tenantService.findBySchemaNameInsensitive(slug));
     if (!tenant) return null;
 
-    this.tenantContext.setTenant(tenant);
+    this.tenantContext.setTenant(
+      toTenantContextPayload({
+        ...tenant,
+        usesDedicatedDatabase: tenantHasDedicatedDatabase(tenant),
+      }),
+    );
     req.tenant = {
       id: tenant.id,
       schema_name: tenant.schemaName,
       name: tenant.name,
+      slug: tenant.slug,
+      subdomain: tenant.subdomain,
+      database_name: tenant.databaseName,
+      status: tenant.status,
     };
     return tenant.schemaName;
   }
@@ -174,7 +188,14 @@ export class BranchMiddleware implements NestMiddleware {
     }
   }
 
+  private usesDedicatedTenantStorage(): boolean {
+    return true;
+  }
+
   private async ensureBranchIsolationColumns(schemaName: string) {
+    if (this.usesDedicatedTenantStorage()) {
+      return;
+    }
     if (BranchMiddleware.ensuredSchemas.has(schemaName)) return;
 
     const checks: Array<{
@@ -185,68 +206,68 @@ export class BranchMiddleware implements NestMiddleware {
       {
         table: 'batches',
         column: 'branch_id',
-        alterSql: `ALTER TABLE "${schemaName}"."batches"
-                    ADD COLUMN branch_id UUID REFERENCES "${schemaName}"."branches"(id)`,
+        alterSql: `ALTER TABLE "batches"
+                    ADD COLUMN branch_id UUID REFERENCES "branches"(id)`,
       },
       {
         table: 'products',
         column: 'branch_id',
-        alterSql: `ALTER TABLE "${schemaName}"."products"
-                    ADD COLUMN branch_id UUID REFERENCES "${schemaName}"."branches"(id)`,
+        alterSql: `ALTER TABLE "products"
+                    ADD COLUMN branch_id UUID REFERENCES "branches"(id)`,
       },
       {
         table: 'product_categories',
         column: 'branch_id',
-        alterSql: `ALTER TABLE "${schemaName}"."product_categories"
-                    ADD COLUMN branch_id UUID REFERENCES "${schemaName}"."branches"(id)`,
+        alterSql: `ALTER TABLE "product_categories"
+                    ADD COLUMN branch_id UUID REFERENCES "branches"(id)`,
       },
       {
         table: 'product_categories',
         column: 'description',
-        alterSql: `ALTER TABLE "${schemaName}"."product_categories"
+        alterSql: `ALTER TABLE "product_categories"
                     ADD COLUMN description TEXT`,
       },
       {
         table: 'product_categories',
         column: 'slug',
-        alterSql: `ALTER TABLE "${schemaName}"."product_categories"
+        alterSql: `ALTER TABLE "product_categories"
                     ADD COLUMN slug VARCHAR(255)`,
       },
       {
         table: 'product_categories',
         column: 'parent_id',
-        alterSql: `ALTER TABLE "${schemaName}"."product_categories"
-                    ADD COLUMN parent_id UUID REFERENCES "${schemaName}"."product_categories"(id) ON DELETE SET NULL`,
+        alterSql: `ALTER TABLE "product_categories"
+                    ADD COLUMN parent_id UUID REFERENCES "product_categories"(id) ON DELETE SET NULL`,
       },
       {
         table: 'products',
         column: 'list_price',
-        alterSql: `ALTER TABLE "${schemaName}"."products"
+        alterSql: `ALTER TABLE "products"
                     ADD COLUMN list_price NUMERIC(10,2)`,
       },
       {
         table: 'purchase_items',
         column: 'branch_id',
-        alterSql: `ALTER TABLE "${schemaName}"."purchase_items"
-                    ADD COLUMN branch_id UUID REFERENCES "${schemaName}"."branches"(id)`,
+        alterSql: `ALTER TABLE "purchase_items"
+                    ADD COLUMN branch_id UUID REFERENCES "branches"(id)`,
       },
       {
         table: 'purchase_items',
         column: 'batch_id',
-        alterSql: `ALTER TABLE "${schemaName}"."purchase_items"
-                    ADD COLUMN batch_id UUID REFERENCES "${schemaName}"."batches"(id)`,
+        alterSql: `ALTER TABLE "purchase_items"
+                    ADD COLUMN batch_id UUID REFERENCES "batches"(id)`,
       },
       {
         table: 'sale_items',
         column: 'branch_id',
-        alterSql: `ALTER TABLE "${schemaName}"."sale_items"
-                    ADD COLUMN branch_id UUID REFERENCES "${schemaName}"."branches"(id)`,
+        alterSql: `ALTER TABLE "sale_items"
+                    ADD COLUMN branch_id UUID REFERENCES "branches"(id)`,
       },
       {
         table: 'cash_transactions',
         column: 'branch_id',
-        alterSql: `ALTER TABLE "${schemaName}"."cash_transactions"
-                    ADD COLUMN branch_id UUID REFERENCES "${schemaName}"."branches"(id)`,
+        alterSql: `ALTER TABLE "cash_transactions"
+                    ADD COLUMN branch_id UUID REFERENCES "branches"(id)`,
       },
     ];
 
@@ -272,39 +293,39 @@ export class BranchMiddleware implements NestMiddleware {
     }
 
     await this.prisma.$executeRawUnsafe(
-      `CREATE UNIQUE INDEX IF NOT EXISTS idx_inventory_product_branch_unique ON "${schemaName}"."inventory"(product_id, branch_id)`,
+      `CREATE UNIQUE INDEX IF NOT EXISTS idx_inventory_product_branch_unique ON "inventory"(product_id, branch_id)`,
     );
     await this.prisma.$executeRawUnsafe(
-      `CREATE INDEX IF NOT EXISTS idx_batches_fifo ON "${schemaName}"."batches"(branch_id, product_id, expiry_date, created_at)`,
+      `CREATE INDEX IF NOT EXISTS idx_batches_fifo ON "batches"(branch_id, product_id, expiry_date, created_at)`,
     );
     await this.prisma.$executeRawUnsafe(
-      `CREATE INDEX IF NOT EXISTS product_categories_parent_id_idx ON "${schemaName}"."product_categories"(parent_id)`,
+      `CREATE INDEX IF NOT EXISTS product_categories_parent_id_idx ON "product_categories"(parent_id)`,
     );
     await this.prisma.$executeRawUnsafe(
-      `CREATE UNIQUE INDEX IF NOT EXISTS products_barcode_unique_not_null ON "${schemaName}"."products"(barcode) WHERE barcode IS NOT NULL AND TRIM(barcode) <> ''`,
+      `CREATE UNIQUE INDEX IF NOT EXISTS products_barcode_unique_not_null ON "products"(barcode) WHERE barcode IS NOT NULL AND TRIM(barcode) <> ''`,
     );
     await this.prisma.$executeRawUnsafe(
-      `CREATE TABLE IF NOT EXISTS "${schemaName}"."sale_returns" (
+      `CREATE TABLE IF NOT EXISTS "sale_returns" (
         id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-        sale_id UUID REFERENCES "${schemaName}"."sales"(id) ON DELETE CASCADE,
-        branch_id UUID REFERENCES "${schemaName}"."branches"(id),
+        sale_id UUID REFERENCES "sales"(id) ON DELETE CASCADE,
+        branch_id UUID REFERENCES "branches"(id),
         reason TEXT,
         return_date TIMESTAMP DEFAULT CURRENT_TIMESTAMP
       )`,
     );
     await this.prisma.$executeRawUnsafe(
-      `CREATE INDEX IF NOT EXISTS idx_sale_returns_sale_id ON "${schemaName}"."sale_returns"(sale_id)`,
+      `CREATE INDEX IF NOT EXISTS idx_sale_returns_sale_id ON "sale_returns"(sale_id)`,
     );
     await this.prisma.$executeRawUnsafe(
-      `CREATE INDEX IF NOT EXISTS idx_sale_returns_date ON "${schemaName}"."sale_returns"(return_date)`,
+      `CREATE INDEX IF NOT EXISTS idx_sale_returns_date ON "sale_returns"(return_date)`,
     );
     await this.prisma.$executeRawUnsafe(
-      `CREATE TABLE IF NOT EXISTS "${schemaName}"."sale_return_items" (
+      `CREATE TABLE IF NOT EXISTS "sale_return_items" (
         id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-        sale_return_id UUID REFERENCES "${schemaName}"."sale_returns"(id) ON DELETE CASCADE,
-        product_id UUID REFERENCES "${schemaName}"."products"(id),
-        batch_id UUID REFERENCES "${schemaName}"."batches"(id),
-        sale_item_id UUID REFERENCES "${schemaName}"."sale_items"(id),
+        sale_return_id UUID REFERENCES "sale_returns"(id) ON DELETE CASCADE,
+        product_id UUID REFERENCES "products"(id),
+        batch_id UUID REFERENCES "batches"(id),
+        sale_item_id UUID REFERENCES "sale_items"(id),
         quantity INTEGER NOT NULL
       )`,
     );
@@ -339,6 +360,7 @@ export class BranchMiddleware implements NestMiddleware {
       pathname.startsWith('/api/tenants') ||
       pathname.startsWith('/api/domains') ||
       pathname.startsWith('/api/system-users') ||
+      pathname.startsWith('/api/admin/') ||
       pathname === '/api';
     if (isPublicRoute) return;
 
@@ -395,8 +417,10 @@ export class BranchMiddleware implements NestMiddleware {
           : undefined;
 
       const allBranchIds = branchIdsFromRows(
-        await this.prisma.$queryRawUnsafe<{ id: string }[]>(
-          `SELECT id FROM "${schemaName}"."branches" ORDER BY name`,
+        await this.prisma.withTenantSchema(schemaName, (tx) =>
+          tx.$queryRawUnsafe<{ id: string }[]>(
+            `SELECT id FROM "branches" ORDER BY name`,
+          ),
         ),
       );
 
@@ -479,11 +503,11 @@ export class BranchMiddleware implements NestMiddleware {
 
     // ------- Resolve user branch permissions -------
     const userId = payload.sub;
-    const userRows = await this.prisma.$queryRawUnsafe<
-      { branch_id: string | null }[]
-    >(
-      `SELECT branch_id FROM "${schemaName}"."users" WHERE id = $1::uuid`,
-      userId,
+    const userRows = await this.prisma.withTenantSchema(schemaName, (tx) =>
+      tx.$queryRawUnsafe<{ branch_id: string | null }[]>(
+        `SELECT branch_id FROM "users" WHERE id = $1::uuid`,
+        userId,
+      ),
     );
 
     const userBranchId = normalizeBranchId(userRows?.[0]?.branch_id);
@@ -563,8 +587,10 @@ export class BranchMiddleware implements NestMiddleware {
       (tenantWantsAllBranchesRead && Boolean(userBranchId));
     const allBranchIds: string[] = needsTenantBranchList
       ? branchIdsFromRows(
-          await this.prisma.$queryRawUnsafe<{ id: string }[]>(
-            `SELECT id FROM "${schemaName}"."branches" ORDER BY name`,
+          await this.prisma.withTenantSchema(schemaName, (tx) =>
+            tx.$queryRawUnsafe<{ id: string }[]>(
+              `SELECT id FROM "branches" ORDER BY name`,
+            ),
           ),
         )
       : [];
@@ -749,13 +775,15 @@ export class BranchMiddleware implements NestMiddleware {
     userId: string,
   ): Promise<string[]> {
     try {
-      const rows = await this.prisma.$queryRawUnsafe<Array<{ name: string }>>(
-        `SELECT DISTINCT p.name AS name
-         FROM "${schemaName}"."permissions" p
-         INNER JOIN "${schemaName}"."role_permissions" rp ON rp.permission_id = p.id
-         INNER JOIN "${schemaName}"."users" u ON u.role_id = rp.role_id
-         WHERE u.id = $1::uuid`,
-        userId,
+      const rows = await this.prisma.withTenantSchema(schemaName, (tx) =>
+        tx.$queryRawUnsafe<Array<{ name: string }>>(
+          `SELECT DISTINCT p.name AS name
+           FROM "permissions" p
+           INNER JOIN "role_permissions" rp ON rp.permission_id = p.id
+           INNER JOIN "users" u ON u.role_id = rp.role_id
+           WHERE u.id = $1::uuid`,
+          userId,
+        ),
       );
       return (rows ?? []).map((r) => r.name).filter(Boolean);
     } catch {

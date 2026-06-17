@@ -1,5 +1,5 @@
-import { ManagerLoginPage } from "@/features/auth/ui/manager-login-page";
+import { redirect } from "next/navigation";
 
 export default function LoginPage() {
-  return <ManagerLoginPage />;
+  redirect("/");
 }

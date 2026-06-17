@@ -15,34 +15,120 @@ datasource db {
 // ============================================
 
 model Tenant {
-  id         String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  name       String   @db.VarChar(255)
-  schemaName String   @unique @map("schema_name") @db.VarChar(100)
-  status     String   @default("active") @db.VarChar(20)
-  createdAt  DateTime @default(now()) @map("created_at") @db.Timestamp(6)
+  id                     String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  name                   String    @db.VarChar(255)
+  schemaName             String    @unique @map("schema_name") @db.VarChar(100)
+  slug                   String?   @unique @db.VarChar(100)
+  subdomain              String?   @unique @db.VarChar(100)
+  customDomain           String?   @unique @map("custom_domain") @db.VarChar(255)
+  databaseName           String?   @unique @map("database_name") @db.VarChar(128)
+  databaseUrlEncrypted   String?   @map("database_url_encrypted") @db.Text
+  status                 String    @default("active") @db.VarChar(20)
+  provisioningStatus     String?   @map("provisioning_status") @db.VarChar(40)
+  provisioningLockId     String?   @map("provisioning_lock_id") @db.Uuid
+  provisioningStartedAt  DateTime? @map("provisioning_started_at") @db.Timestamp(6)
+  planId                 String?   @map("plan_id") @db.VarChar(100)
+  ownerUserId            String?   @map("owner_user_id") @db.Uuid
+  ownerName              String?   @map("owner_name") @db.VarChar(200)
+  ownerEmail             String?   @map("owner_email") @db.VarChar(255)
+  lastLoginAt            DateTime? @map("last_login_at") @db.Timestamptz(6)
+  databaseHealthStatus   String?   @map("database_health_status") @db.VarChar(32)
+  migrationStatus        String?   @map("migration_status") @db.VarChar(32)
+  storageUsedBytes       BigInt?   @map("storage_used_bytes")
+  lastBackupAt           DateTime? @map("last_backup_at") @db.Timestamptz(6)
+  errorMessage           String?   @map("error_message") @db.Text
+  deletedAt              DateTime? @map("deleted_at") @db.Timestamp(6)
+  scheduledDeleteAt      DateTime? @map("scheduled_delete_at") @db.Timestamp(6)
+  createdAt              DateTime  @default(now()) @map("created_at") @db.Timestamp(6)
+  updatedAt              DateTime  @default(now()) @updatedAt @map("updated_at") @db.Timestamp(6)
 
   posDevices            PosDevice[]
   domains               Domain[]
   reconciliationRuns    ReconciliationRun[]
   reconciliationLogs    ReconciliationLog[]
   systemHealthSnapshots SystemHealthSnapshot[]
+  migrationRuns         TenantMigrationRun[]
+  adminAuditEvents      AdminAuditEvent[]
+  backupJobs            TenantBackupJob[]
 
   @@schema("public")
 }
 
+model AdminAuditEvent {
+  id           String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  adminUserId  String?  @map("admin_user_id") @db.Uuid
+  action       String   @db.VarChar(80)
+  tenantId     String?  @map("tenant_id") @db.Uuid
+  result       String   @db.VarChar(16)
+  errorMessage String?  @map("error_message") @db.Text
+  ipAddress    String?  @map("ip_address") @db.Inet
+  userAgent    String?  @map("user_agent") @db.Text
+  payload      Json?
+  createdAt    DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  tenant Tenant? @relation(fields: [tenantId], references: [id], onDelete: SetNull)
+
+  @@index([tenantId, createdAt(sort: Desc)])
+  @@index([adminUserId, createdAt(sort: Desc)])
+  @@index([action, createdAt(sort: Desc)])
+  @@map("admin_audit_events")
+  @@schema("public")
+}
+
+model TenantBackupJob {
+  id                String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  tenantId          String    @map("tenant_id") @db.Uuid
+  requestedByUserId String?   @map("requested_by_user_id") @db.Uuid
+  status            String    @default("accepted") @db.VarChar(32)
+  requestedAt       DateTime  @default(now()) @map("requested_at") @db.Timestamptz(6)
+  completedAt       DateTime? @map("completed_at") @db.Timestamptz(6)
+  errorMessage      String?   @map("error_message") @db.Text
+  metadata          Json?
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId, requestedAt(sort: Desc)])
+  @@map("tenant_backup_jobs")
+  @@schema("public")
+}
+
+model TenantMigrationRun {
+  id            String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  tenantId      String    @map("tenant_id") @db.Uuid
+  migrationName String    @map("migration_name") @db.VarChar(255)
+  status        String    @db.VarChar(32)
+  startedAt     DateTime  @default(now()) @map("started_at") @db.Timestamp(6)
+  finishedAt    DateTime? @map("finished_at") @db.Timestamp(6)
+  errorMessage  String?   @map("error_message") @db.Text
+  createdAt     DateTime  @default(now()) @map("created_at") @db.Timestamp(6)
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId, startedAt(sort: Desc)])
+  @@index([tenantId, migrationName])
+  @@map("tenant_migration_runs")
+  @@schema("public")
+}
+
 model PosDevice {
-  id               String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  tenantId         String    @map("tenant_id") @db.Uuid
-  deviceCode       String    @unique @map("device_code") @db.VarChar(128)
-  displayName      String?   @map("display_name") @db.VarChar(255)
-  status           String    @default("active") @db.VarChar(20)
-  deviceSecretHash String    @map("device_secret_hash") @db.VarChar(128)
-  branchId         String?   @map("branch_id") @db.Uuid
-  boundAt          DateTime  @default(now()) @map("bound_at") @db.Timestamp(6)
-  lastSeenAt       DateTime? @map("last_seen_at") @db.Timestamp(6)
-  revokedAt        DateTime? @map("revoked_at") @db.Timestamp(6)
-  createdAt        DateTime  @default(now()) @map("created_at") @db.Timestamp(6)
-  updatedAt        DateTime  @updatedAt @map("updated_at") @db.Timestamp(6)
+  id                 String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  tenantId           String    @map("tenant_id") @db.Uuid
+  deviceCode         String    @unique @map("device_code") @db.VarChar(128)
+  terminalUsername   String?   @unique @map("terminal_username") @db.VarChar(64)
+  displayName        String?   @map("display_name") @db.VarChar(255)
+  status             String    @default("active") @db.VarChar(20)
+  bindingStatus      String    @default("unbound") @map("binding_status") @db.VarChar(20)
+  setupPasswordHash  String?   @map("setup_password_hash") @db.Text
+  deviceSecretHash   String?   @map("device_secret_hash") @db.VarChar(128)
+  branchId           String?   @map("branch_id") @db.Uuid
+  deviceFingerprint  String?   @map("device_fingerprint") @db.VarChar(128)
+  boundAt            DateTime? @map("bound_at") @db.Timestamp(6)
+  lastSeenAt         DateTime? @map("last_seen_at") @db.Timestamp(6)
+  lastSetupAttemptAt DateTime? @map("last_setup_attempt_at") @db.Timestamp(6)
+  revokedAt          DateTime? @map("revoked_at") @db.Timestamp(6)
+  createdByUserId    String?   @map("created_by_user_id") @db.Uuid
+  createdAt          DateTime  @default(now()) @map("created_at") @db.Timestamp(6)
+  updatedAt          DateTime  @updatedAt @map("updated_at") @db.Timestamp(6)
 
   tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
 

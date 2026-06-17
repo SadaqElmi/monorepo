@@ -8,6 +8,13 @@ export class UpdateTenantDto {
 
   @IsOptional()
   @IsString()
-  @IsIn(['active', 'inactive', 'suspended'])
+  @IsIn([
+    'pending_setup',
+    'active',
+    'suspended',
+    'inactive',
+    'provisioning_failed',
+    'migration_failed',
+  ])
   status?: string;
 }

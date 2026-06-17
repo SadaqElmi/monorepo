@@ -16,6 +16,7 @@ import { COATableView } from "@/components/accounting/chart-of-accounts/coa-tabl
 import { useErpBranchFacet } from "@/hooks/use-erp-branch-facet";
 import { groupCoaByRoot, sortCoaTree } from "@/lib/accounting-display";
 import { getResolvedStoredUser } from "@/lib/auth-client";
+import { readBranchIdFromStorageForApi } from "@/lib/branch-scope";
 import { erpKeys } from "@/lib/erp-query-keys";
 import { ERP_STALE_STATIC } from "@/lib/erp-query-options";
 import {
@@ -36,6 +37,7 @@ export default function AccountingChartOfAccountsPage({
   const router = useRouter();
   const queryClient = useQueryClient();
   const branchFacet = useErpBranchFacet();
+  const [initialBranchFacet] = React.useState(branchFacet);
   const [storedUser] = React.useState(() => getResolvedStoredUser());
   const [tenantSlug] = React.useState(
     () => storedUser?.tenantSlug?.trim() ?? "",
@@ -45,24 +47,75 @@ export default function AccountingChartOfAccountsPage({
     null,
   );
   const [viewMode, setViewMode] = React.useState<CoaViewMode>("table");
+  const [branchScopeKey, setBranchScopeKey] = React.useState(() => {
+    if (typeof window === "undefined") return "";
+    try {
+      const v = localStorage.getItem("branchId")?.trim() ?? "";
+      return v || "all";
+    } catch {
+      return "all";
+    }
+  });
+  const [initialBranchScopeKey] = React.useState(branchScopeKey);
+
+  React.useEffect(() => {
+    const syncBranchScope = () => {
+      try {
+        const v = localStorage.getItem("branchId")?.trim() ?? "";
+        setBranchScopeKey(v || "all");
+      } catch {
+        setBranchScopeKey("all");
+      }
+      setSelectedGroupId(null);
+    };
+    const onBranch = (evt: Event) => {
+      const detail = (evt as CustomEvent).detail as { branchId?: string | null };
+      if (detail && "branchId" in detail) {
+        setBranchScopeKey(detail.branchId ?? "all");
+      } else {
+        syncBranchScope();
+      }
+      setSelectedGroupId(null);
+    };
+    window.addEventListener("storage", syncBranchScope);
+    window.addEventListener("activeBranchChanged", onBranch as EventListener);
+    return () => {
+      window.removeEventListener("storage", syncBranchScope);
+      window.removeEventListener(
+        "activeBranchChanged",
+        onBranch as EventListener,
+      );
+    };
+  }, []);
 
   const accountsQueryKey = React.useMemo(
-    () => erpKeys.accounts(tenantSlug, branchFacet),
-    [branchFacet, tenantSlug],
+    () =>
+      erpKeys.accounts(
+        tenantSlug,
+        branchFacet,
+        branchScopeKey === "all" ? undefined : branchScopeKey,
+      ),
+    [branchFacet, branchScopeKey, tenantSlug],
   );
+  const useServerInitialData =
+    serverPrefetched &&
+    Boolean(initialAccounts?.length) &&
+    branchFacet === initialBranchFacet &&
+    branchScopeKey === initialBranchScopeKey;
   const accountsQuery = useQuery({
     queryKey: accountsQueryKey,
-    queryFn: () => getAccounts(tenantSlug),
+    queryFn: () => getAccounts(tenantSlug, readBranchIdFromStorageForApi()),
     enabled: Boolean(tenantSlug && branchFacet),
     staleTime: ERP_STALE_STATIC,
-    initialData:
-      serverPrefetched && initialAccounts ? initialAccounts : undefined,
+    initialData: useServerInitialData ? initialAccounts! : undefined,
   });
   const accounts = React.useMemo(
     () => accountsQuery.data ?? [],
     [accountsQuery.data],
   );
-  const loading = accountsQuery.isPending;
+  const loading =
+    accountsQuery.isPending ||
+    (accountsQuery.isFetching && accounts.length === 0);
   const loadError = accountsQuery.error;
   const displayError =
     loadError instanceof Error

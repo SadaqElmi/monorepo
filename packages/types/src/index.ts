@@ -245,6 +245,10 @@ export type Sale = {
   customer_name?: string | null;
   /** Primary payment method code (from `payments.method` when stored). */
   payment_method?: string | null;
+  /** Branch code (store number) when returned from list/detail APIs. */
+  store_no?: string | null;
+  /** POS device code when returned from list/detail APIs. */
+  terminal_no?: string | null;
   items?: SaleItem[];
 };
 
@@ -307,6 +311,12 @@ export type CreateSaleInput = {
   creditOverride?: { managerUserId: string; reason: string };
   /** Open POS shift session id (required for register sales once shift workflow is enabled). */
   posSessionId?: string;
+  /** Client-generated UUID for offline sync deduplication. */
+  clientSaleRef?: string;
+  /** `online` (default) or `offline` when replayed from POS outbox. */
+  syncSource?: "online" | "offline";
+  /** Approved supervisor request when discount exceeds role cap. */
+  discountApprovalId?: string;
   items: Array<{
     productId?: string;
     uomId?: string;
@@ -392,6 +402,10 @@ export type PosTransactionLine = {
 export type PosTransaction = {
   receiptId: string;
   saleId?: string;
+  /** Client UUID for offline sync deduplication. */
+  clientSaleRef?: string;
+  /** Set when the sale was voided on the server. */
+  voided?: boolean;
   createdAt: number;
   paymentMethod: string;
   lines: PosTransactionLine[];
@@ -399,6 +413,10 @@ export type PosTransaction = {
   subtotal: number;
   tax: number;
   total: number;
+  /** Branch code (store number). */
+  storeNo?: string | null;
+  /** POS terminal device code. */
+  terminalNo?: string | null;
   customerId?: string;
   customerName?: string;
   onAccount?: boolean;

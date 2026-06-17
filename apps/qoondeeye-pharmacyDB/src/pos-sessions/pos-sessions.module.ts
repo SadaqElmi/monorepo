@@ -6,6 +6,7 @@ import { BatchesModule } from '../batches/batches.module';
 import { CategoriesModule } from '../categories/categories.module';
 import { ProductsModule } from '../products/products.module';
 import { UomsModule } from '../uoms/uoms.module';
+import { PosApprovalsModule } from '../pos-approvals/pos-approvals.module';
 import { PosSessionsController } from './pos-sessions.controller';
 import { PosSessionsService } from './pos-sessions.service';
 
@@ -13,6 +14,7 @@ import { PosSessionsService } from './pos-sessions.service';
   imports: [
     PrismaModule,
     TenantModule,
+    PosApprovalsModule,
     AccountingModule,
     ProductsModule,
     UomsModule,

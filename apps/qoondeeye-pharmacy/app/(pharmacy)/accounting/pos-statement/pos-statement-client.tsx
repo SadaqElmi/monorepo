@@ -3,6 +3,7 @@
 import * as React from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import Link from "next/link";
+import { useSearchParams } from "next/navigation";
 import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
@@ -39,6 +40,9 @@ type StatementLine = {
 export default function AccountingPosStatementPage() {
   const queryClient = useQueryClient();
   const branchFacet = useErpBranchFacet();
+  const searchParams = useSearchParams();
+  const sessionIdFromUrl = searchParams.get("sessionId")?.trim() || null;
+  const branchIdFromUrl = searchParams.get("branchId")?.trim() || null;
   const [slug] = React.useState(
     () => getResolvedStoredUser()?.tenantSlug?.trim() ?? null,
   );
@@ -68,14 +72,19 @@ export default function AccountingPosStatementPage() {
     };
   }, [syncBranch]);
 
+  const effectiveBranchId = branchIdFromUrl ?? branchId;
+
   const sessionQuery = useQuery({
-    queryKey: erpKeys.posSession(slug ?? "", branchFacet, branchId ?? ""),
+    queryKey: erpKeys.posSession(slug ?? "", branchFacet, effectiveBranchId ?? ""),
     queryFn: () => getCurrentPosSession(slug!),
-    enabled: Boolean(slug && branchId),
+    enabled: Boolean(slug && effectiveBranchId && !sessionIdFromUrl),
     staleTime: ERP_STALE_LIST,
   });
-  const posSessionId = sessionQuery.data?.id ?? null;
-  const posSessionLoading = sessionQuery.isPending;
+  const posSessionId = sessionIdFromUrl ?? sessionQuery.data?.id ?? null;
+  const posSessionLoading = sessionIdFromUrl
+    ? false
+    : sessionQuery.isPending;
+  const statementBranchId = effectiveBranchId ?? undefined;
 
   const [statementId, setStatementId] = React.useState<string | null>(null);
   const [lines, setLines] = React.useState<StatementLine[]>([]);
@@ -91,7 +100,7 @@ export default function AccountingPosStatementPage() {
   const loadStatement = React.useCallback(
     async (id: string) => {
       if (!slug) return;
-      const res = (await getPosStatement(slug, id)) as {
+      const res = (await getPosStatement(slug, id, statementBranchId)) as {
         statement: { id: string; status: string; lines: StatementLine[] };
       };
       setStatementId(res.statement.id);
@@ -103,7 +112,7 @@ export default function AccountingPosStatementPage() {
       }
       setDrafts(d);
     },
-    [slug],
+    [slug, statementBranchId],
   );
 
   const handleOpenStatement = React.useCallback(async () => {
@@ -113,7 +122,11 @@ export default function AccountingPosStatementPage() {
     }
     setLoading(true);
     try {
-      const res = (await postSessionStatement(slug, posSessionId)) as {
+      const res = (await postSessionStatement(
+        slug,
+        posSessionId,
+        statementBranchId,
+      )) as {
         statement: { id: string; status: string; lines: StatementLine[] };
       };
       await loadStatement(res.statement.id);
@@ -128,7 +141,7 @@ export default function AccountingPosStatementPage() {
     } finally {
       setLoading(false);
     }
-  }, [slug, posSessionId, loadStatement]);
+  }, [slug, posSessionId, loadStatement, statementBranchId]);
 
   const saveLine = async (lineId: string) => {
     if (!slug || !statementId || status !== "open") return;
@@ -147,6 +160,7 @@ export default function AccountingPosStatementPage() {
         statementId,
         lineId,
         n,
+        statementBranchId,
       )) as { statement: { lines: StatementLine[]; status: string } };
       setLines(res.statement.lines);
       setStatus(res.statement.status);
@@ -164,7 +178,7 @@ export default function AccountingPosStatementPage() {
     if (!slug || !statementId) return;
     setLoading(true);
     try {
-      await postPosStatement(slug, statementId);
+      await postPosStatement(slug, statementId, statementBranchId);
       await loadStatement(statementId);
       toast.success("Posted", {
         description: "Variance journal created (if any).",
@@ -182,7 +196,7 @@ export default function AccountingPosStatementPage() {
     if (!slug || !posSessionId) return;
     setClosing(true);
     try {
-      await closePosSession(slug, posSessionId);
+      await closePosSession(slug, posSessionId, statementBranchId);
       refreshSession();
       setStatementId(null);
       setLines([]);
@@ -214,6 +228,9 @@ export default function AccountingPosStatementPage() {
           <CardTitle className="text-lg">POS statement</CardTitle>
           <CardDescription>
             Shift cash declaration and posting (same flow as the POS terminal).
+            {sessionIdFromUrl
+              ? " Managing a specific shift from POS Shifts."
+              : null}
           </CardDescription>
         </div>
         <Button asChild variant="ghost" size="sm">
@@ -223,6 +240,11 @@ export default function AccountingPosStatementPage() {
       <CardContent className="space-y-4">
         {posSessionLoading ? (
           <p className="text-muted-foreground text-sm">Loading session…</p>
+        ) : !effectiveBranchId ? (
+          <p className="rounded-lg border border-amber-500/30 bg-amber-500/5 p-4 text-sm text-amber-950 dark:text-amber-100">
+            Select a branch in the branch switcher, or open this page from POS
+            Shifts with a specific shift.
+          </p>
         ) : !posSessionId ? (
           <p className="rounded-lg border border-amber-500/30 bg-amber-500/5 p-4 text-sm text-amber-950 dark:text-amber-100">
             No open shift for this branch. Open a shift from the POS register,

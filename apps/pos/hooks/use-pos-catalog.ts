@@ -1,15 +1,20 @@
 "use client";
 
 import { useQuery } from "@tanstack/react-query";
-import { useMemo } from "react";
+import { useEffect, useMemo, useState } from "react";
 
 import { usePosBranchFacet } from "@/hooks/use-pos-branch-facet";
+import { useNetworkStatus } from "@/hooks/use-network-status";
 import {
   EMPTY_POS_CATALOG_VIEW,
   mapPosCatalogView,
   type PosCatalogData,
 } from "@/lib/pos-catalog-view";
 import { posKeys, POS_STALE_CATALOG } from "@/lib/pos-query-keys";
+import {
+  loadCatalogSnapshot,
+  saveCatalogSnapshot,
+} from "@/lib/offline/catalog-store";
 import { getPosRegisterCatalog } from "@/lib/services/pos-catalog";
 
 export type { PosCatalogData } from "@/lib/pos-catalog-view";
@@ -29,16 +34,28 @@ export function usePosCatalog(
   },
 ) {
   const branchFacet = usePosBranchFacet(tenantSlug);
+  const { isOffline } = useNetworkStatus();
   const enabled =
-    options?.enabled !== false && Boolean(tenantSlug && branchFacet);
+    options?.enabled !== false && Boolean(tenantSlug && branchFacet) && !isOffline;
   const tenant = tenantSlug ?? "";
+  const [offlineSnapshot, setOfflineSnapshot] = useState<PosCatalogData | null>(
+    null,
+  );
+
+  useEffect(() => {
+    if (!tenantSlug || !branchFacet) {
+      setOfflineSnapshot(null);
+      return;
+    }
+    void loadCatalogSnapshot(tenantSlug, branchFacet).then(setOfflineSnapshot);
+  }, [tenantSlug, branchFacet]);
 
   const query = useQuery({
     queryKey: posKeys.catalog(tenant, branchFacet),
     enabled,
     staleTime: POS_STALE_CATALOG,
     refetchOnWindowFocus: false,
-    initialData: options?.initialData,
+    initialData: options?.initialData ?? offlineSnapshot ?? undefined,
     queryFn: ({ signal }) => getPosRegisterCatalog(tenantSlug!, { signal }),
   });
 
@@ -46,12 +63,23 @@ export function usePosCatalog(
 
   const data = query.data;
 
+  useEffect(() => {
+    if (tenantSlug && branchFacet && data) {
+      void saveCatalogSnapshot(tenantSlug, branchFacet, data);
+    }
+  }, [tenantSlug, branchFacet, data]);
+
+  const catalogSource = data ?? offlineSnapshot;
+
   const view = useMemo(() => {
-    if (!tenantSlug || isError || !data) {
+    if (!tenantSlug || !catalogSource) {
       return EMPTY_POS_CATALOG_VIEW;
     }
-    return mapPosCatalogView(data);
-  }, [tenantSlug, isError, data]);
+    if (isError && !offlineSnapshot) {
+      return EMPTY_POS_CATALOG_VIEW;
+    }
+    return mapPosCatalogView(catalogSource);
+  }, [tenantSlug, isError, catalogSource, offlineSnapshot]);
 
   return {
     data,

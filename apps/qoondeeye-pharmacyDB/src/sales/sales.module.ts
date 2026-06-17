@@ -3,6 +3,7 @@ import { AccountingModule } from '../accounting/accounting.module';
 import { CustomersModule } from '../customers/customers.module';
 import { InventoryModule } from '../inventory/inventory.module';
 import { PermissionGuard } from '../common/security/permission.guard';
+import { PosApprovalsModule } from '../pos-approvals/pos-approvals.module';
 import { TenantModule } from '../tenant/tenant.module';
 import { UomsModule } from '../uoms/uoms.module';
 import { SalesController } from './sales.controller';
@@ -15,6 +16,7 @@ import { SalesService } from './sales.service';
     AccountingModule,
     UomsModule,
     CustomersModule,
+    PosApprovalsModule,
   ],
   controllers: [SalesController],
   providers: [SalesService, PermissionGuard],

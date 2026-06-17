@@ -32,10 +32,6 @@ export function getRateLimitConfig(): Record<RateLimitTier, TierLimitConfig> {
       limit: loginMax,
       ttlMs: loginTtlSec * 1000,
     },
-    pin: {
-      limit: envInt('RATE_LIMIT_PIN_PER_MIN', 10),
-      ttlMs: MS_PER_MINUTE,
-    },
     staff: {
       limit: envInt('RATE_LIMIT_STAFF_LOGIN_PER_MIN', 10),
       ttlMs: MS_PER_MINUTE,

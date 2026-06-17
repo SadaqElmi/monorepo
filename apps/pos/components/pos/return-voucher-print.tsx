@@ -118,7 +118,11 @@ export function ReturnVoucherPrint({
             </p>
           </div>
           <div className="flex justify-center overflow-hidden rounded border border-neutral-200 bg-white py-2">
-            <svg ref={svgRef} className="max-w-full" aria-label="Voucher barcode" />
+            <svg
+              ref={svgRef}
+              className="max-w-full"
+              aria-label="Voucher barcode"
+            />
           </div>
           <p className="text-center font-mono text-[10px] text-neutral-500">
             Scan token: {token}

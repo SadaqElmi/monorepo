@@ -3,6 +3,7 @@ import {
   Injectable,
   ServiceUnavailableException,
 } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 import { PrismaService } from '../prisma/prisma.service';
 import { TenantService } from '../tenant/tenant.service';
 import {
@@ -40,7 +41,82 @@ export class StaffService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly tenantService: TenantService,
+    _config: ConfigService,
   ) {}
+
+  private resolvePhysicalSchema(_schemaName: string): string {
+    return 'public';
+  }
+
+  /** Run raw SQL against an explicit tenant (not the request X-Tenant header). */
+  private queryRawUnsafeForTenant<T>(
+    schemaName: string,
+    query: string,
+    ...values: unknown[]
+  ): Promise<T> {
+    return this.prisma.withTenantSchema(schemaName, (tx) =>
+      tx.$queryRawUnsafe<T>(query, ...values),
+    );
+  }
+
+  /** Columns that link ERP/POS rows to a staff user (users table excluded). */
+  private static readonly STAFF_ACTIVITY_USER_COLUMNS = [
+    'staff_user_id',
+    'actor_user_id',
+    'user_id',
+    'credit_override_manager_id',
+    'created_by',
+    'reversed_by',
+  ] as const;
+
+  /**
+   * Staff with POS, sales, audit, or other tenant records cannot be moved — only
+   * unused accounts (no linked activity outside `users`) may transfer.
+   */
+  private async assertStaffHasNoSourceTenantActivity(
+    sourceSchema: string,
+    userId: string,
+  ): Promise<void> {
+    const physicalSchema = this.resolvePhysicalSchema(sourceSchema);
+    const columns = await this.queryRawUnsafeForTenant<
+      { table_name: string; column_name: string }[]
+    >(
+      sourceSchema,
+      `
+      SELECT table_name, column_name
+      FROM information_schema.columns
+      WHERE table_schema = $1
+        AND column_name = ANY($2::text[])
+        AND table_name NOT IN ('users', 'User')
+      ORDER BY table_name, column_name
+      `,
+      physicalSchema,
+      [...StaffService.STAFF_ACTIVITY_USER_COLUMNS],
+    );
+
+    if (!columns.length) {
+      return;
+    }
+
+    const existsChecks = columns
+      .map(
+        (col) =>
+          `EXISTS (SELECT 1 FROM "${col.table_name.replace(/"/g, '""')}" WHERE "${col.column_name.replace(/"/g, '""')}" = $1::uuid)`,
+      )
+      .join(' OR ');
+
+    const [row] = await this.queryRawUnsafeForTenant<{ blocked: boolean }[]>(
+      sourceSchema,
+      `SELECT (${existsChecks}) AS blocked`,
+      userId,
+    );
+
+    if (row?.blocked) {
+      throw new BadRequestException(
+        `Cannot move this staff member to another pharmacy because they have activity in "${sourceSchema}". Create a new account in the target pharmacy instead.`,
+      );
+    }
+  }
 
   private async ensureStaffTenantSchema(schemaName: string): Promise<void> {
     await this.tenantService.applyTenantSchemaPatches(schemaName);
@@ -49,15 +125,20 @@ export class StaffService {
   private async resolveTenantUserTables(
     schemaName: string,
   ): Promise<StaffTenantUserTableMeta> {
-    const [schemaRow] = await this.prisma.queryRawUnsafe<{ ok: boolean }[]>(
-      `
-      SELECT EXISTS(
-        SELECT 1
-        FROM information_schema.schemata
-        WHERE schema_name = $1
-      ) as ok
-      `,
+    const physicalSchema = this.resolvePhysicalSchema(schemaName);
+    const [schemaRow] = await this.prisma.withTenantSchema(
       schemaName,
+      (tx) =>
+        tx.$queryRawUnsafe<{ ok: boolean }[]>(
+          `
+          SELECT EXISTS(
+            SELECT 1
+            FROM information_schema.schemata
+            WHERE schema_name = $1
+          ) as ok
+          `,
+          physicalSchema,
+        ),
     );
     if (!schemaRow?.ok) {
       throw new ServiceUnavailableException(
@@ -65,43 +146,47 @@ export class StaffService {
       );
     }
 
-    const [userRow] = await this.prisma.queryRawUnsafe<
-      { user_table: string | null; role_table: string | null }[]
-    >(
-      `
-      SELECT
-        CASE
-          WHEN EXISTS (
-            SELECT 1
-            FROM information_schema.tables
-            WHERE table_schema = $1
-              AND table_name = 'users'
-          ) THEN 'users'
-          WHEN EXISTS (
-            SELECT 1
-            FROM information_schema.tables
-            WHERE table_schema = $1
-              AND table_name = 'User'
-          ) THEN '"User"'
-          ELSE NULL
-        END AS user_table,
-        CASE
-          WHEN EXISTS (
-            SELECT 1
-            FROM information_schema.tables
-            WHERE table_schema = $1
-              AND table_name = 'roles'
-          ) THEN 'roles'
-          WHEN EXISTS (
-            SELECT 1
-            FROM information_schema.tables
-            WHERE table_schema = $1
-              AND table_name = 'Role'
-          ) THEN '"Role"'
-          ELSE NULL
-        END AS role_table
-      `,
+    const [userRow] = await this.prisma.withTenantSchema(
       schemaName,
+      (tx) =>
+        tx.$queryRawUnsafe<
+          { user_table: string | null; role_table: string | null }[]
+        >(
+          `
+          SELECT
+            CASE
+              WHEN EXISTS (
+                SELECT 1
+                FROM information_schema.tables
+                WHERE table_schema = $1
+                  AND table_name = 'users'
+              ) THEN 'users'
+              WHEN EXISTS (
+                SELECT 1
+                FROM information_schema.tables
+                WHERE table_schema = $1
+                  AND table_name = 'User'
+              ) THEN '"User"'
+              ELSE NULL
+            END AS user_table,
+            CASE
+              WHEN EXISTS (
+                SELECT 1
+                FROM information_schema.tables
+                WHERE table_schema = $1
+                  AND table_name = 'roles'
+              ) THEN 'roles'
+              WHEN EXISTS (
+                SELECT 1
+                FROM information_schema.tables
+                WHERE table_schema = $1
+                  AND table_name = 'Role'
+              ) THEN '"Role"'
+              ELSE NULL
+            END AS role_table
+          `,
+          physicalSchema,
+        ),
     );
 
     const userTable = userRow?.user_table ?? null;
@@ -113,19 +198,21 @@ export class StaffService {
 
     const getHasColumn = async (tableName: string, columnName: string) => {
       const clean = tableName.replace(/"/g, '');
-      const [row] = await this.prisma.queryRawUnsafe<{ ok: boolean }[]>(
-        `
-        SELECT EXISTS(
-          SELECT 1
-          FROM information_schema.columns
-          WHERE table_schema = $1
-            AND table_name = $2
-            AND column_name = $3
-        ) as ok
-        `,
-        schemaName,
-        clean,
-        columnName,
+      const [row] = await this.prisma.withTenantSchema(schemaName, (tx) =>
+        tx.$queryRawUnsafe<{ ok: boolean }[]>(
+          `
+          SELECT EXISTS(
+            SELECT 1
+            FROM information_schema.columns
+            WHERE table_schema = $1
+              AND table_name = $2
+              AND column_name = $3
+          ) as ok
+          `,
+          physicalSchema,
+          clean,
+          columnName,
+        ),
       );
       return Boolean(row?.ok);
     };
@@ -172,13 +259,13 @@ export class StaffService {
     excludeUserId?: string,
   ) {
     const userTable = meta.userTable.startsWith('"')
-      ? `"${schemaName}".${meta.userTable}`
-      : `"${schemaName}".${meta.userTable}`;
+      ? `${meta.userTable}`
+      : `${meta.userTable}`;
     const roleTable =
       meta.roleTable &&
       (meta.roleTable.startsWith('"')
-        ? `"${schemaName}".${meta.roleTable}`
-        : `"${schemaName}".${meta.roleTable}`);
+        ? `${meta.roleTable}`
+        : `${meta.roleTable}`);
 
     const posRoles = `('cashier', 'manager', 'admin', 'pharmacist')`;
     let sql: string;
@@ -202,9 +289,9 @@ export class StaffService {
          AND ($1::uuid IS NULL OR u.id <> $1::uuid)`;
     }
 
-    const rows = await this.prisma.queryRawUnsafe<
+    const rows = await this.queryRawUnsafeForTenant<
       { id: string; pin_hash: string }[]
-    >(sql, excludeUserId ?? null);
+    >(schemaName, sql, excludeUserId ?? null);
     const bcrypt = await import('bcrypt');
     for (const row of rows) {
       if (await bcrypt.compare(plainPin, row.pin_hash)) {
@@ -219,13 +306,13 @@ export class StaffService {
     await this.ensureStaffTenantSchema(schemaName);
     const meta = await this.resolveTenantUserTables(schemaName);
     const userTable = meta.userTable.startsWith('"')
-      ? `"${schemaName}".${meta.userTable}`
-      : `"${schemaName}".${meta.userTable}`;
+      ? `${meta.userTable}`
+      : `${meta.userTable}`;
     const roleTable =
       meta.roleTable &&
       (meta.roleTable.startsWith('"')
-        ? `"${schemaName}".${meta.roleTable}`
-        : `"${schemaName}".${meta.roleTable}`);
+        ? `${meta.roleTable}`
+        : `${meta.roleTable}`);
 
     const createdAt = meta.createdAtColumn
       ? `u.${meta.createdAtColumn} AS created_at`
@@ -233,7 +320,8 @@ export class StaffService {
 
     // Prefer role join if role_id + roles table exists; otherwise use text role column if present.
     if (meta.hasRoleId && roleTable) {
-      return this.prisma.queryRawUnsafe(
+      return this.queryRawUnsafeForTenant(
+        schemaName,
         `SELECT u.id,
                 u.name,
                 u.staff_id,
@@ -248,7 +336,8 @@ export class StaffService {
     }
 
     if (meta.hasRoleText) {
-      return this.prisma.queryRawUnsafe(
+      return this.queryRawUnsafeForTenant(
+        schemaName,
         `SELECT u.id,
                 u.name,
                 u.staff_id,
@@ -261,7 +350,8 @@ export class StaffService {
       );
     }
 
-    return this.prisma.queryRawUnsafe(
+    return this.queryRawUnsafeForTenant(
+      schemaName,
       `SELECT u.id,
               u.name,
               u.staff_id,
@@ -278,13 +368,13 @@ export class StaffService {
     await this.ensureStaffTenantSchema(schemaName);
     const meta = await this.resolveTenantUserTables(schemaName);
     const userTable = meta.userTable.startsWith('"')
-      ? `"${schemaName}".${meta.userTable}`
-      : `"${schemaName}".${meta.userTable}`;
+      ? `${meta.userTable}`
+      : `${meta.userTable}`;
     const roleTable =
       meta.roleTable &&
       (meta.roleTable.startsWith('"')
-        ? `"${schemaName}".${meta.roleTable}`
-        : `"${schemaName}".${meta.roleTable}`);
+        ? `${meta.roleTable}`
+        : `${meta.roleTable}`);
 
     const createdAt = meta.createdAtColumn
       ? `u.${meta.createdAtColumn} AS created_at`
@@ -292,7 +382,8 @@ export class StaffService {
 
     let row: StaffTenantUserRow | undefined;
     if (meta.hasRoleId && roleTable) {
-      [row] = await this.prisma.queryRawUnsafe<StaffTenantUserRow[]>(
+      [row] = await this.queryRawUnsafeForTenant<StaffTenantUserRow[]>(
+        schemaName,
         `SELECT u.id,
                 u.name,
                 u.staff_id,
@@ -306,7 +397,8 @@ export class StaffService {
         id,
       );
     } else if (meta.hasRoleText) {
-      [row] = await this.prisma.queryRawUnsafe<StaffTenantUserRow[]>(
+      [row] = await this.queryRawUnsafeForTenant<StaffTenantUserRow[]>(
+        schemaName,
         `SELECT u.id,
                 u.name,
                 u.staff_id,
@@ -319,7 +411,8 @@ export class StaffService {
         id,
       );
     } else {
-      [row] = await this.prisma.queryRawUnsafe<StaffTenantUserRow[]>(
+      [row] = await this.queryRawUnsafeForTenant<StaffTenantUserRow[]>(
+        schemaName,
         `SELECT u.id,
                 u.name,
                 u.staff_id,
@@ -358,13 +451,13 @@ export class StaffService {
       );
     }
     const userTable = meta.userTable.startsWith('"')
-      ? `"${schemaName}".${meta.userTable}`
-      : `"${schemaName}".${meta.userTable}`;
+      ? `${meta.userTable}`
+      : `${meta.userTable}`;
     const roleTable =
       meta.roleTable &&
       (meta.roleTable.startsWith('"')
-        ? `"${schemaName}".${meta.roleTable}`
-        : `"${schemaName}".${meta.roleTable}`);
+        ? `${meta.roleTable}`
+        : `${meta.roleTable}`);
 
     const hashed =
       dto.password && dto.password.length > 0
@@ -433,7 +526,8 @@ export class StaffService {
     if (meta.hasRoleId && roleTable) {
       let roleId: string | null = null;
       if (roleName) {
-        const [r] = await this.prisma.queryRawUnsafe<{ id: string }[]>(
+        const [r] = await this.queryRawUnsafeForTenant<{ id: string }[]>(
+          schemaName,
           `SELECT id FROM ${roleTable} WHERE lower(name) = lower($1::text)`,
           roleName,
         );
@@ -446,7 +540,8 @@ export class StaffService {
       }
 
       if (meta.hasPinHash) {
-        [inserted] = await this.prisma.queryRawUnsafe<StaffIdOnlyRow[]>(
+        [inserted] = await this.queryRawUnsafeForTenant<StaffIdOnlyRow[]>(
+          schemaName,
           `INSERT INTO ${userTable} (name, staff_id, email, password, role_id, pin_hash, branch_id)
            VALUES ($1, $2, $3, $4, $5::uuid, $6, $7::uuid)
            RETURNING id`,
@@ -459,7 +554,8 @@ export class StaffService {
           targetBranchId,
         );
       } else {
-        [inserted] = await this.prisma.queryRawUnsafe<StaffIdOnlyRow[]>(
+        [inserted] = await this.queryRawUnsafeForTenant<StaffIdOnlyRow[]>(
+          schemaName,
           `INSERT INTO ${userTable} (name, staff_id, email, password, role_id, branch_id)
            VALUES ($1, $2, $3, $4, $5::uuid, $6::uuid)
            RETURNING id`,
@@ -473,7 +569,8 @@ export class StaffService {
       }
     } else if (meta.hasRoleText) {
       if (meta.hasPinHash) {
-        [inserted] = await this.prisma.queryRawUnsafe<StaffIdOnlyRow[]>(
+        [inserted] = await this.queryRawUnsafeForTenant<StaffIdOnlyRow[]>(
+          schemaName,
           `INSERT INTO ${userTable} (name, staff_id, email, password, role, pin_hash, branch_id)
            VALUES ($1, $2, $3, $4, $5, $6, $7::uuid)
            RETURNING id`,
@@ -486,7 +583,8 @@ export class StaffService {
           targetBranchId,
         );
       } else {
-        [inserted] = await this.prisma.queryRawUnsafe<StaffIdOnlyRow[]>(
+        [inserted] = await this.queryRawUnsafeForTenant<StaffIdOnlyRow[]>(
+          schemaName,
           `INSERT INTO ${userTable} (name, staff_id, email, password, role, branch_id)
            VALUES ($1, $2, $3, $4, $5, $6::uuid)
            RETURNING id`,
@@ -500,7 +598,8 @@ export class StaffService {
       }
     } else {
       if (meta.hasPinHash) {
-        [inserted] = await this.prisma.queryRawUnsafe<StaffIdOnlyRow[]>(
+        [inserted] = await this.queryRawUnsafeForTenant<StaffIdOnlyRow[]>(
+          schemaName,
           `INSERT INTO ${userTable} (name, staff_id, email, password, pin_hash, branch_id)
            VALUES ($1, $2, $3, $4, $5, $6::uuid)
            RETURNING id`,
@@ -512,7 +611,8 @@ export class StaffService {
           targetBranchId,
         );
       } else {
-        [inserted] = await this.prisma.queryRawUnsafe<StaffIdOnlyRow[]>(
+        [inserted] = await this.queryRawUnsafeForTenant<StaffIdOnlyRow[]>(
+          schemaName,
           `INSERT INTO ${userTable} (name, staff_id, email, password, branch_id)
            VALUES ($1, $2, $3, $4, $5::uuid)
            RETURNING id`,
@@ -556,13 +656,13 @@ export class StaffService {
       );
     }
     const userTable = meta.userTable.startsWith('"')
-      ? `"${schemaName}".${meta.userTable}`
-      : `"${schemaName}".${meta.userTable}`;
+      ? `${meta.userTable}`
+      : `${meta.userTable}`;
     const roleTable =
       meta.roleTable &&
       (meta.roleTable.startsWith('"')
-        ? `"${schemaName}".${meta.roleTable}`
-        : `"${schemaName}".${meta.roleTable}`);
+        ? `${meta.roleTable}`
+        : `${meta.roleTable}`);
 
     const roleName = dto.role?.trim() ? dto.role.trim() : null;
     const staffId = dto.staffId?.trim() || null;
@@ -588,9 +688,10 @@ export class StaffService {
       );
     }
 
-    const [currentUser] = await this.prisma.queryRawUnsafe<
+    const [currentUser] = await this.queryRawUnsafeForTenant<
       { role_name: string | null; branch_id: string | null }[]
     >(
+      schemaName,
       `SELECT
          ${
            meta.hasRoleId && roleTable
@@ -611,6 +712,24 @@ export class StaffService {
     );
     if (!currentUser) {
       return null;
+    }
+    if (dto.email !== undefined) {
+      const nextEmail = dto.email.trim() || null;
+      if (nextEmail) {
+        const [existingEmail] = await this.queryRawUnsafeForTenant<
+          { id: string }[]
+        >(
+          schemaName,
+          `SELECT id FROM ${userTable} WHERE lower(email) = lower($1::text) AND id <> $2::uuid LIMIT 1`,
+          nextEmail,
+          id,
+        );
+        if (existingEmail) {
+          throw new BadRequestException(
+            `Email "${nextEmail}" is already used in this pharmacy`,
+          );
+        }
+      }
     }
     const nextRoleName =
       dto.role !== undefined ? roleName : currentUser.role_name;
@@ -636,7 +755,8 @@ export class StaffService {
         if (!roleName) {
           roleId = null;
         } else {
-          const [r] = await this.prisma.queryRawUnsafe<{ id: string }[]>(
+          const [r] = await this.queryRawUnsafeForTenant<{ id: string }[]>(
+            schemaName,
             `SELECT id FROM ${roleTable} WHERE lower(name) = lower($1::text)`,
             roleName,
           );
@@ -649,7 +769,8 @@ export class StaffService {
         }
       }
 
-      [updated] = await this.prisma.queryRawUnsafe<StaffIdOnlyRow[]>(
+      [updated] = await this.queryRawUnsafeForTenant<StaffIdOnlyRow[]>(
+        schemaName,
         `UPDATE ${userTable}
          SET name = COALESCE($2, name),
              staff_id = COALESCE($3, staff_id),
@@ -681,7 +802,8 @@ export class StaffService {
         dto.branchId ?? null,
       );
     } else if (meta.hasRoleText) {
-      [updated] = await this.prisma.queryRawUnsafe<StaffIdOnlyRow[]>(
+      [updated] = await this.queryRawUnsafeForTenant<StaffIdOnlyRow[]>(
+        schemaName,
         `UPDATE ${userTable}
          SET name = COALESCE($2, name),
              staff_id = COALESCE($3, staff_id),
@@ -704,7 +826,8 @@ export class StaffService {
         dto.branchId ?? null,
       );
     } else {
-      [updated] = await this.prisma.queryRawUnsafe<StaffIdOnlyRow[]>(
+      [updated] = await this.queryRawUnsafeForTenant<StaffIdOnlyRow[]>(
+        schemaName,
         `UPDATE ${userTable}
          SET name = COALESCE($2, name),
              staff_id = COALESCE($3, staff_id),
@@ -733,18 +856,19 @@ export class StaffService {
       const pinPlain = dto.pin.trim();
       let roleLower = '';
       if (meta.hasRoleId && roleTable) {
-        const [row] = await this.prisma.queryRawUnsafe<
+        const [row] = await this.queryRawUnsafeForTenant<
           { name: string | null }[]
         >(
+          schemaName,
           `SELECT r.name AS name FROM ${userTable} u
            LEFT JOIN ${roleTable} r ON u.role_id = r.id WHERE u.id = $1`,
           id,
         );
         roleLower = (row?.name ?? '').toLowerCase();
       } else if (meta.hasRoleText) {
-        const [row] = await this.prisma.queryRawUnsafe<
+        const [row] = await this.queryRawUnsafeForTenant<
           { role: string | null }[]
-        >(`SELECT role FROM ${userTable} WHERE id = $1`, id);
+        >(schemaName, `SELECT role FROM ${userTable} WHERE id = $1`, id);
         roleLower = (row?.role ?? '').toLowerCase();
       }
 
@@ -756,13 +880,15 @@ export class StaffService {
         }
         await this.assertPosPinUnique(schemaName, meta, pinPlain, id);
         const ph = await import('bcrypt').then((m) => m.hash(pinPlain, 10));
-        await this.prisma.queryRawUnsafe(
+        await this.queryRawUnsafeForTenant(
+          schemaName,
           `UPDATE ${userTable} SET pin_hash = $2 WHERE id = $1`,
           id,
           ph,
         );
       } else {
-        await this.prisma.queryRawUnsafe(
+        await this.queryRawUnsafeForTenant(
+          schemaName,
           `UPDATE ${userTable} SET pin_hash = NULL WHERE id = $1`,
           id,
         );
@@ -780,7 +906,8 @@ export class StaffService {
       if (this.canUsePosPin(nextRoleLower)) {
         await this.assertPosPinUnique(schemaName, meta, syncPin, id);
         const ph = await import('bcrypt').then((m) => m.hash(syncPin, 10));
-        await this.prisma.queryRawUnsafe(
+        await this.queryRawUnsafeForTenant(
+          schemaName,
           `UPDATE ${userTable} SET pin_hash = $2 WHERE id = $1`,
           id,
           ph,
@@ -831,15 +958,15 @@ export class StaffService {
     }
 
     const sourceUserTable = sourceMeta.userTable.startsWith('"')
-      ? `"${sourceSchema}".${sourceMeta.userTable}`
-      : `"${sourceSchema}".${sourceMeta.userTable}`;
+      ? `${sourceMeta.userTable}`
+      : `${sourceMeta.userTable}`;
     const sourceRoleTable =
       sourceMeta.roleTable &&
       (sourceMeta.roleTable.startsWith('"')
-        ? `"${sourceSchema}".${sourceMeta.roleTable}`
-        : `"${sourceSchema}".${sourceMeta.roleTable}`);
+        ? `${sourceMeta.roleTable}`
+        : `${sourceMeta.roleTable}`);
 
-    const [sourceUser] = await this.prisma.queryRawUnsafe<
+    const [sourceUser] = await this.queryRawUnsafeForTenant<
       {
         name: string | null;
         staff_id: string | null;
@@ -850,6 +977,7 @@ export class StaffService {
         branch_id: string | null;
       }[]
     >(
+      sourceSchema,
       `SELECT u.name,
               u.staff_id,
               u.email,
@@ -876,6 +1004,8 @@ export class StaffService {
       throw new BadRequestException('Staff member not found in source pharmacy');
     }
 
+    await this.assertStaffHasNoSourceTenantActivity(sourceSchema, id);
+
     const roleName =
       dto.role !== undefined
         ? dto.role.trim() || null
@@ -893,9 +1023,10 @@ export class StaffService {
 
     if (email) {
       const targetUserTable = targetMeta.userTable.startsWith('"')
-        ? `"${targetSchema}".${targetMeta.userTable}`
-        : `"${targetSchema}".${targetMeta.userTable}`;
-      const [existing] = await this.prisma.queryRawUnsafe<{ id: string }[]>(
+        ? `${targetMeta.userTable}`
+        : `${targetMeta.userTable}`;
+      const [existing] = await this.queryRawUnsafeForTenant<{ id: string }[]>(
+        targetSchema,
         `SELECT id FROM ${targetUserTable} WHERE lower(email) = lower($1::text) LIMIT 1`,
         email,
       );
@@ -918,8 +1049,9 @@ export class StaffService {
       );
     }
 
-    const [defaultBranch] = await this.prisma.queryRawUnsafe<{ id: string }[]>(
-      `SELECT id FROM "${targetSchema}"."branches" ORDER BY name LIMIT 1`,
+    const [defaultBranch] = await this.queryRawUnsafeForTenant<{ id: string }[]>(
+      targetSchema,
+      `SELECT id FROM "branches" ORDER BY name LIMIT 1`,
     );
     const targetBranchId =
       dto.branchId?.trim() ||
@@ -931,13 +1063,13 @@ export class StaffService {
     }
 
     const targetUserTable = targetMeta.userTable.startsWith('"')
-      ? `"${targetSchema}".${targetMeta.userTable}`
-      : `"${targetSchema}".${targetMeta.userTable}`;
+      ? `${targetMeta.userTable}`
+      : `${targetMeta.userTable}`;
     const targetRoleTable =
       targetMeta.roleTable &&
       (targetMeta.roleTable.startsWith('"')
-        ? `"${targetSchema}".${targetMeta.roleTable}`
-        : `"${targetSchema}".${targetMeta.roleTable}`);
+        ? `${targetMeta.roleTable}`
+        : `${targetMeta.roleTable}`);
 
     let pinHash = sourceMeta.hasPinHash ? sourceUser.pin_hash : null;
     if (targetMeta.hasPinHash && dto.pin !== undefined) {
@@ -970,7 +1102,8 @@ export class StaffService {
     if (targetMeta.hasRoleId && targetRoleTable) {
       let roleId: string | null = null;
       if (roleName) {
-        const [r] = await this.prisma.queryRawUnsafe<{ id: string }[]>(
+        const [r] = await this.queryRawUnsafeForTenant<{ id: string }[]>(
+          targetSchema,
           `SELECT id FROM ${targetRoleTable} WHERE lower(name) = lower($1::text)`,
           roleName,
         );
@@ -983,7 +1116,8 @@ export class StaffService {
       }
 
       if (targetMeta.hasPinHash) {
-        [inserted] = await this.prisma.queryRawUnsafe<StaffIdOnlyRow[]>(
+        [inserted] = await this.queryRawUnsafeForTenant<StaffIdOnlyRow[]>(
+          targetSchema,
           `INSERT INTO ${targetUserTable} (name, staff_id, email, password, role_id, pin_hash, branch_id)
            VALUES ($1, $2, $3, $4, $5::uuid, $6, $7::uuid)
            RETURNING id`,
@@ -996,7 +1130,8 @@ export class StaffService {
           targetBranchId,
         );
       } else {
-        [inserted] = await this.prisma.queryRawUnsafe<StaffIdOnlyRow[]>(
+        [inserted] = await this.queryRawUnsafeForTenant<StaffIdOnlyRow[]>(
+          targetSchema,
           `INSERT INTO ${targetUserTable} (name, staff_id, email, password, role_id, branch_id)
            VALUES ($1, $2, $3, $4, $5::uuid, $6::uuid)
            RETURNING id`,
@@ -1010,7 +1145,8 @@ export class StaffService {
       }
     } else if (targetMeta.hasRoleText) {
       if (targetMeta.hasPinHash) {
-        [inserted] = await this.prisma.queryRawUnsafe<StaffIdOnlyRow[]>(
+        [inserted] = await this.queryRawUnsafeForTenant<StaffIdOnlyRow[]>(
+          targetSchema,
           `INSERT INTO ${targetUserTable} (name, staff_id, email, password, role, pin_hash, branch_id)
            VALUES ($1, $2, $3, $4, $5, $6, $7::uuid)
            RETURNING id`,
@@ -1023,7 +1159,8 @@ export class StaffService {
           targetBranchId,
         );
       } else {
-        [inserted] = await this.prisma.queryRawUnsafe<StaffIdOnlyRow[]>(
+        [inserted] = await this.queryRawUnsafeForTenant<StaffIdOnlyRow[]>(
+          targetSchema,
           `INSERT INTO ${targetUserTable} (name, staff_id, email, password, role, branch_id)
            VALUES ($1, $2, $3, $4, $5, $6::uuid)
            RETURNING id`,
@@ -1036,7 +1173,8 @@ export class StaffService {
         );
       }
     } else {
-      [inserted] = await this.prisma.queryRawUnsafe<StaffIdOnlyRow[]>(
+      [inserted] = await this.queryRawUnsafeForTenant<StaffIdOnlyRow[]>(
+        targetSchema,
         `INSERT INTO ${targetUserTable} (name, staff_id, email, password, branch_id)
          VALUES ($1, $2, $3, $4, $5::uuid)
          RETURNING id`,
@@ -1052,7 +1190,8 @@ export class StaffService {
       throw new BadRequestException('Failed to create staff in target pharmacy');
     }
 
-    await this.prisma.queryRawUnsafe(
+    await this.queryRawUnsafeForTenant(
+      sourceSchema,
       `DELETE FROM ${sourceUserTable} WHERE id = $1`,
       id,
     );
@@ -1064,9 +1203,10 @@ export class StaffService {
     await this.ensureStaffTenantSchema(schemaName);
     const meta = await this.resolveTenantUserTables(schemaName);
     const userTable = meta.userTable.startsWith('"')
-      ? `"${schemaName}".${meta.userTable}`
-      : `"${schemaName}".${meta.userTable}`;
-    await this.prisma.queryRawUnsafe(
+      ? `${meta.userTable}`
+      : `${meta.userTable}`;
+    await this.queryRawUnsafeForTenant(
+      schemaName,
       `DELETE FROM ${userTable} WHERE id = $1`,
       id,
     );

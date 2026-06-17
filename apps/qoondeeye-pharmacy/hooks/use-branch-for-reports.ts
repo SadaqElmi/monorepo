@@ -41,11 +41,31 @@ export function getReportBranchSnapshot(): ReportBranchScope {
   return computeReportBranch();
 }
 
-function computeReportBranch(): {
+type ReportBranchState = {
   branchId: string | undefined;
   aggregateAll: boolean;
   branchName?: string;
-} {
+};
+
+function reportBranchStateEqual(
+  a: ReportBranchState,
+  b: ReportBranchState,
+): boolean {
+  return (
+    a.branchId === b.branchId &&
+    a.aggregateAll === b.aggregateAll &&
+    a.branchName === b.branchName
+  );
+}
+
+function setReportBranchStateIfChanged(
+  setState: React.Dispatch<React.SetStateAction<ReportBranchState>>,
+  next: ReportBranchState,
+) {
+  setState((prev) => (reportBranchStateEqual(prev, next) ? prev : next));
+}
+
+function computeReportBranch(): ReportBranchState {
   if (typeof window === "undefined") {
     return { branchId: undefined, aggregateAll: false, branchName: undefined };
   }
@@ -100,7 +120,7 @@ export function useReportBranchQuery(): {
   // SSR seeds `aggregateAll: false` because `window` is undefined; re-sync after
   // hydration so "All branches" (localStorage `branchId === "all"`) is reflected.
   React.useEffect(() => {
-    setState(computeReportBranch());
+    setReportBranchStateIfChanged(setState, computeReportBranch());
   }, []);
 
   React.useEffect(() => {
@@ -109,7 +129,7 @@ export function useReportBranchQuery(): {
         | { branchId?: string | null; branchName?: string }
         | undefined;
       if (detail && "branchId" in detail && detail.branchId === null) {
-        setState(computeReportBranch());
+        setReportBranchStateIfChanged(setState, computeReportBranch());
         return;
       }
       const id = detail?.branchId;
@@ -120,21 +140,21 @@ export function useReportBranchQuery(): {
           trimmed.toLowerCase() === "all" &&
           hasGlobalBranchAccess(user?.role, user?.canViewAllBranches)
         ) {
-          setState({
+          setReportBranchStateIfChanged(setState, {
             branchId: undefined,
             aggregateAll: true,
             branchName: "All allowed branches",
           });
           return;
         }
-        setState({
+        setReportBranchStateIfChanged(setState, {
           branchId: trimmed || undefined,
           aggregateAll: false,
           branchName: detail?.branchName?.trim() || readBranchNameFromStorage(),
         });
         return;
       }
-      setState(computeReportBranch());
+      setReportBranchStateIfChanged(setState, computeReportBranch());
     };
     window.addEventListener("activeBranchChanged", handler);
     return () => window.removeEventListener("activeBranchChanged", handler);

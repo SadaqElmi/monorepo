@@ -22,7 +22,7 @@ export const ERP_NAV_MODULES: ErpNavModule[] = [
   {
     id: "pos",
     label: "POS",
-    children: [{ label: "Point of sale", href: "/pos" }],
+    children: [{ label: "Open POS app", href: "/pos" }],
   },
   {
     id: "customers",
@@ -62,7 +62,11 @@ export const ERP_NAV_MODULES: ErpNavModule[] = [
         label: "Payments",
         href: "/vendors/supplier-payments",
       },
-      { label: "Employee Expenses", href: "/vendors/expenses", permission: "view_expenses" },
+      {
+        label: "Employee Expenses",
+        href: "/vendors/expenses",
+        permission: "view_expenses",
+      },
     ],
   },
   {
@@ -71,8 +75,16 @@ export const ERP_NAV_MODULES: ErpNavModule[] = [
     children: [
       { label: "Items", href: "/items" },
       { label: "Items by location", href: "/items-locations" },
-      { label: "Products", href: "/inventory/products", permission: "view_products" },
-      { label: "Import products", href: "/inventory/products/import", permission: "import_products" },
+      {
+        label: "Products",
+        href: "/inventory/products",
+        permission: "view_products",
+      },
+      {
+        label: "Import products",
+        href: "/inventory/products/import",
+        permission: "import_products",
+      },
       {
         label: "Opening stock import",
         href: "/inventory/opening-stock/import",
@@ -81,10 +93,26 @@ export const ERP_NAV_MODULES: ErpNavModule[] = [
       { label: "Import history", href: "/inventory/products/import/history" },
       { label: "Inventory history", href: "/inventory/history" },
       { label: "Batches", href: "/inventory/batches" },
-      { label: "Categories", href: "/inventory/categories", permission: "view_products" },
-      { label: "Branches", href: "/inventory/branches", permission: "edit_branch" },
-      { label: "Stock transfers", href: "/inventory/transfers", permission: "transfer_inventory" },
-      { label: "Incoming transfers", href: "/inventory/transfers/incoming", permission: "transfer_inventory" },
+      {
+        label: "Categories",
+        href: "/inventory/categories",
+        permission: "view_products",
+      },
+      {
+        label: "Branches",
+        href: "/inventory/branches",
+        permission: "edit_branch",
+      },
+      {
+        label: "Stock transfers",
+        href: "/inventory/transfers",
+        permission: "transfer_inventory",
+      },
+      {
+        label: "Incoming transfers",
+        href: "/inventory/transfers/incoming",
+        permission: "transfer_inventory",
+      },
     ],
   },
   {
@@ -106,7 +134,11 @@ export const ERP_NAV_MODULES: ErpNavModule[] = [
         href: "/sales/price-groups",
         permission: "manage_price_groups",
       },
-      { label: "Units of Measure", href: "/sales/uoms", permission: "edit_product" },
+      {
+        label: "Units of Measure",
+        href: "/sales/uoms",
+        permission: "edit_product",
+      },
       {
         label: "Transaction Register",
         href: "/sales/transaction-register",
@@ -119,8 +151,16 @@ export const ERP_NAV_MODULES: ErpNavModule[] = [
     label: "Accounting",
     children: [
       { label: "Dashboard", href: "/accounting", permission: "view_reports" },
-      { label: "Control Center", href: "/accounting/control-center", permission: "manage_accounting_configuration" },
-      { label: "Reconciliation", href: "/reconciliation", permission: "view_reports" },
+      {
+        label: "Control Center",
+        href: "/accounting/control-center",
+        permission: "manage_accounting_configuration",
+      },
+      {
+        label: "Reconciliation",
+        href: "/reconciliation",
+        permission: "view_reports",
+      },
     ],
   },
 
@@ -136,18 +176,44 @@ export const ERP_NAV_MODULES: ErpNavModule[] = [
     ],
   },
   {
-    id: "configuration",
-    label: "Configuration",
+    id: "users",
+    label: "Users",
     children: [
       {
         label: "Staff & users",
-        href: "/configuration/staff",
+        href: "/users/staff",
         permission: "view_staff",
       },
       {
         label: "Roles",
-        href: "/configuration/roles",
+        href: "/users/roles",
         permission: "view_roles",
+      },
+    ],
+  },
+  {
+    id: "configuration",
+    label: "Configuration",
+    children: [
+      {
+        label: "POS Configuration",
+        href: "/configuration/pos-terminals",
+        permission: "view_pos_terminals",
+      },
+      {
+        label: "POS Operations",
+        href: "/configuration/pos-center",
+        permission: "view_pos_terminals",
+      },
+      {
+        label: "POS Approvals",
+        href: "/operations/pos-approvals",
+        permission: "view_pos_terminals",
+      },
+      {
+        label: "POS Shifts",
+        href: "/configuration/pos-shifts",
+        permission: "view_pos_terminals",
       },
     ],
   },
@@ -172,7 +238,9 @@ export function filterErpNavModulesForUser(
     ? ERP_NAV_MODULES.filter((m) => m.id === "pos")
     : ERP_NAV_MODULES;
 
-  const isAdmin = filter.role?.toLowerCase() === "admin";
+  const role = filter.role?.toLowerCase();
+  const isAdmin = role === "admin";
+  const isManager = role === "manager";
   const perms = getEffectivePermissions(filter.permissions ?? []);
 
   return base
@@ -180,7 +248,7 @@ export function filterErpNavModulesForUser(
       ...mod,
       children: mod.children.filter((c) => {
         if (!c.permission) return true;
-        if (isAdmin) return true;
+        if (isAdmin || isManager) return true;
         if (!perms.size) return false;
         return perms.has(c.permission);
       }),

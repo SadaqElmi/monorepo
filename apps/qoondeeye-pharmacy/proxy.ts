@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
 
 import { getAdminDashboardUrl } from "@/lib/admin-dashboard-url";
+import { getPosAppUrl } from "@/lib/pos-app-url";
 
 const AUTH_USER_COOKIE = "auth_user";
 const AUTH_TOKEN_KEY = "auth_token";
@@ -28,9 +29,9 @@ export function proxy(request: NextRequest) {
     return NextResponse.redirect(new URL("/login", request.url));
   }
 
-  // POS: client-side PIN gate; do not force redirect to /login
+  // Legacy /pos path — redirect to standalone POS app
   if (pathname === "/pos" || pathname.startsWith("/pos/")) {
-    return NextResponse.next();
+    return NextResponse.redirect(getPosAppUrl());
   }
 
   if (pathname === "/login" || pathname === "/system-login") {
@@ -42,7 +43,7 @@ export function proxy(request: NextRequest) {
       }
       if (payload?.userType === "tenant") {
         if (payload.role?.toLowerCase() === "cashier") {
-          return NextResponse.redirect(new URL("/pos", request.url));
+          return NextResponse.redirect(getPosAppUrl());
         }
         return NextResponse.redirect(new URL("/dashboard", request.url));
       }
@@ -110,7 +111,7 @@ export function proxy(request: NextRequest) {
 
   if (isTenantPath) {
     if (payload.userType === "tenant" && payload.role?.toLowerCase() === "cashier") {
-      return NextResponse.redirect(new URL("/pos", request.url));
+      return NextResponse.redirect(getPosAppUrl());
     }
     if (payload.userType !== "tenant" && payload.role === "super_admin") {
       return NextResponse.redirect(getAdminDashboardUrl("/admin"));

@@ -28,6 +28,7 @@ import { CreateSupplierPaymentDto } from './dto/create-supplier-payment.dto';
 import { CreateCustomerPaymentDto } from './dto/create-customer-payment.dto';
 import { SupplierPaymentsService } from './supplier-payments.service';
 import { CustomerPaymentsService } from './customer-payments.service';
+import { ChartOfAccountsSeedService } from './chart-of-accounts-seed.service';
 import { JournalBooksSeedService } from './journal-books-seed.service';
 import { FinancialReportsService } from './financial-reports.service';
 import { CreatePaymentTermDto } from './dto/create-payment-term.dto';
@@ -39,6 +40,11 @@ import { UpdateChartOfAccountDto } from './dto/update-chart-of-account.dto';
 import { ChartOfAccountsMergeService } from './chart-of-accounts-merge.service';
 import { BranchSecurityMetricsService } from './branch-security-metrics.service';
 import { AuditLogService } from './audit-log.service';
+import {
+  countAuditTrailRows,
+  enrichAuditTrailPosDeviceLabels,
+  listAuditTrailRows,
+} from './audit-trail-query.util';
 import { isGlobalBranchRole } from '../common/branch-scope/branch-scope.util';
 import { PermissionGuard } from '../common/security/permission.guard';
 import { RequirePermissions } from '../common/security/require-permissions.decorator';
@@ -146,6 +152,7 @@ export class AccountingController {
     private readonly journalService: JournalService,
     private readonly supplierPayments: SupplierPaymentsService,
     private readonly customerPayments: CustomerPaymentsService,
+    private readonly coaSeed: ChartOfAccountsSeedService,
     private readonly journalBooks: JournalBooksSeedService,
     private readonly financialReports: FinancialReportsService,
     private readonly chartOfAccountsMerge: ChartOfAccountsMergeService,
@@ -469,6 +476,7 @@ export class AccountingController {
     @Query('branchId') branchId?: string,
     @Query('limit') limit?: string,
     @Query('page') page?: string,
+    @Query('tableName') tableName?: string,
   ) {
     this.ensureTenant();
     assertAllowedBranches(req);
@@ -480,26 +488,21 @@ export class AccountingController {
       defaultLimit: 50,
       maxLimit: 500,
     });
+    const tableFilter = tableName?.trim() ? tableName.trim() : null;
+
+    const tenantId = this.tenantContext.getTenant()!.id;
+
     if (paged) {
       return this.prisma.withTenantSchema(schema, async (tx) => {
-        const [countRow] = await tx.$queryRawUnsafe<{ c: bigint }[]>(
-          `SELECT COUNT(*)::bigint AS c
-           FROM audit_logs
-           WHERE branch_id IS NULL OR branch_id = $1::uuid`,
+        const total = await countAuditTrailRows(tx, target, tableFilter);
+        const rows = await listAuditTrailRows(
+          tx,
           target,
-        );
-        const total = Number(countRow?.c ?? 0);
-        const rows = (await tx.$queryRawUnsafe(
-          `SELECT id, branch_id::text, actor_user_id::text, table_name, record_id::text,
-                  action, old_payload, new_payload, created_at
-           FROM audit_logs
-           WHERE branch_id IS NULL OR branch_id = $1::uuid
-           ORDER BY created_at DESC
-           LIMIT $2 OFFSET $3`,
-          target,
+          tableFilter,
           paged.limit,
           paged.skip,
-        )) as unknown[];
+        );
+        await enrichAuditTrailPosDeviceLabels(this.prisma, tenantId, rows);
         return toPagedResult(rows, total, paged.page, paged.limit);
       });
     }
@@ -508,18 +511,11 @@ export class AccountingController {
       500,
       Math.max(1, parseInt(limit ?? '100', 10) || 100),
     );
-    return this.prisma.withTenantSchema(schema, (tx) =>
-      tx.$queryRawUnsafe(
-        `SELECT id, branch_id::text, actor_user_id::text, table_name, record_id::text,
-                action, old_payload, new_payload, created_at
-         FROM audit_logs
-         WHERE branch_id IS NULL OR branch_id = $1::uuid
-         ORDER BY created_at DESC
-         LIMIT $2`,
-        target,
-        take,
-      ),
-    );
+    return this.prisma.withTenantSchema(schema, async (tx) => {
+      const rows = await listAuditTrailRows(tx, target, tableFilter, take, 0);
+      await enrichAuditTrailPosDeviceLabels(this.prisma, tenantId, rows);
+      return rows;
+    });
   }
 
   @Get('close-readiness')
@@ -623,15 +619,16 @@ export class AccountingController {
     const target = resolveSingleBranchId(req, branchId);
     const schema = this.tenantContext.getSchemaName()!;
     await this.tenantService.applyTenantSchemaPatches(schema);
-    return this.prisma.withTenantSchema(schema, (tx) =>
-      tx.$queryRawUnsafe<ChartOfAccountsListRow[]>(
+    return this.prisma.withTenantSchema(schema, async (tx) => {
+      await this.coaSeed.ensureAccountsForBranchIfEmpty(tx, target);
+      return tx.$queryRawUnsafe<ChartOfAccountsListRow[]>(
         `SELECT id, branch_id, code, name, account_type, account_key, is_system, allow_reconciliation, payment_method_key, parent_id, created_at
          FROM chart_of_accounts
          WHERE branch_id = $1::uuid
          ORDER BY code NULLS LAST, name`,
         target,
-      ),
-    );
+      );
+    });
   }
 
   @Get('reconciliation/accounts')
@@ -668,6 +665,9 @@ export class AccountingController {
     const schema = this.tenantContext.getSchemaName()!;
     await this.tenantService.applyTenantSchemaPatches(schema);
     return this.prisma.withTenantSchema(schema, async (tx) => {
+      if (branchIds.length === 1) {
+        await this.coaSeed.ensureAccountsForBranchIfEmpty(tx, branchIds[0]!);
+      }
       const rows = await tx.$queryRawUnsafe<ChartOfAccountCrudRecord[]>(
         `SELECT ${this.accountCrudSelectSql()}
          FROM chart_of_accounts

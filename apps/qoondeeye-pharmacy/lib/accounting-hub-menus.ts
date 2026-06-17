@@ -22,6 +22,8 @@ export const ACCOUNTING_HUB_MENUS: HubMenu[] = [
         items: [
           { label: "Journal Entries", href: "/accounting/journals" },
           { label: "POS statement", href: "/accounting/pos-statement" },
+          { label: "POS shifts", href: "/configuration/pos-shifts" },
+          { label: "Cash movements", href: "/accounting/cash-movements" },
         ],
       },
       {
@@ -43,6 +45,7 @@ export const ACCOUNTING_HUB_MENUS: HubMenu[] = [
         items: [
           { label: "Control Center", href: "/accounting/control-center" },
           { label: "Transfer Monitoring", href: "/accounting/monitoring" },
+          { label: "POS Operations", href: "/configuration/pos-center" },
         ],
       },
     ],
@@ -128,6 +131,10 @@ export const ACCOUNTING_HUB_MENUS: HubMenu[] = [
             label: "Audit trail",
             href: "/accounting/audit-trail",
           },
+          {
+            label: "POS audit log",
+            href: "/configuration/pos-audit",
+          },
         ],
       },
     ],
@@ -206,6 +213,7 @@ export const ACCOUNTING_HUB_MENUS: HubMenu[] = [
             label: "Executive summary",
             href: "/accounting/reports/executive-summary",
           },
+          { label: "POS analytics", href: "/configuration/pos-analytics" },
         ],
       },
     ],

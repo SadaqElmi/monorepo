@@ -32,6 +32,8 @@ import { invalidatePosAfterSale } from "@/lib/invalidate-pos-after-sale";
 import {
   getCurrentPosSession,
   openPosSession,
+  pausePosSession,
+  resumePosSession,
 } from "@/lib/services/pos-sessions";
 import { getEffectiveClientBranchId } from "@/lib/branch-access";
 import {
@@ -47,8 +49,11 @@ import {
   isManagerTierRole,
   maxDiscountPercentForRole,
 } from "@/features/register/model/discount-policy";
-import { formatApiErrorForUser } from "@/lib/services/http";
+import { ApiError, formatApiErrorForUser } from "@/lib/services/http";
 import { posToast } from "@/lib/pos-toast";
+import { useNetworkStatus } from "@/hooks/use-network-status";
+import { enqueueOutboxSale, newOfflineReceiptId } from "@/lib/offline/outbox";
+import { cacheShiftState, loadCachedShift } from "@/lib/offline/shift-cache";
 
 type PosContextType = {
   mainTab: "register" | "returns";
@@ -101,9 +106,16 @@ type PosContextType = {
   /** Show the synthetic VAT line and switch to the payment step. */
   triggerTotalAndPay: () => void;
   /** Apply a per-line discount (0..100) to the selected line. */
-  applyLineDiscountPct: (pct: number) => void;
+  applyLineDiscountPct: (
+    pct: number,
+    opts?: { supervisorApproved?: boolean },
+  ) => void;
   /** Apply a global percentage discount calculated against the cart subtotal. */
-  applyTotalDiscountPct: (pct: number) => void;
+  applyTotalDiscountPct: (
+    pct: number,
+    opts?: { supervisorApproved?: boolean },
+  ) => void;
+  setDiscountApprovalId: (id: string | null) => void;
   /** Attach / replace a free-form comment on the selected line. */
   setLineComment: (text: string) => void;
   selectedCustomer: CustomerSummary | null;
@@ -124,9 +136,15 @@ type PosContextType = {
   ) => Promise<{ creditLimitExceeded?: boolean } | void>;
   /** Open shift session id for the current branch, or null. */
   posSessionId: string | null;
+  posSessionStatus: "open" | "paused" | null;
+  posSessionOpenedAt: string | null;
+  posSessionOpeningCash: number;
   posSessionLoading: boolean;
+  posSessionPaused: boolean;
   refreshPosSession: () => Promise<void>;
-  openPosShift: () => Promise<string | null>;
+  openPosShift: (openingCash?: number) => Promise<string | null>;
+  pausePosShift: () => Promise<boolean>;
+  resumePosShift: () => Promise<boolean>;
 };
 
 const PosContext = createContext<PosContextType | undefined>(undefined);
@@ -136,16 +154,24 @@ type CreateSaleMutatePayload = {
   body: CreateSaleInput;
   optimisticSaleId: string;
   optimisticReceiptId: string;
+  clientSaleRef: string;
+  idempotencyKey: string;
 };
 
 export function PosProvider({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const queryClient = useQueryClient();
+  const { isOffline, markApiUnreachable, markApiReachable } =
+    useNetworkStatus();
 
   const salePostingRef = React.useRef(false);
 
   const createSaleMutation = useMutation<Sale, Error, CreateSaleMutatePayload>({
-    mutationFn: async (payload) => createSale(payload.tenantSlug, payload.body),
+    mutationFn: async (payload) =>
+      createSale(payload.tenantSlug, payload.body, {
+        clientSaleRef: payload.clientSaleRef,
+        idempotencyKey: payload.idempotencyKey,
+      }),
     onSuccess: (_data, variables) => {
       if (!variables?.tenantSlug) return;
       invalidatePosAfterSale(queryClient, variables.tenantSlug);
@@ -162,6 +188,9 @@ export function PosProvider({ children }: { children: React.ReactNode }) {
   );
   const [cart, setCart] = useState<PosCartLine[]>([]);
   const [discount, setDiscount] = useState(0);
+  const [discountApprovalId, setDiscountApprovalId] = useState<string | null>(
+    null,
+  );
   const [heldOrders, setHeldOrders] = useState<PosHeldOrder[]>([]);
   const [selectedLineId, setSelectedLineId] = useState<string | null>(null);
   const [showVatLine, setShowVatLine] = useState(false);
@@ -172,7 +201,61 @@ export function PosProvider({ children }: { children: React.ReactNode }) {
   const [managerPrivilegesSuspended, setManagerPrivilegesSuspended] =
     useState(false);
   const [posSessionId, setPosSessionId] = useState<string | null>(null);
+  const [posSessionStatus, setPosSessionStatus] = useState<
+    "open" | "paused" | null
+  >(null);
+  const [posSessionOpenedAt, setPosSessionOpenedAt] = useState<string | null>(
+    null,
+  );
+  const [posSessionOpeningCash, setPosSessionOpeningCash] = useState(0);
   const [posSessionLoading, setPosSessionLoading] = useState(false);
+
+  const applyPosSessionRow = useCallback(
+    (row: Awaited<ReturnType<typeof getCurrentPosSession>>) => {
+      if (!row?.id) {
+        setPosSessionId(null);
+        setPosSessionStatus(null);
+        setPosSessionOpenedAt(null);
+        setPosSessionOpeningCash(0);
+        return;
+      }
+      setPosSessionId(row.id);
+      setPosSessionStatus(
+        row.status === "paused"
+          ? "paused"
+          : row.status === "open"
+            ? "open"
+            : null,
+      );
+      setPosSessionOpenedAt(row.opened_at ?? null);
+      setPosSessionOpeningCash(Number(row.opening_cash ?? 0));
+      const slug = currentUser?.tenantSlug?.trim();
+      const branchId = getEffectiveClientBranchId();
+      if (slug && branchId && row.status !== "closed") {
+        void cacheShiftState(slug, branchId, {
+          sessionId: row.id,
+          status: row.status === "paused" ? "paused" : "open",
+          openingCash: Number(row.opening_cash ?? 0),
+          openedAt: row.opened_at ?? null,
+          cachedAt: Date.now(),
+        });
+      }
+    },
+    [currentUser?.tenantSlug],
+  );
+
+  const hydrateShiftFromCache = useCallback(async (): Promise<boolean> => {
+    const slug = currentUser?.tenantSlug?.trim();
+    const branchId = getEffectiveClientBranchId();
+    if (!slug || !branchId) return false;
+    const cached = await loadCachedShift(slug);
+    if (!cached?.sessionId || cached.branchId !== branchId) return false;
+    setPosSessionId(cached.sessionId);
+    setPosSessionStatus(cached.status);
+    setPosSessionOpenedAt(cached.openedAt);
+    setPosSessionOpeningCash(cached.openingCash);
+    return true;
+  }, [currentUser?.tenantSlug]);
   const [selectedCustomer, setSelectedCustomer] =
     useState<CustomerSummary | null>(null);
   const [customerCreditSummary, setCustomerCreditSummary] =
@@ -192,79 +275,131 @@ export function PosProvider({ children }: { children: React.ReactNode }) {
     const slug = currentUser?.tenantSlug?.trim();
     const branchId = getEffectiveClientBranchId();
     if (!slug || currentUser?.userType !== "tenant" || !branchId) {
-      setPosSessionId(null);
+      applyPosSessionRow(null);
       return;
     }
     setPosSessionLoading(true);
     try {
       const row = await getCurrentPosSession(slug);
-      setPosSessionId(row?.id ?? null);
+      applyPosSessionRow(row);
     } catch {
-      setPosSessionId(null);
+      const hydrated = await hydrateShiftFromCache();
+      if (!hydrated) applyPosSessionRow(null);
     } finally {
       setPosSessionLoading(false);
     }
-  }, [currentUser?.tenantSlug, currentUser?.userType]);
+  }, [
+    currentUser?.tenantSlug,
+    currentUser?.userType,
+    applyPosSessionRow,
+    hydrateShiftFromCache,
+  ]);
 
-  /**
-   * After login / route change: load open shift or POST `/pos/sessions/open` so the cashier
-   * never has to tap “Open shift” when a branch is selected.
-   */
+  /** After login: load existing open/paused shift only (cashier must open shift explicitly). */
   const ensurePosSessionWithAutoOpen = useCallback(async () => {
     const slug = currentUser?.tenantSlug?.trim();
     const branchId = getEffectiveClientBranchId();
     if (!slug || currentUser?.userType !== "tenant" || !branchId) {
-      setPosSessionId(null);
+      applyPosSessionRow(null);
       return;
     }
     setPosSessionLoading(true);
     try {
-      let row = await getCurrentPosSession(slug);
-      if (row?.id) {
-        setPosSessionId(row.id);
-        return;
-      }
-      try {
-        const opened = await openPosSession(slug, {
-          staffUserId: currentUser?.id,
-        });
-        setPosSessionId(opened.id);
-      } catch {
-        row = await getCurrentPosSession(slug);
-        setPosSessionId(row?.id ?? null);
-      }
+      const row = await getCurrentPosSession(slug);
+      applyPosSessionRow(row);
     } catch {
-      setPosSessionId(null);
+      const hydrated = await hydrateShiftFromCache();
+      if (!hydrated) applyPosSessionRow(null);
     } finally {
       setPosSessionLoading(false);
     }
-  }, [currentUser?.tenantSlug, currentUser?.userType, currentUser?.id]);
+  }, [
+    currentUser?.tenantSlug,
+    currentUser?.userType,
+    applyPosSessionRow,
+    hydrateShiftFromCache,
+  ]);
 
-  const openPosShift = useCallback(async (): Promise<string | null> => {
+  const openPosShift = useCallback(
+    async (openingCash = 0): Promise<string | null> => {
+      const slug = currentUser?.tenantSlug?.trim();
+      const branchId = getEffectiveClientBranchId();
+      if (!slug || currentUser?.userType !== "tenant" || !branchId) {
+        posToast.warning(
+          "Cannot open shift",
+          "Select a single branch (not “All”) and sign in as tenant staff.",
+        );
+        return null;
+      }
+      try {
+        const row = await openPosSession(slug, {
+          staffUserId: currentUser?.id,
+          openingCash,
+        });
+        applyPosSessionRow({
+          id: row.id,
+          branch_id: row.branch_id,
+          device_id: null,
+          staff_user_id: currentUser?.id ?? null,
+          status: row.status,
+          opened_at: row.opened_at,
+          closed_at: null,
+          opening_cash: openingCash,
+        });
+        posToast.success(
+          "Shift opened",
+          "You can ring sales for this session.",
+        );
+        return row.id;
+      } catch (e) {
+        posToast.error(
+          "Could not open shift",
+          e instanceof Error ? e.message : "Try again.",
+        );
+        return null;
+      }
+    },
+    [
+      currentUser?.tenantSlug,
+      currentUser?.userType,
+      currentUser?.id,
+      applyPosSessionRow,
+    ],
+  );
+
+  const pausePosShift = useCallback(async (): Promise<boolean> => {
     const slug = currentUser?.tenantSlug?.trim();
-    const branchId = getEffectiveClientBranchId();
-    if (!slug || currentUser?.userType !== "tenant" || !branchId) {
-      posToast.warning(
-        "Cannot open shift",
-        "Select a single branch (not “All”) and sign in as tenant staff.",
-      );
-      return null;
-    }
+    if (!slug || !posSessionId || posSessionStatus !== "open") return false;
     try {
-      const row = await openPosSession(slug, {
-        staffUserId: currentUser?.id,
-      });
-      setPosSessionId(row.id);
-      posToast.success("Shift opened", "You can ring sales for this session.");
-      return row.id;
+      await pausePosSession(slug, posSessionId);
+      setPosSessionStatus("paused");
+      posToast.success("Shift locked", "Resume the shift to ring sales again.");
+      return true;
     } catch (e) {
       posToast.error(
-        "Could not open shift",
+        "Could not lock shift",
         e instanceof Error ? e.message : "Try again.",
       );
-      return null;
+      return false;
     }
-  }, [currentUser?.tenantSlug, currentUser?.userType, currentUser?.id]);
+  }, [currentUser?.tenantSlug, posSessionId, posSessionStatus]);
+
+  const resumePosShift = useCallback(async (): Promise<boolean> => {
+    const slug = currentUser?.tenantSlug?.trim();
+    if (!slug || !posSessionId || posSessionStatus !== "paused") return false;
+    try {
+      await resumePosSession(slug, posSessionId);
+      setPosSessionStatus("open");
+      posToast.success("Shift resumed", "You can ring sales again.");
+      return true;
+    } catch (e) {
+      posToast.error(
+        "Could not resume shift",
+        e instanceof Error ? e.message : "Try again.",
+      );
+      return false;
+    }
+  }, [currentUser?.tenantSlug, posSessionId, posSessionStatus]);
 
   useEffect(() => {
     void ensurePosSessionWithAutoOpen();
@@ -326,6 +461,12 @@ export function PosProvider({ children }: { children: React.ReactNode }) {
   const selectCustomer = useCallback(
     async (customer: CustomerSummary) => {
       setSelectedCustomer(customer);
+      const { cacheCustomer } = await import("@/lib/offline/customer-cache");
+      void cacheCustomer({
+        id: customer.id,
+        name: customer.name ?? "Customer",
+        phone: customer.phone ?? null,
+      });
       const slug = currentUser?.tenantSlug?.trim();
       if (!slug) {
         setCustomerCreditSummary(null);
@@ -357,6 +498,7 @@ export function PosProvider({ children }: { children: React.ReactNode }) {
     setSupervisorMode(false);
     setSelectedCustomer(null);
     setCustomerCreditSummary(null);
+    setDiscountApprovalId(null);
   }, []);
 
   const cancelEntry = useCallback(() => {
@@ -450,10 +592,10 @@ export function PosProvider({ children }: { children: React.ReactNode }) {
   }, [cart]);
 
   const applyLineDiscountPct = useCallback(
-    (pct: number) => {
+    (pct: number, opts?: { supervisorApproved?: boolean }) => {
       if (!selectedLineId) return;
       const maxPct = maxDiscountPercentForRole(roleForDiscountPolicy);
-      if (pct > maxPct + 1e-9) {
+      if (!opts?.supervisorApproved && pct > maxPct + 1e-9) {
         posToast.warning(`Maximum discount: ${maxPct}%`);
         return;
       }
@@ -468,9 +610,9 @@ export function PosProvider({ children }: { children: React.ReactNode }) {
   );
 
   const applyTotalDiscountPct = useCallback(
-    (pct: number) => {
+    (pct: number, opts?: { supervisorApproved?: boolean }) => {
       const maxPct = maxDiscountPercentForRole(roleForDiscountPolicy);
-      if (pct > maxPct + 1e-9) {
+      if (!opts?.supervisorApproved && pct > maxPct + 1e-9) {
         posToast.warning(`Maximum discount: ${maxPct}%`);
         return;
       }
@@ -525,7 +667,12 @@ export function PosProvider({ children }: { children: React.ReactNode }) {
       } = cartTotals(billable, discount);
 
       const maxPct = maxDiscountPercentForRole(roleForDiscountPolicy);
-      if (s > 0 && discount > 0 && discount / s > maxPct / 100 + 1e-9) {
+      const needsDiscountApproval =
+        s > 0 &&
+        discount > 0 &&
+        discount / s > maxPct / 100 + 1e-9 &&
+        !discountApprovalId;
+      if (needsDiscountApproval && !isOffline) {
         posToast.warning(
           "Discount too high for this sale",
           `This cart exceeds the ${maxPct}% limit for your role. Lower the discount or continue with a manager‑approved session.`,
@@ -545,12 +692,11 @@ export function PosProvider({ children }: { children: React.ReactNode }) {
       }
 
       const totRounded = roundMoney(tot);
-      const tendered =
-        onAccount
-          ? totRounded
-          : amountTendered != null && Number.isFinite(amountTendered)
-            ? roundMoney(amountTendered)
-            : totRounded;
+      const tendered = onAccount
+        ? totRounded
+        : amountTendered != null && Number.isFinite(amountTendered)
+          ? roundMoney(amountTendered)
+          : totRounded;
       if (!onAccount && tendered + 0.001 < totRounded) {
         posToast.error(
           "Insufficient tender",
@@ -578,10 +724,26 @@ export function PosProvider({ children }: { children: React.ReactNode }) {
           );
           return;
         }
-        if (!posSessionId) {
+        let activeSessionId = posSessionId;
+        let activeSessionStatus = posSessionStatus;
+        if (!activeSessionId && isOffline) {
+          const cached = await loadCachedShift(tenantSlug);
+          if (cached?.sessionId) {
+            activeSessionId = cached.sessionId;
+            activeSessionStatus = cached.status;
+          }
+        }
+        if (!activeSessionId) {
           posToast.warning(
             "No open shift",
             "Open a shift before recording sales.",
+          );
+          return;
+        }
+        if (activeSessionStatus === "paused") {
+          posToast.warning(
+            "Shift locked",
+            "Resume the shift before recording sales.",
           );
           return;
         }
@@ -596,62 +758,149 @@ export function PosProvider({ children }: { children: React.ReactNode }) {
           return;
         }
         const changeRounded = roundMoney(Math.max(0, tendered - totRounded));
+        const clientSaleRef = crypto.randomUUID();
+        const idempotencyKey = clientSaleRef;
+        const saleBody: CreateSaleInput = {
+          totalAmount: totRounded,
+          discount,
+          tax: t,
+          paymentMethod: onAccount
+            ? CUSTOMER_CREDIT_PAYMENT_METHOD_ID
+            : (paymentMethodCode ?? paymentLabel),
+          onAccount: onAccount || undefined,
+          customerId: selectedCustomer?.id,
+          creditOverride: options?.creditOverride,
+          discountApprovalId: discountApprovalId ?? undefined,
+          posSessionId: activeSessionId,
+          clientSaleRef,
+          syncSource: isOffline ? "offline" : "online",
+          items: billable.map((l) =>
+            l.miscChargeKind === "delivery" || l.miscChargeKind === "tailor"
+              ? {
+                  miscChargeKind: l.miscChargeKind,
+                  quantity: l.qty,
+                  price: l.unitPrice,
+                  priceGroupId: l.priceGroupId,
+                  offerId: l.offerId,
+                  lineDiscount: l.lineDiscount ?? 0,
+                  discountSource: l.discountSource,
+                }
+              : {
+                  productId: l.productId,
+                  uomId: l.uomId,
+                  quantity: l.qty,
+                  price: l.unitPrice,
+                  priceGroupId: l.priceGroupId,
+                  offerId: l.offerId,
+                  lineDiscount:
+                    l.lineDiscount ??
+                    (typeof l.lineDiscountPct === "number"
+                      ? Math.round(
+                          (l.unitPrice * l.qty * (l.lineDiscountPct / 100) +
+                            Number.EPSILON) *
+                            100,
+                        ) / 100
+                      : 0),
+                  discountSource:
+                    l.discountSource ??
+                    (l.offerId
+                      ? "offer"
+                      : typeof l.lineDiscountPct === "number" &&
+                          l.lineDiscountPct > 0
+                        ? "manual"
+                        : undefined),
+                },
+          ),
+        };
+
+        const persistLocalSale = (
+          receiptId: string,
+          saleId?: string,
+          offlineMsg?: string,
+        ) => {
+          const changeRounded = roundMoney(Math.max(0, tendered - totRounded));
+          const entry: PosTransaction = {
+            receiptId,
+            saleId,
+            clientSaleRef,
+            createdAt: Date.now(),
+            paymentMethod: paymentLabel,
+            lines: cloneLines(billable),
+            discount,
+            subtotal: s,
+            tax: t,
+            total: totRounded,
+            amountTendered: tendered,
+            changeDue: changeRounded,
+            customerId: selectedCustomer?.id,
+            customerName: selectedCustomer?.name ?? undefined,
+            onAccount,
+          };
+          setTransactions((prev) => {
+            const next = [entry, ...prev].slice(0, 500);
+            persistPosTransactions(next);
+            return next;
+          });
+          clearCart();
+          setReceiptToPrint(entry);
+          posToast.success(
+            offlineMsg ? "Sale saved locally" : "Sale recorded",
+            [
+              `Payment: ${paymentLabel}`,
+              `Receipt #${receiptId}`,
+              offlineMsg,
+              changeRounded > 0 ? `Change ${changeRounded.toFixed(2)}` : null,
+            ]
+              .filter(Boolean)
+              .join(" · "),
+          );
+        };
+
+        if (isOffline) {
+          const localReceipt = newOfflineReceiptId();
+          const branchFacet = getEffectiveClientBranchId() ?? "";
+          await enqueueOutboxSale({
+            clientSaleRef,
+            idempotencyKey,
+            tenantSlug,
+            branchId: branchFacet,
+            body: saleBody,
+            localReceiptId: localReceipt,
+            status: needsDiscountApproval ? "pending_approval" : "pending",
+            discountApprovalId: discountApprovalId ?? undefined,
+          });
+          const { decrementCatalogStock } =
+            await import("@/lib/offline/catalog-store");
+          const stockItems = billable
+            .filter((l) => l.productId && !l.miscChargeKind)
+            .map((l) => ({
+              productId: l.productId!,
+              quantity: l.baseQty ?? l.qty,
+            }));
+          if (stockItems.length > 0) {
+            void decrementCatalogStock(tenantSlug, branchFacet, stockItems);
+          }
+          persistLocalSale(
+            localReceipt,
+            undefined,
+            needsDiscountApproval
+              ? "Offline — supervisor approval required before sync"
+              : "Offline — will sync when connected",
+          );
+          return;
+        }
+
         salePostingRef.current = true;
         try {
           const sale = await createSaleMutation.mutateAsync({
             tenantSlug,
             optimisticSaleId: `pending-${Date.now()}`,
             optimisticReceiptId: newReceiptId(),
-            body: {
-              totalAmount: totRounded,
-              discount,
-              tax: t,
-              paymentMethod: onAccount
-                ? CUSTOMER_CREDIT_PAYMENT_METHOD_ID
-                : paymentMethodCode ?? paymentLabel,
-              onAccount: onAccount || undefined,
-              customerId: selectedCustomer?.id,
-              creditOverride: options?.creditOverride,
-              posSessionId,
-              items: billable.map((l) =>
-                l.miscChargeKind === "delivery" || l.miscChargeKind === "tailor"
-                  ? {
-                      miscChargeKind: l.miscChargeKind,
-                      quantity: l.qty,
-                      price: l.unitPrice,
-                      priceGroupId: l.priceGroupId,
-                      offerId: l.offerId,
-                      lineDiscount: l.lineDiscount ?? 0,
-                      discountSource: l.discountSource,
-                    }
-                  : {
-                      productId: l.productId,
-                      uomId: l.uomId,
-                      quantity: l.qty,
-                      price: l.unitPrice,
-                      priceGroupId: l.priceGroupId,
-                      offerId: l.offerId,
-                      lineDiscount:
-                        l.lineDiscount ??
-                        (typeof l.lineDiscountPct === "number"
-                          ? Math.round(
-                              (l.unitPrice * l.qty * (l.lineDiscountPct / 100) +
-                                Number.EPSILON) *
-                                100,
-                            ) / 100
-                          : 0),
-                      discountSource:
-                        l.discountSource ??
-                        (l.offerId
-                          ? "offer"
-                          : typeof l.lineDiscountPct === "number" &&
-                              l.lineDiscountPct > 0
-                            ? "manual"
-                            : undefined),
-                    },
-              ),
-            },
+            clientSaleRef,
+            idempotencyKey,
+            body: saleBody,
           });
+          markApiReachable();
           const receiptNum =
             (sale.receipt_number as string | null | undefined)?.trim() ||
             newReceiptId();
@@ -672,9 +921,7 @@ export function PosProvider({ children }: { children: React.ReactNode }) {
             changeDue: changeRounded,
             customerId: selectedCustomer?.id,
             customerName:
-              sale.customer_name ??
-              selectedCustomer?.name ??
-              undefined,
+              sale.customer_name ?? selectedCustomer?.name ?? undefined,
             onAccount,
             outstandingAfterSale: outstandingAfter,
           };
@@ -686,6 +933,12 @@ export function PosProvider({ children }: { children: React.ReactNode }) {
           });
           clearCart();
           setReceiptToPrint(entry);
+          if (isCashPaymentMethod(paymentCode)) {
+            void import("@/lib/hardware/browser-print-adapter").then(
+              ({ BrowserPrintAdapter }) =>
+                new BrowserPrintAdapter().openCashDrawer(),
+            );
+          }
           posToast.success(
             "Sale recorded",
             [
@@ -698,10 +951,30 @@ export function PosProvider({ children }: { children: React.ReactNode }) {
               .join(" · "),
           );
         } catch (e) {
-          const msg =
-            e instanceof Error ? e.message : formatApiErrorForUser(e);
+          const msg = e instanceof Error ? e.message : formatApiErrorForUser(e);
           if (msg.includes("CREDIT_LIMIT_EXCEEDED")) {
             return { creditLimitExceeded: true };
+          }
+          const isNetwork =
+            e instanceof ApiError &&
+            (e.isNetworkError || e.status === 0 || e.status >= 500);
+          if (isNetwork) {
+            markApiUnreachable();
+            const localReceipt = newOfflineReceiptId();
+            await enqueueOutboxSale({
+              clientSaleRef,
+              idempotencyKey,
+              tenantSlug,
+              branchId: getEffectiveClientBranchId() ?? "",
+              body: saleBody,
+              localReceiptId: localReceipt,
+            });
+            persistLocalSale(
+              localReceipt,
+              undefined,
+              "Queued — will sync when connected",
+            );
+            return;
           }
           posToast.error("Could not save sale", formatApiErrorForUser(e));
         } finally {
@@ -710,38 +983,7 @@ export function PosProvider({ children }: { children: React.ReactNode }) {
         return;
       }
 
-      const changeRounded = roundMoney(Math.max(0, tendered - totRounded));
-      const changeDue = changeRounded;
-      const entry: PosTransaction = {
-        receiptId: newReceiptId(),
-        createdAt: Date.now(),
-        paymentMethod: paymentLabel,
-        lines: cloneLines(billable),
-        discount,
-        subtotal: s,
-        tax: t,
-        total: totRounded,
-        amountTendered: tendered,
-        changeDue: changeRounded,
-      };
-      setTransactions((prev) => {
-        const next = [entry, ...prev].slice(0, 500);
-        persistPosTransactions(next);
-        return next;
-      });
-      clearCart();
-      setReceiptToPrint(entry);
-      posToast.success(
-        "Sale saved locally",
-        [
-          `Payment: ${paymentLabel}`,
-          `Receipt #${entry.receiptId}`,
-          "Offline — sync when signed in",
-          changeDue > 0 ? `Change ${changeDue.toFixed(2)}` : null,
-        ]
-          .filter(Boolean)
-          .join(" · "),
-      );
+      posToast.warning("Sign in required", "Sign in to record sales.");
     },
     [
       cart,
@@ -750,9 +992,13 @@ export function PosProvider({ children }: { children: React.ReactNode }) {
       clearCart,
       roleForDiscountPolicy,
       posSessionId,
+      posSessionStatus,
+      isOffline,
       createSaleMutation,
       selectedCustomer,
       customerCreditSummary,
+      markApiReachable,
+      markApiUnreachable,
     ],
   );
 
@@ -795,6 +1041,7 @@ export function PosProvider({ children }: { children: React.ReactNode }) {
         triggerTotalAndPay,
         applyLineDiscountPct,
         applyTotalDiscountPct,
+        setDiscountApprovalId,
         setLineComment,
         selectedCustomer,
         customerCreditSummary,
@@ -804,9 +1051,15 @@ export function PosProvider({ children }: { children: React.ReactNode }) {
         refreshCustomerCredit,
         completePayment,
         posSessionId,
+        posSessionStatus,
+        posSessionOpenedAt,
+        posSessionOpeningCash,
         posSessionLoading,
+        posSessionPaused: posSessionStatus === "paused",
         refreshPosSession,
         openPosShift,
+        pausePosShift,
+        resumePosShift,
       }}
     >
       {children}

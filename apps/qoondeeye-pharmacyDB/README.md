@@ -102,12 +102,14 @@ Skipped: `GET /api` (health), `GET /api/inventory/stream` (SSE), `OPTIONS`. Test
 Device-bound POS rollout flags:
 
 ```env
-# legacy | dual | device
-POS_DEVICE_LOGIN_MODE=dual
+# device (default) | dual | legacy
+POS_DEVICE_LOGIN_MODE=device
 
 # Optional comma-separated tenant schema names forced to use device login while global mode stays dual
 POS_DEVICE_ENFORCED_TENANTS=pharmacy1,pharmacy2
 ```
+
+Health endpoints (no tenant header required): `GET /api/health`, `GET /api/health/control-db`, `GET /api/health/tenant-pool`.
 
 ### 3. Run migrations
 

@@ -3,19 +3,7 @@ import { z } from "zod";
 import { nonEmptyString, pinDigits, uuid } from "./primitives";
 
 /**
- * Keep in sync with:
- * apps/qoondeeye-pharmacyDB/src/auth/dto/auth.dto.ts — PinLoginDto
- */
-export const pinLoginSchema = z.object({
-  pin: pinDigits,
-  tenant: nonEmptyString,
-  branchId: uuid.optional(),
-  staffId: z.string().trim().min(1).max(120).optional(),
-});
-
-export type PinLoginInput = z.infer<typeof pinLoginSchema>;
-
-/**
+ * ERP dashboard email/password login only — not used by standalone POS.
  * Keep in sync with:
  * apps/qoondeeye-pharmacyDB/src/auth/dto/auth.dto.ts — LoginDto
  */
@@ -42,15 +30,29 @@ export type StaffLoginInput = z.infer<typeof staffLoginSchema>;
 
 /**
  * Keep in sync with:
- * apps/qoondeeye-pharmacyDB/src/auth/dto/auth.dto.ts — PosDeviceEnrollDto
+ * apps/qoondeeye-pharmacyDB/src/auth/dto/pos-setup.dto.ts — PosSetupDto
  */
-export const posDeviceEnrollSchema = z.object({
-  tenant: nonEmptyString,
-  email: z.string().email(),
-  password: z.string().min(6),
-  deviceCode: z.string().trim().min(1).optional(),
-  displayName: z.string().trim().min(1).optional(),
-  branchId: uuid.optional(),
+export const posSetupSchema = z.object({
+  tenantCode: z
+    .string()
+    .trim()
+    .min(1, { message: "Tenant code is required" })
+    .max(100)
+    .regex(/^[a-zA-Z0-9_-]+$/, {
+      message:
+        "Tenant code may only contain letters, numbers, underscores, and hyphens",
+    }),
+  terminalUsername: z
+    .string()
+    .trim()
+    .min(3)
+    .max(64)
+    .regex(/^[a-zA-Z0-9_-]+$/, {
+      message:
+        "Terminal username may only contain letters, numbers, underscores, and hyphens",
+    }),
+  password: z.string().min(6).max(128),
+  deviceFingerprint: z.string().trim().max(128).optional(),
 });
 
-export type PosDeviceEnrollInput = z.infer<typeof posDeviceEnrollSchema>;
+export type PosSetupInput = z.infer<typeof posSetupSchema>;

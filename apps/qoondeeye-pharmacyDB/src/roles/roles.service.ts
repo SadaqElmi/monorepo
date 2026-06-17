@@ -59,19 +59,21 @@ export class RolesService {
     tableName: string,
     columnName: string,
   ): Promise<boolean> {
-    const [row] = await this.prisma.$queryRawUnsafe<{ ok: boolean }[]>(
-      `
-      SELECT EXISTS (
-        SELECT 1
-        FROM information_schema.columns
-        WHERE table_schema = $1
-          AND table_name = $2
-          AND column_name = $3
-      ) AS ok
-      `,
-      schemaName,
-      tableName,
-      columnName,
+    const [row] = await this.prisma.withTenantSchema(schemaName, (tx) =>
+      tx.$queryRawUnsafe<{ ok: boolean }[]>(
+        `
+        SELECT EXISTS (
+          SELECT 1
+          FROM information_schema.columns
+          WHERE table_schema = $1
+            AND table_name = $2
+            AND column_name = $3
+        ) AS ok
+        `,
+        'public',
+        tableName,
+        columnName,
+      ),
     );
     return Boolean(row?.ok);
   }

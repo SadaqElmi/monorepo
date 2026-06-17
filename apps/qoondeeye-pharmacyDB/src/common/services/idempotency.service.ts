@@ -27,7 +27,7 @@ export class IdempotencyService {
   private async ensureTable(schemaName: string): Promise<void> {
     if (this.ensuredSchemas.has(schemaName)) return;
     await this.prisma.$executeRawUnsafe(
-      `CREATE TABLE IF NOT EXISTS "${schemaName}"."api_idempotency" (
+      `CREATE TABLE IF NOT EXISTS "api_idempotency" (
         id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
         idempotency_key TEXT NOT NULL,
         request_fingerprint TEXT NOT NULL,
@@ -43,10 +43,10 @@ export class IdempotencyService {
       )`,
     );
     await this.prisma.$executeRawUnsafe(
-      `CREATE UNIQUE INDEX IF NOT EXISTS idx_api_idempotency_key ON "${schemaName}"."api_idempotency"(idempotency_key)`,
+      `CREATE UNIQUE INDEX IF NOT EXISTS idx_api_idempotency_key ON "api_idempotency"(idempotency_key)`,
     );
     await this.prisma.$executeRawUnsafe(
-      `CREATE INDEX IF NOT EXISTS idx_api_idempotency_expires_at ON "${schemaName}"."api_idempotency"(expires_at)`,
+      `CREATE INDEX IF NOT EXISTS idx_api_idempotency_expires_at ON "api_idempotency"(expires_at)`,
     );
     this.ensuredSchemas.add(schemaName);
   }
