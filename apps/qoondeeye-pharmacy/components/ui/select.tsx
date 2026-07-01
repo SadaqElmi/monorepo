@@ -7,10 +7,9 @@ import { Select as SelectPrimitive } from "radix-ui"
 import { cn } from "@repo/utils"
 
 function Select({
-  modal = true,
   ...props
 }: React.ComponentProps<typeof SelectPrimitive.Root>) {
-  return <SelectPrimitive.Root data-slot="select" modal={modal} {...props} />
+  return <SelectPrimitive.Root data-slot="select" {...props} />
 }
 
 function SelectGroup({
