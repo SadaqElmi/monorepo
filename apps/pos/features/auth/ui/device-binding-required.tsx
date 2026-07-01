@@ -62,7 +62,7 @@ export function DeviceBindingRequired({ children, redirectTo = "/" }: Props) {
         savePosDeviceBinding(
           {
             ...local.binding,
-            status: status.status,
+            status: status.status ?? local.binding.status,
             branchId: status.branchId ?? local.binding.branchId,
             displayName: status.displayName ?? local.binding.displayName,
           },
