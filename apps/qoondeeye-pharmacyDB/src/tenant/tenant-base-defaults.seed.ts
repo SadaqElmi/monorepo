@@ -1,9 +1,8 @@
-import { Pool } from 'pg';
+import { createPgPool } from '../prisma/create-pg-adapter';
 
 /** Idempotent roles, permissions, Main Branch, uoms, and price groups for a tenant database. */
 export async function seedTenantBaseDefaults(databaseUrl: string): Promise<void> {
-  const pool = new Pool({
-    connectionString: databaseUrl,
+  const pool = createPgPool(databaseUrl, {
     max: 1,
     idleTimeoutMillis: 10_000,
     connectionTimeoutMillis: 20_000,

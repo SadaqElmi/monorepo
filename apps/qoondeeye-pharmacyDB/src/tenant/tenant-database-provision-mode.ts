@@ -1,7 +1,7 @@
 import type { ConfigService } from '@nestjs/config';
 
 /**
- * Managed Postgres (Neon, etc.) cannot CREATE ROLE / ALTER OWNER per tenant.
+ * Managed Postgres (Neon, Supabase, etc.) cannot CREATE ROLE / ALTER OWNER per tenant.
  * Use one admin login; isolate tenants by database name only.
  */
 export function usesSharedDatabaseOwner(config?: ConfigService): boolean {
@@ -15,5 +15,8 @@ export function usesSharedDatabaseOwner(config?: ConfigService): boolean {
     config?.get<string>('TENANT_DB_ADMIN_URL')?.trim() ??
     process.env.TENANT_DB_ADMIN_URL?.trim() ??
     '';
-  return /\.neon\.tech\b/i.test(adminUrl);
+  return (
+    /\.neon\.tech\b/i.test(adminUrl) ||
+    /\.supabase\.(co|com)\b/i.test(adminUrl)
+  );
 }

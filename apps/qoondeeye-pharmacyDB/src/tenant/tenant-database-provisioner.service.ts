@@ -13,8 +13,8 @@ import {
   updateTenantControl,
 } from './tenant-control.repository';
 import { randomBytes, randomUUID } from 'crypto';
-import { Pool } from 'pg';
 import * as bcrypt from 'bcrypt';
+import { createPgPool } from '../prisma/create-pg-adapter';
 import { runTenantPrismaMigrate } from './run-tenant-prisma-migrate';
 import { usesSharedDatabaseOwner } from './tenant-database-provision-mode';
 import { seedTenantBaseDefaults } from './tenant-base-defaults.seed';
@@ -336,9 +336,8 @@ export class TenantDatabaseProvisionerService {
     return value;
   }
 
-  private adminPool(): Pool {
-    return new Pool({
-      connectionString: this.adminUrl(),
+  private adminPool() {
+    return createPgPool(this.adminUrl(), {
       max: 1,
       idleTimeoutMillis: 10_000,
       connectionTimeoutMillis: 20_000,
@@ -404,8 +403,7 @@ END $$`);
   ): Promise<void> {
     const url = new URL(this.adminUrl());
     url.pathname = `/${databaseName}`;
-    const pool = new Pool({
-      connectionString: url.toString(),
+    const pool = createPgPool(url.toString(), {
       max: 1,
       idleTimeoutMillis: 10_000,
       connectionTimeoutMillis: 20_000,
@@ -443,8 +441,7 @@ END $$`);
     databaseUrl: string,
     input: { name: string; email: string; password: string },
   ): Promise<string> {
-    const pool = new Pool({
-      connectionString: databaseUrl,
+    const pool = createPgPool(databaseUrl, {
       max: 1,
       idleTimeoutMillis: 10_000,
       connectionTimeoutMillis: 20_000,
@@ -507,8 +504,7 @@ END $$`);
     migrationStatus: 'up_to_date';
     storageUsedBytes: bigint;
   }> {
-    const pool = new Pool({
-      connectionString: databaseUrl,
+    const pool = createPgPool(databaseUrl, {
       max: 1,
       idleTimeoutMillis: 10_000,
       connectionTimeoutMillis: 20_000,

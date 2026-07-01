@@ -1,5 +1,7 @@
 import 'dotenv/config';
-import { Pool } from 'pg';
+import {
+  createPgPool,
+} from '../src/prisma/create-pg-adapter';
 import {
   argValue,
   databaseNameForSlug,
@@ -30,7 +32,7 @@ async function dropDedicatedDatabase(
   }
 
   const databaseUser = databaseUserForSlug(slug);
-  const admin = new Pool({ connectionString: adminUrl, max: 1 });
+  const admin = createPgPool(adminUrl, { max: 1 });
   try {
     const db = escapeIdentifier(databaseName);
     await admin.query(`DROP DATABASE IF EXISTS "${db}" WITH (FORCE)`);
@@ -53,7 +55,7 @@ async function main(): Promise<void> {
 
   const normalized = tenantArg.trim().toLowerCase();
   const controlUrl = requireControlUrl();
-  const controlPool = new Pool({ connectionString: controlUrl, max: 1 });
+  const controlPool = createPgPool(controlUrl, { max: 1 });
 
   try {
     const { rows } = await controlPool.query<TenantRow>(
@@ -71,10 +73,11 @@ async function main(): Promise<void> {
     }
     if (
       tenant.status !== 'provisioning' &&
-      tenant.status !== 'migration_failed'
+      tenant.status !== 'migration_failed' &&
+      tenant.status !== 'provisioning_failed'
     ) {
       throw new Error(
-        `Tenant status is "${tenant.status}". Only provisioning or migration_failed tenants can be abandoned.`,
+        `Tenant status is "${tenant.status}". Only provisioning, provisioning_failed, or migration_failed tenants can be abandoned.`,
       );
     }
 

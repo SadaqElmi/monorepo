@@ -127,6 +127,7 @@
     "test:e2e": "jest --config ./test/jest-e2e.json",
     "tenant:abandon": "node -r ./load-env.cjs node_modules/ts-node/dist/bin.js scripts/abandon-failed-tenant.ts",
     "tenant:repoint:databases": "node -r ./load-env.cjs node_modules/ts-node/dist/bin.js scripts/repoint-tenant-database-urls.ts",
+    "migrate:neon-to-supabase": "node -r ./load-env.cjs node_modules/ts-node/dist/bin.js scripts/migrate-neon-to-supabase.ts",
     "tenant:migrate:all": "node -r ./load-env.cjs node_modules/ts-node/dist/bin.js scripts/migrate-all-tenants.ts",
     "tenant:seed:erp-defaults": "node -r ./load-env.cjs node_modules/ts-node/dist/bin.js scripts/seed-tenant-erp-defaults.ts",
     "tenant:synthesize:erp-migration": "node -r ./load-env.cjs node_modules/ts-node/dist/bin.js scripts/synthesize-tenant-erp-migration.ts",

@@ -3,6 +3,11 @@
   "strict": false,
   "semverGroups": [
     {
+      "label": "Prisma-generated clients use exact versions",
+      "packages": ["prisma-client-*"],
+      "range": ""
+    },
+    {
       "label": "Catalog-aligned deps use semver caret range",
       "range": "^",
       "dependencies": ["**"],

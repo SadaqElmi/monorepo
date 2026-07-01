@@ -9,8 +9,11 @@ export default defineConfig({
     path: 'prisma/migrations',
   },
   datasource: {
-    // CONTROL_DATABASE_URL or DATABASE_URL (set in .env / .env.local via load-env profile).
+    // Session/direct URL for Prisma CLI; runtime API uses pooled DATABASE_URL (6543).
     url:
-      process.env['CONTROL_DATABASE_URL'] ?? process.env['DATABASE_URL'],
+      process.env['DIRECT_URL'] ??
+      process.env['CONTROL_DIRECT_URL'] ??
+      process.env['CONTROL_DATABASE_URL'] ??
+      process.env['DATABASE_URL'],
   },
 });

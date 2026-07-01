@@ -4,7 +4,7 @@ import { mkdtemp, rm } from 'fs/promises';
 import os from 'os';
 import path from 'path';
 import { promisify } from 'util';
-import { Pool } from 'pg';
+import { type Pool } from 'pg';
 import {
   createPgPool,
   resolveDatabaseUrl,
@@ -45,7 +45,7 @@ async function databaseExists(adminPool: Pool, databaseName: string) {
 }
 
 async function verifyRestore(targetUrl: string): Promise<void> {
-  const pool = new Pool({ connectionString: targetUrl, max: 1 });
+  const pool = createPgPool(targetUrl, { max: 1 });
   const tables = ['users', 'branches', 'products', 'sales', 'purchases'];
   try {
     for (const table of tables) {
@@ -108,7 +108,7 @@ async function main(): Promise<void> {
         `${row.database_name ?? `tenant_${row.slug ?? row.schema_name}_db`}_restore_test`,
     );
 
-    const adminPool = new Pool({ connectionString: adminUrl, max: 1 });
+    const adminPool = createPgPool(adminUrl, { max: 1 });
     try {
       if (await databaseExists(adminPool, targetDatabase)) {
         if (!hasFlag('force')) {

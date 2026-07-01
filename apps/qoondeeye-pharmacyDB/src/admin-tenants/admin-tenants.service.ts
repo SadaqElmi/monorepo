@@ -6,7 +6,8 @@ import {
 } from '@nestjs/common';
 import * as bcrypt from 'bcrypt';
 import { randomBytes } from 'crypto';
-import { Pool } from 'pg';
+import type { Pool } from 'pg';
+import { createPgPool } from '../prisma/create-pg-adapter';
 import { PrismaService } from '../prisma/prisma.service';
 import {
   getTenantControlById,
@@ -264,9 +265,7 @@ export class AdminTenantsService {
         ownerName: input.ownerName ?? null,
       },
     );
-    return temporaryOwnerPassword
-      ? { ...result, temporaryOwnerPassword }
-      : result;
+    return { ...result, temporaryOwnerPassword };
   }
 
   async assignTenantOwner(
@@ -292,9 +291,7 @@ export class AdminTenantsService {
         ownerName: input.ownerName,
       },
     );
-    return temporaryOwnerPassword
-      ? { ...result, temporaryOwnerPassword }
-      : result;
+    return { ...result, temporaryOwnerPassword };
   }
 
   async clearTenantOwner(id: string, actor: AdminActor) {
@@ -1047,8 +1044,7 @@ export class AdminTenantsService {
   }
 
   private tenantPool(databaseUrl: string): Pool {
-    return new Pool({
-      connectionString: databaseUrl,
+    return createPgPool(databaseUrl, {
       max: 1,
       idleTimeoutMillis: 10_000,
       connectionTimeoutMillis: 15_000,
