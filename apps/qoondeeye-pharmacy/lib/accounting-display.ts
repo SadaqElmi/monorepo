@@ -1,6 +1,7 @@
 import type {
   ChartAccountRow,
   ChartOfAccountRow,
+  JournalEntryRow,
 } from "@/lib/services/accounting";
 
 type CoaTreeSource = Pick<
@@ -13,6 +14,40 @@ export function money(n: number) {
     minimumFractionDigits: 2,
     maximumFractionDigits: 2,
   })}`;
+}
+
+export function journalSourceLabel(sourceType: string): string {
+  const map: Record<string, string> = {
+    sale: "POS / Sale",
+    customer_invoice: "Customer invoice",
+    purchase: "Vendor bill",
+    purchase_reversal: "Purchase void",
+    purchase_refund: "Vendor refund",
+    sale_return: "Credit note",
+    expense: "Expense",
+    manual: "Manual entry",
+    ap_payment: "Supplier payment",
+    ar_payment: "Customer payment",
+  };
+  return map[sourceType] ?? sourceType.replace(/_/g, " ");
+}
+
+export function journalEntryAmount(entry: JournalEntryRow): number {
+  let total = 0;
+  for (const ln of entry.lines) {
+    total += Number(ln.debit);
+  }
+  return total;
+}
+
+export function journalEntryPartner(entry: JournalEntryRow): string {
+  const line = entry.lines.find((l) => l.partner_id);
+  if (!line?.partner_id) return "—";
+  return (
+    (line.partner_kind === "customer" ? "Customer " : "Supplier ") +
+    line.partner_id.slice(0, 8) +
+    "…"
+  );
 }
 
 /** Order COA rows as a tree (parent before children) for display. */

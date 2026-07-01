@@ -164,6 +164,7 @@ export class PosSessionsController {
       sessionId,
       req.branchId,
       req.allowedBranchIds ?? [],
+      req.userId ?? null,
     );
   }
 
@@ -178,6 +179,24 @@ export class PosSessionsController {
       sessionId,
       req.branchId,
       req.allowedBranchIds ?? [],
+    );
+  }
+
+  @Post('sessions/:sessionId/z-report/close')
+  closeViaZReport(
+    @Param('sessionId') sessionId: string,
+    @Req() req: FastifyRequest,
+  ) {
+    this.ensureTenant();
+    if (!req.branchId) {
+      throw new BadRequestException('Branch required (x-branch-id header)');
+    }
+    return this.posSessionsService.closeViaZReport(
+      this.tenantContext.getSchemaName()!,
+      sessionId,
+      req.branchId,
+      req.allowedBranchIds ?? [],
+      req.userId ?? null,
     );
   }
 

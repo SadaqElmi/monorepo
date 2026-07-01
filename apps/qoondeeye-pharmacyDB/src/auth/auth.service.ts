@@ -23,6 +23,7 @@ import { getTenantControlById, listActiveDedicatedTenants } from '../tenant/tena
 import { PosAuthRateLimitService } from './pos-auth-rate-limit.service';
 import { PosAuditService } from './pos-audit.service';
 import { PosRefreshTokenService } from './pos-refresh-token.service';
+import { PosSessionsService } from '../pos-sessions/pos-sessions.service';
 
 /** Response shape for unified login (frontend uses for redirect) */
 export type LoginResponse = {
@@ -49,6 +50,17 @@ export type LoginResponse = {
   staffId?: string | null;
   /** Tenant permission codes embedded in JWT (re-login refreshes). */
   permissions?: string[];
+  /** Auto-opened or resumed POS shift (staff PIN login only). */
+  posSession?: {
+    id: string;
+    branch_id: string;
+    device_id: string | null;
+    staff_user_id: string | null;
+    status: string;
+    opened_at: string;
+    closed_at: string | null;
+    opening_cash: number;
+  } | null;
 };
 
 /** Response shape for pharmacy owner register */
@@ -78,6 +90,7 @@ export class AuthService {
     private readonly posAuthRateLimit: PosAuthRateLimitService,
     private readonly posAudit: PosAuditService,
     private readonly posRefreshTokens: PosRefreshTokenService,
+    private readonly posSessions: PosSessionsService,
   ) {}
 
   private tenantTableRef(_schemaName: string, tableName: string): Prisma.Sql {
@@ -392,6 +405,15 @@ export class AuthService {
     });
     await this.markTenantLastLogin(device.tenantId);
 
+    const branchForShift = device.branchId ?? matched.branch_id;
+    const posSessionRow = await this.posSessions.ensureShiftForLogin(
+      device.tenantSchema,
+      branchForShift,
+      [branchForShift],
+      device.id,
+      matched.id,
+    );
+
     return {
       user: {
         id: matched.id,
@@ -413,6 +435,18 @@ export class AuthService {
       canViewAllBranches: false,
       staffId: resolvedStaffId,
       permissions: permissionCodes,
+      posSession: {
+        id: posSessionRow.id,
+        branch_id: posSessionRow.branch_id,
+        device_id: posSessionRow.device_id,
+        staff_user_id: posSessionRow.staff_user_id,
+        status: posSessionRow.status,
+        opened_at: posSessionRow.opened_at.toISOString(),
+        closed_at: posSessionRow.closed_at
+          ? posSessionRow.closed_at.toISOString()
+          : null,
+        opening_cash: posSessionRow.opening_cash,
+      },
     };
   }
 
@@ -477,23 +511,28 @@ export class AuthService {
       throw new BadRequestException('Tenant code is required');
     }
 
-    const [row] = await this.prisma.$queryRawUnsafe<
-      Array<{
-        id: string;
-        tenant_id: string;
-        display_name: string | null;
-        status: string;
-        binding_status: string;
-        setup_password_hash: string | null;
-        branch_id: string | null;
-        tenant_schema_name: string;
-        tenant_subdomain: string | null;
-        tenant_slug: string | null;
-        tenant_status: string;
-        database_url_encrypted: string | null;
-      }>
-    >(
-      `SELECT d.id, d.tenant_id, d.display_name, d.status, d.binding_status,
+    const tenantCode = input.tenantCode?.trim().toLowerCase() || null;
+    const tenantCodeForQuery =
+      requireTenantCode || tenantCode ? tenantCode : null;
+
+    type SetupTerminalRow = {
+      id: string;
+      tenant_id: string;
+      display_name: string | null;
+      terminal_username: string | null;
+      status: string;
+      binding_status: string;
+      setup_password_hash: string | null;
+      branch_id: string | null;
+      tenant_schema_name: string;
+      tenant_subdomain: string | null;
+      tenant_slug: string | null;
+      tenant_status: string;
+      database_url_encrypted: string | null;
+    };
+
+    const [row] = await this.prisma.$queryRawUnsafe<SetupTerminalRow[]>(
+      `SELECT d.id, d.tenant_id, d.display_name, d.terminal_username, d.status, d.binding_status,
               d.setup_password_hash, d.branch_id,
               t.schema_name AS tenant_schema_name,
               t.subdomain AS tenant_subdomain,
@@ -502,9 +541,22 @@ export class AuthService {
               t.database_url_encrypted
        FROM "public"."pos_devices" d
        INNER JOIN "public"."Tenant" t ON t.id = d.tenant_id
-       WHERE lower(d.terminal_username) = lower($1)
+       WHERE (
+         lower(d.terminal_username) = lower($1)
+         OR lower(trim(COALESCE(d.display_name, ''))) = lower($1)
+       )
+       AND (
+         $2::text IS NULL
+         OR lower(t.schema_name) = lower($2)
+         OR lower(COALESCE(t.subdomain, '')) = lower($2)
+         OR lower(COALESCE(t.slug, '')) = lower($2)
+       )
+       ORDER BY
+         CASE WHEN lower(d.terminal_username) = lower($1) THEN 0 ELSE 1 END,
+         d.created_at DESC
        LIMIT 1`,
       terminalUsername,
+      tenantCodeForQuery,
     );
 
     const reject = async (outcome: string): Promise<never> => {
@@ -543,28 +595,27 @@ export class AuthService {
       await reject('invalid_credentials');
     }
 
-    const tenantCode = input.tenantCode?.trim().toLowerCase();
     if (requireTenantCode || tenantCode) {
       if (!tenantCode) {
         await reject('tenant_code_required');
       } else {
         const aliases = [
-          row!.tenant_schema_name,
-          row!.tenant_subdomain,
-          row!.tenant_slug,
+          row.tenant_schema_name,
+          row.tenant_subdomain,
+          row.tenant_slug,
         ]
           .filter((value): value is string => Boolean(value?.trim()))
           .map((value) => value.trim().toLowerCase());
         if (!aliases.includes(tenantCode)) {
           this.logPosAuthEvent('pos_terminal_setup_failure', {
             terminalUsername,
-            tenantId: row!.tenant_id,
+            tenantId: row.tenant_id,
             outcome: 'tenant_terminal_mismatch',
           });
           void this.posAudit.record({
-            schemaName: row!.tenant_schema_name,
-            deviceId: row!.id,
-            branchId: row!.branch_id,
+            schemaName: row.tenant_schema_name,
+            deviceId: row.id,
+            branchId: row.branch_id,
             action: 'pos_terminal_setup_failure',
             payload: { terminalUsername, outcome: 'tenant_terminal_mismatch' },
           });
@@ -580,25 +631,25 @@ export class AuthService {
       `UPDATE "public"."pos_devices"
        SET last_setup_attempt_at = CURRENT_TIMESTAMP
        WHERE id = $1::uuid`,
-      row!.id,
+      row.id,
     );
 
     if (
-      row!.status !== 'active' ||
-      row!.tenant_status !== 'active' ||
-      !row!.database_url_encrypted?.trim() ||
-      row!.binding_status !== 'unbound'
+      row.status !== 'active' ||
+      row.tenant_status !== 'active' ||
+      !row.database_url_encrypted?.trim() ||
+      row.binding_status !== 'unbound'
     ) {
       await reject('inactive_or_bound');
     }
 
-    if (row!.branch_id) {
+    if (row.branch_id) {
       const branchExists = await this.prisma.withTenantSchema(
-        row!.tenant_schema_name,
+        row.tenant_schema_name,
         async (tx) => {
           const [branch] = await tx.$queryRawUnsafe<{ id: string }[]>(
             `SELECT id FROM "branches" WHERE id = $1::uuid LIMIT 1`,
-            row!.branch_id,
+            row.branch_id,
           );
           return Boolean(branch);
         },
@@ -610,7 +661,7 @@ export class AuthService {
 
     const passwordMatches = await bcrypt.compare(
       input.password,
-      row!.setup_password_hash!,
+      row.setup_password_hash!,
     );
     if (!passwordMatches) {
       await reject('invalid_password');

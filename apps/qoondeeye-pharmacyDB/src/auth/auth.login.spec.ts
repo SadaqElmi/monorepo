@@ -72,6 +72,9 @@ function createLoginService() {
       issuePair: jest.fn(),
       rotateRefreshToken: jest.fn(),
     } as never,
+    {
+      ensureShiftForLogin: jest.fn(),
+    } as never,
   );
 
   prisma.withTenantSchema.mockImplementation(

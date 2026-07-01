@@ -69,6 +69,7 @@ export default async function AccountingPageContent() {
       initialExecutive={initialExecutive}
       initialAudit={initialAudit}
       serverPrefetched={Boolean(initialBalanceSheet || initialExecutive)}
+      journalsPrefetched={Boolean(ctx.branchId)}
     />
   );
 }

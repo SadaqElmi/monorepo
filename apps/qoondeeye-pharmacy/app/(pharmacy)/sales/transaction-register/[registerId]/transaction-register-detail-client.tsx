@@ -286,6 +286,11 @@ export default function TransactionRegisterDetailClient({ registerId }: Props) {
           <div>
             <span className="text-muted-foreground">Posted statement</span>
             <p className="font-medium truncate">{d.posted_statement_no ?? "—"}</p>
+            {!d.posted_statement_no ? (
+              <p className="text-xs text-muted-foreground">
+                Filled after shift close (Z-report).
+              </p>
+            ) : null}
           </div>
           {d.refund_status ? (
             <div>

@@ -56,6 +56,8 @@ async function bootstrap() {
       'X-Request-Id',
       'x-correlation-id',
       'X-Correlation-Id',
+      'X-Pos-Device-Credential',
+      'x-pos-device-credential',
     ],
   });
   console.log(`CORS allowed origins: ${corsOrigins.join(', ')}`);

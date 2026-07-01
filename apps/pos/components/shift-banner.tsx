@@ -2,8 +2,7 @@
 
 import * as React from "react";
 import Link from "next/link";
-import { Lock, Unlock } from "lucide-react";
-
+import { getPosDeviceBinding } from "@/lib/device-client";
 import { usePos } from "@/components/pos-context";
 import { useOfflineSync } from "@/hooks/use-offline-sync";
 import { Button } from "@/components/ui/button";
@@ -25,14 +24,26 @@ export function ShiftBanner() {
     posSessionId,
     posSessionStatus,
     posSessionOpenedAt,
-    posSessionOpeningCash,
     posSessionLoading,
     posSessionPaused,
+    posSessionConflict,
     currentUser,
     pausePosShift,
     resumePosShift,
   } = usePos();
   const { isOffline, pendingCount } = useOfflineSync(currentUser?.tenantSlug);
+  const terminalLabel =
+    getPosDeviceBinding()?.displayName?.trim() ||
+    getPosDeviceBinding()?.terminalId?.slice(0, 8) ||
+    "Terminal";
+
+  if (posSessionConflict) {
+    return (
+      <div className="border-b border-red-500/40 bg-red-500/10 px-4 py-2 text-xs text-red-900">
+        {posSessionConflict}
+      </div>
+    );
+  }
 
   if (posSessionLoading || !posSessionId) return null;
 
@@ -59,12 +70,12 @@ export function ShiftBanner() {
           <span className="text-muted-foreground">Cashier:</span> {staffLabel}
         </span>
         <span>
-          <span className="text-muted-foreground">Opened:</span>{" "}
-          {formatShiftTime(posSessionOpenedAt)}
+          <span className="text-muted-foreground">Terminal:</span>{" "}
+          {terminalLabel}
         </span>
         <span>
-          <span className="text-muted-foreground">Opening cash:</span>{" "}
-          {posSessionOpeningCash.toFixed(2)}
+          <span className="text-muted-foreground">Opened:</span>{" "}
+          {formatShiftTime(posSessionOpenedAt)}
         </span>
         {isOffline ? (
           <span className="font-semibold text-amber-800">Offline</span>
@@ -84,7 +95,6 @@ export function ShiftBanner() {
             className="h-7 gap-1 rounded-sm text-xs"
             onClick={() => void resumePosShift()}
           >
-            <Unlock className="h-3.5 w-3.5" />
             Resume
           </Button>
         ) : (
@@ -95,7 +105,6 @@ export function ShiftBanner() {
             className="h-7 gap-1 rounded-sm text-xs"
             onClick={() => void pausePosShift()}
           >
-            <Lock className="h-3.5 w-3.5" />
             Lock
           </Button>
         )}
@@ -106,7 +115,7 @@ export function ShiftBanner() {
           variant="secondary"
           className="h-7 rounded-sm text-xs"
         >
-          <Link href="/close-shift">Close shift</Link>
+          <Link href="/x-report">X-Report</Link>
         </Button>
       </div>
     </div>

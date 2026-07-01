@@ -26,7 +26,7 @@ import { POS_BRAND_COLOR } from "@/features/register/model/constants";
 export function StaffLoginPage() {
   const router = useRouter();
   const queryClient = useQueryClient();
-  const { setManagerPrivilegesSuspended } = usePos();
+  const { setManagerPrivilegesSuspended, applyPosSessionFromLogin } = usePos();
 
   const [staffId, setStaffId] = React.useState("");
   const [pin, setPin] = React.useState("");
@@ -117,6 +117,19 @@ export function StaffLoginPage() {
 
       setAuthToken(res.token, user, res.refreshToken);
       setManagerPrivilegesSuspended(false);
+
+      if (res.posSession?.id) {
+        applyPosSessionFromLogin({
+          id: res.posSession.id,
+          branch_id: res.posSession.branch_id,
+          device_id: res.posSession.device_id,
+          staff_user_id: res.posSession.staff_user_id,
+          status: res.posSession.status,
+          opened_at: res.posSession.opened_at,
+          closed_at: res.posSession.closed_at,
+          opening_cash: res.posSession.opening_cash,
+        });
+      }
       try {
         localStorage.setItem("posLastStaffId", id);
         if (res.tenantSlug)

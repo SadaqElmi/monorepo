@@ -434,6 +434,10 @@ export default function TransactionRegisterClient() {
                 </span>
               ) : null}
             </CardTitle>
+            <CardDescription>
+              Sales appear here as soon as they are saved. Posted statement numbers
+              are assigned when the POS shift is closed (Z-report), not at sale time.
+            </CardDescription>
           </CardHeader>
           <CardContent className="overflow-x-auto p-0 pb-4">
             {listQuery.error ? (

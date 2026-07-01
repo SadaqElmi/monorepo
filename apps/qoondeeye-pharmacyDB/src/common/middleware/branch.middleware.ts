@@ -748,6 +748,16 @@ export class BranchMiddleware implements NestMiddleware {
     req.userId = userId;
     req.userRole = roleLower;
     req.userCanViewAllBranches = isBranchSuperUser;
+    if (payload.type === 'tenant_user') {
+      const p = payload as {
+        authMode?: string;
+        posDeviceId?: string | null;
+      };
+      if (typeof p.authMode === 'string') req.authMode = p.authMode;
+      if (typeof p.posDeviceId === 'string' && p.posDeviceId.trim()) {
+        req.posDeviceId = p.posDeviceId.trim();
+      }
+    }
 
     const jwtPerms =
       payload.type === 'tenant_user' &&

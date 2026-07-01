@@ -352,6 +352,7 @@ export default function ConfigurationPosTerminalsClient() {
         open={Boolean(resetTerminal)}
         onOpenChange={(open) => !open && setResetTerminal(null)}
         displayName={resetTerminal?.displayName}
+        terminalUsername={resetTerminal?.terminalUsername}
         password={resetPassword}
         onPasswordChange={setResetPassword}
         saving={saving}

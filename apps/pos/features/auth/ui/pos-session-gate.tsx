@@ -157,7 +157,7 @@ export function PosTerminalSetup({ onBound }: { onBound: () => void }) {
           <Input
             value={terminalUsername}
             onChange={(e) => setTerminalUsername(e.target.value)}
-            placeholder="Terminal username (e.g. hayatpos01)"
+            placeholder="Terminal username or label (e.g. pos01 or POS1)"
             autoComplete="off"
           />
           <Input

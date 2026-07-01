@@ -329,8 +329,10 @@ export class SaleReturnsService {
       async (tx) => {
       await this.lockDates.assertDocumentDateOpen(tx, branchId, new Date());
 
-      const [sale] = await tx.$queryRawUnsafe<SaleForReturnRow[]>(
-        `SELECT id, branch_id, on_account, customer_id
+      const [sale] = await tx.$queryRawUnsafe<
+        (SaleForReturnRow & { pos_session_id: string | null })[]
+      >(
+        `SELECT id, branch_id, on_account, customer_id, pos_session_id
          FROM sales
          WHERE id = $1`,
         dto.saleId,
@@ -413,6 +415,25 @@ export class SaleReturnsService {
           refund_amount: refundTotal,
         },
       });
+
+      if (sale.pos_session_id) {
+        await this.auditLog.append(tx, {
+          branchId,
+          actorUserId: ctx?.actorUserId ?? null,
+          tableName: 'pos_auth',
+          recordId: sale.pos_session_id,
+          action: 'REFUND_CREATED',
+          newPayload: {
+            saleReturnId: saleReturn.id,
+            saleId: dto.saleId,
+            refund_amount: refundTotal,
+            posSessionId: sale.pos_session_id,
+            legacyAction: 'create',
+          },
+          entityType: 'pos_auth',
+          entityId: sale.pos_session_id,
+        });
+      }
 
       return saleReturn;
       },

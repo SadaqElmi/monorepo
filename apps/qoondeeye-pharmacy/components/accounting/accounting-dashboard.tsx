@@ -25,15 +25,8 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table";
 import { ReportScopeBadge } from "@/components/accounting/report-scope-badge";
+import { RecentJournalEntriesCard } from "@/components/accounting/recent-journal-entries-card";
 import {
   getReportBranchSnapshot,
   useReportBranchQuery,
@@ -45,7 +38,6 @@ import {
   getAuditTrail,
   getBalanceSheet,
   getExecutiveSummary,
-  getJournalEntries,
   type AuditLogRow,
   type BalanceSheetResult,
   type ExecutiveSummaryResult,
@@ -58,40 +50,6 @@ function balanceForKey(bs: BalanceSheetResult | null, key: string): number {
   return line?.balance ?? 0;
 }
 
-function journalSourceLabel(sourceType: string): string {
-  const map: Record<string, string> = {
-    sale: "POS / Sale",
-    customer_invoice: "Customer invoice",
-    purchase: "Vendor bill",
-    purchase_reversal: "Purchase void",
-    purchase_refund: "Vendor refund",
-    sale_return: "Credit note",
-    expense: "Expense",
-    manual: "Manual entry",
-    ap_payment: "Supplier payment",
-    ar_payment: "Customer payment",
-  };
-  return map[sourceType] ?? sourceType.replace(/_/g, " ");
-}
-
-function entryAmount(entry: JournalEntryRow): number {
-  let d = 0;
-  for (const ln of entry.lines) {
-    d += Number(ln.debit);
-  }
-  return d;
-}
-
-function entryPartner(entry: JournalEntryRow): string {
-  const line = entry.lines.find((l) => l.partner_id);
-  if (!line?.partner_id) return "—";
-  return (
-    (line.partner_kind === "customer" ? "Customer " : "Supplier ") +
-    line.partner_id.slice(0, 8) +
-    "…"
-  );
-}
-
 export type AccountingDashboardProps = {
   tenantSlug?: string;
   serverScope?: { branchId?: string; aggregateAll?: boolean };
@@ -100,6 +58,7 @@ export type AccountingDashboardProps = {
   initialExecutive?: ExecutiveSummaryResult | null;
   initialAudit?: AuditLogRow[];
   serverPrefetched?: boolean;
+  journalsPrefetched?: boolean;
 };
 
 export function AccountingDashboard({
@@ -110,6 +69,7 @@ export function AccountingDashboard({
   initialExecutive = null,
   initialAudit = [],
   serverPrefetched = false,
+  journalsPrefetched = false,
 }: AccountingDashboardProps) {
   const { branchId: hookBranchId, aggregateAll: hookAggregateAll } =
     useReportBranchQuery();
@@ -128,9 +88,6 @@ export function AccountingDashboard({
   const [error, setError] = React.useState<string | null>(null);
   const [balanceSheet, setBalanceSheet] = React.useState<BalanceSheetResult | null>(
     initialBalanceSheet,
-  );
-  const [journals, setJournals] = React.useState<JournalEntryRow[]>(
-    initialJournals,
   );
   const [executive, setExecutive] = React.useState<ExecutiveSummaryResult | null>(
     initialExecutive,
@@ -165,11 +122,8 @@ export function AccountingDashboard({
       const reportBranchId = bid ?? effectiveBranchId;
       const reportAggregateAll = agg || effectiveAggregateAll;
       try {
-        const [bs, je, ex] = await Promise.all([
+        const [bs, ex] = await Promise.all([
           getBalanceSheet(tenantSlug, asOf, reportBranchId, reportAggregateAll),
-          reportBranchId
-            ? getJournalEntries(tenantSlug, reportBranchId, 8)
-            : Promise.resolve([] as JournalEntryRow[]),
           getExecutiveSummary(
             tenantSlug,
             from,
@@ -188,7 +142,6 @@ export function AccountingDashboard({
         }
         if (!cancelled) {
           setBalanceSheet(bs);
-          setJournals(je);
           setExecutive(ex);
           setAudit(trail);
         }
@@ -265,13 +218,12 @@ export function AccountingDashboard({
           ) : null}
 
           {loading ? (
-            <div className="flex items-center gap-2 text-muted-foreground">
+            <div className="mb-8 flex items-center gap-2 text-muted-foreground">
               <Loader2 className="size-5 animate-spin" />
               Loading dashboard…
             </div>
           ) : (
-            <>
-              <div className="mb-8 grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
+            <div className="mb-8 grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
                 <Card className="rounded-2xl border-teal-500/10 shadow-sm transition-colors hover:border-teal-500/20">
                   <CardHeader className="flex flex-row items-start justify-between space-y-0 pb-2">
                     <div className="rounded-lg bg-teal-500/10 p-2 text-teal-600">
@@ -365,176 +317,123 @@ export function AccountingDashboard({
                   </CardContent>
                 </Card>
               </div>
+          )}
 
-              <div className="space-y-8">
-                <Card className="overflow-hidden rounded-2xl border-teal-500/10 shadow-sm">
-                  <CardHeader className="flex flex-row items-center justify-between border-b border-border py-4">
+          <div className="space-y-8">
+            <RecentJournalEntriesCard
+              tenantSlug={tenantSlug}
+              branchId={effectiveBranchId}
+              limit={8}
+              initialEntries={initialJournals}
+              serverPrefetched={journalsPrefetched}
+            />
+
+            {!loading ? (
+              <div className="grid grid-cols-1 gap-8 md:grid-cols-2">
+                <Card className="rounded-2xl border-teal-500/10 shadow-sm">
+                  <CardHeader>
                     <CardTitle className="text-sm font-bold uppercase tracking-widest">
-                      Recent journal entries
+                      Period snapshot
                     </CardTitle>
-                    <Button variant="link" className="h-auto p-0 text-xs font-bold text-teal-600" asChild>
-                      <Link href="/accounting/journals">View all</Link>
-                    </Button>
+                    <CardDescription>From executive summary (this month)</CardDescription>
                   </CardHeader>
-                  <CardContent className="p-0">
-                    <Table>
-                      <TableHeader>
-                        <TableRow className="bg-muted/50 text-[11px] uppercase tracking-wider hover:bg-muted/50">
-                          <TableHead>Date</TableHead>
-                          <TableHead>Journal</TableHead>
-                          <TableHead>Reference</TableHead>
-                          <TableHead>Partner</TableHead>
-                          <TableHead className="text-right">Amount</TableHead>
-                          <TableHead>Status</TableHead>
-                        </TableRow>
-                      </TableHeader>
-                      <TableBody>
-                        {journals.length === 0 ? (
-                          <TableRow>
-                            <TableCell colSpan={6} className="text-center text-muted-foreground">
-                              No journal entries yet.
-                            </TableCell>
-                          </TableRow>
-                        ) : (
-                          journals.map((row) => (
-                            <TableRow
-                              key={row.id}
-                              className="hover:bg-teal-500/6"
-                            >
-                              <TableCell className="whitespace-nowrap text-muted-foreground">
-                                {row.entry_date}
-                              </TableCell>
-                              <TableCell className="font-semibold">
-                                {journalSourceLabel(row.source_type)}
-                              </TableCell>
-                              <TableCell className="max-w-[140px] truncate font-mono text-xs">
-                                {row.description ?? row.source_id?.slice(0, 8) ?? "—"}
-                              </TableCell>
-                              <TableCell className="max-w-[120px] truncate text-sm">
-                                {entryPartner(row)}
-                              </TableCell>
-                              <TableCell className="text-right font-bold tabular-nums">
-                                {money(entryAmount(row))}
-                              </TableCell>
-                              <TableCell>
-                                <Badge className="bg-emerald-100 text-[10px] font-bold uppercase tracking-widest text-emerald-800 hover:bg-emerald-100">
-                                  Posted
-                                </Badge>
-                              </TableCell>
-                            </TableRow>
-                          ))
+                  <CardContent className="space-y-4">
+                    <div className="flex justify-between text-xs">
+                      <span className="text-muted-foreground">Revenue</span>
+                      <span className="font-bold text-emerald-600 tabular-nums">
+                        {money(executive?.revenue ?? 0)}
+                      </span>
+                    </div>
+                    <div className="h-2 w-full overflow-hidden rounded-full bg-muted">
+                      <div
+                        className="h-full bg-emerald-500"
+                        style={{
+                          width: executive?.revenue
+                            ? `${Math.min(100, (Math.max(0, executive.netIncome) / executive.revenue) * 100 + 50)}%`
+                            : "0%",
+                        }}
+                      />
+                    </div>
+                    <div className="flex justify-between pt-2 text-xs">
+                      <span className="text-muted-foreground">Net income</span>
+                      <span
+                        className={cn(
+                          "font-bold tabular-nums",
+                          (executive?.netIncome ?? 0) >= 0
+                            ? "text-emerald-600"
+                            : "text-destructive",
                         )}
-                      </TableBody>
-                    </Table>
+                      >
+                        {money(executive?.netIncome ?? 0)}
+                      </span>
+                    </div>
+                    <div className="h-2 w-full overflow-hidden rounded-full bg-muted">
+                      <div
+                        className="h-full bg-red-500/80"
+                        style={{
+                          width: executive?.revenue
+                            ? `${Math.min(100, (Math.abs(Math.min(0, executive.netIncome)) / (executive.revenue || 1)) * 40 + 20)}%`
+                            : "15%",
+                        }}
+                      />
+                    </div>
+                    <div className="border-t pt-4">
+                      <div className="flex items-center gap-3">
+                        <div className="flex-1">
+                          <p className="text-[10px] font-bold uppercase text-muted-foreground">
+                            Rough liquidity view
+                          </p>
+                          <p className="text-lg font-bold tabular-nums">
+                            {money(projected)}
+                          </p>
+                        </div>
+                        <div className="rounded-lg bg-teal-50 p-2 text-teal-600 dark:bg-teal-950/50">
+                          <TrendingUp className="size-5" />
+                        </div>
+                      </div>
+                    </div>
                   </CardContent>
                 </Card>
 
-                <div className="grid grid-cols-1 gap-8 md:grid-cols-2">
-                  <Card className="rounded-2xl border-teal-500/10 shadow-sm">
-                    <CardHeader>
-                      <CardTitle className="text-sm font-bold uppercase tracking-widest">
-                        Period snapshot
-                      </CardTitle>
-                      <CardDescription>From executive summary (this month)</CardDescription>
-                    </CardHeader>
-                    <CardContent className="space-y-4">
-                      <div className="flex justify-between text-xs">
-                        <span className="text-muted-foreground">Revenue</span>
-                        <span className="font-bold text-emerald-600 tabular-nums">
-                          {money(executive?.revenue ?? 0)}
-                        </span>
-                      </div>
-                      <div className="h-2 w-full overflow-hidden rounded-full bg-muted">
-                        <div
-                          className="h-full bg-emerald-500"
-                          style={{
-                            width: executive?.revenue
-                              ? `${Math.min(100, (Math.max(0, executive.netIncome) / executive.revenue) * 100 + 50)}%`
-                              : "0%",
-                          }}
-                        />
-                      </div>
-                      <div className="flex justify-between pt-2 text-xs">
-                        <span className="text-muted-foreground">Net income</span>
-                        <span
-                          className={cn(
-                            "font-bold tabular-nums",
-                            (executive?.netIncome ?? 0) >= 0
-                              ? "text-emerald-600"
-                              : "text-destructive",
-                          )}
-                        >
-                          {money(executive?.netIncome ?? 0)}
-                        </span>
-                      </div>
-                      <div className="h-2 w-full overflow-hidden rounded-full bg-muted">
-                        <div
-                          className="h-full bg-red-500/80"
-                          style={{
-                            width: executive?.revenue
-                              ? `${Math.min(100, (Math.abs(Math.min(0, executive.netIncome)) / (executive.revenue || 1)) * 40 + 20)}%`
-                              : "15%",
-                          }}
-                        />
-                      </div>
-                      <div className="border-t pt-4">
-                        <div className="flex items-center gap-3">
-                          <div className="flex-1">
-                            <p className="text-[10px] font-bold uppercase text-muted-foreground">
-                              Rough liquidity view
-                            </p>
-                            <p className="text-lg font-bold tabular-nums">
-                              {money(projected)}
-                            </p>
+                <Card className="rounded-2xl border-teal-500/10 shadow-sm">
+                  <CardHeader>
+                    <CardTitle className="text-sm font-bold uppercase tracking-widest">
+                      Audit trail
+                    </CardTitle>
+                    <CardDescription>Recent changes (this branch)</CardDescription>
+                  </CardHeader>
+                  <CardContent className="space-y-5">
+                    {audit.length === 0 ? (
+                      <p className="text-xs text-muted-foreground">
+                        No audit events yet, or trail is empty for this branch.
+                      </p>
+                    ) : (
+                      audit.map((log) => (
+                        <div key={log.id} className="flex gap-3">
+                          <div className="flex size-8 shrink-0 items-center justify-center rounded-full bg-muted">
+                            <CheckCircle2 className="size-4 text-muted-foreground" />
                           </div>
-                          <div className="rounded-lg bg-teal-50 p-2 text-teal-600 dark:bg-teal-950/50">
-                            <TrendingUp className="size-5" />
+                          <div>
+                            <p className="text-xs text-foreground">
+                              <span className="font-semibold">{log.action}</span>{" "}
+                              <span className="text-muted-foreground">
+                                {log.table_name}
+                              </span>
+                            </p>
+                            <p className="text-[10px] text-muted-foreground">
+                              {formatDistanceToNow(new Date(log.created_at), {
+                                addSuffix: true,
+                              })}
+                            </p>
                           </div>
                         </div>
-                      </div>
-                    </CardContent>
-                  </Card>
-
-                  <Card className="rounded-2xl border-teal-500/10 shadow-sm">
-                    <CardHeader>
-                      <CardTitle className="text-sm font-bold uppercase tracking-widest">
-                        Audit trail
-                      </CardTitle>
-                      <CardDescription>Recent changes (this branch)</CardDescription>
-                    </CardHeader>
-                    <CardContent className="space-y-5">
-                      {audit.length === 0 ? (
-                        <p className="text-xs text-muted-foreground">
-                          No audit events yet, or trail is empty for this branch.
-                        </p>
-                      ) : (
-                        audit.map((log) => (
-                          <div key={log.id} className="flex gap-3">
-                            <div className="flex size-8 shrink-0 items-center justify-center rounded-full bg-muted">
-                              <CheckCircle2 className="size-4 text-muted-foreground" />
-                            </div>
-                            <div>
-                              <p className="text-xs text-foreground">
-                                <span className="font-semibold">{log.action}</span>{" "}
-                                <span className="text-muted-foreground">
-                                  {log.table_name}
-                                </span>
-                              </p>
-                              <p className="text-[10px] text-muted-foreground">
-                                {formatDistanceToNow(new Date(log.created_at), {
-                                  addSuffix: true,
-                                })}
-                              </p>
-                            </div>
-                          </div>
-                        ))
-                      )}
-                    </CardContent>
-                  </Card>
-                </div>
+                      ))
+                    )}
+                  </CardContent>
+                </Card>
               </div>
-            </>
-          )}
+            ) : null}
+          </div>
       </main>
 
       <div className="fixed bottom-8 right-8 z-30 md:right-10">
