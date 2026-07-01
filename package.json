@@ -19,7 +19,7 @@
   "scripts": {
     "build": "turbo run build",
     "check-types": "turbo run check-types",
-    "deps:fix": "syncpack fix-mismatches",
+    "deps:fix": "syncpack fix",
     "deps:lint": "syncpack lint",
     "dev": "turbo run dev",
     "dev:backend": "turbo run dev --filter=backend",
