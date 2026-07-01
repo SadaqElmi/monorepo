@@ -37,7 +37,7 @@ export async function decrementCatalogStock(
   const nextBatches = data.batchesData.map((batch) => {
     const match = items.find(
       (item) =>
-        item.productId === batch.productId &&
+        item.productId === batch.product_id &&
         (!item.batchId || item.batchId === batch.id),
     );
     if (!match) return batch;
