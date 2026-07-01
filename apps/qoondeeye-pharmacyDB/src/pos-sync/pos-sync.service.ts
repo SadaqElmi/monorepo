@@ -38,6 +38,7 @@ export class PosSyncService {
       actorUserId?: string | null;
       requestUserRole?: string | null;
       permissionCodes?: string[];
+      authMode?: string | null;
     },
   ): Promise<{ results: BatchSyncItemResult[] }> {
     if (!branchId) {
@@ -76,6 +77,7 @@ export class PosSyncService {
             actorUserId: ctx.actorUserId,
             requestUserRole: ctx.requestUserRole,
             permissionCodes: ctx.permissionCodes,
+            authMode: ctx.authMode,
           },
         );
 

@@ -1,16 +1,24 @@
 import { POS_PREFIX } from "./endpoints";
 import { getPosDeviceCredential } from "@/lib/device-client";
-import { authPost } from "./http";
+import { jsonFetch } from "./http";
 
 const APP_VERSION = "0.1.0";
 
-export async function sendPosHeartbeat(pendingOutboxCount = 0) {
+export async function sendPosHeartbeat(
+  tenantSlug: string,
+  pendingOutboxCount = 0,
+) {
   const credential = getPosDeviceCredential();
   if (!credential) return;
 
-  await authPost(
-    `${POS_PREFIX}/devices/heartbeat`,
-    {
+  await jsonFetch(`${POS_PREFIX}/devices/heartbeat`, {
+    method: "POST",
+    tenantSlug,
+    headers: {
+      "Content-Type": "application/json",
+      "X-Pos-Device-Credential": credential,
+    },
+    body: JSON.stringify({
       deviceName:
         typeof navigator !== "undefined"
           ? navigator.userAgent.slice(0, 120)
@@ -23,7 +31,6 @@ export async function sendPosHeartbeat(pendingOutboxCount = 0) {
           : undefined,
       appVersion: APP_VERSION,
       pendingOutboxCount,
-    },
-    { "X-Pos-Device-Credential": credential },
-  );
+    }),
+  });
 }

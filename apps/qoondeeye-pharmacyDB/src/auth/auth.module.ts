@@ -1,4 +1,4 @@
-import { Module } from '@nestjs/common';
+import { Module, forwardRef } from '@nestjs/common';
 import { JwtModule } from '@nestjs/jwt';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { AppRedisModule } from '../cache/redis.module';
@@ -11,6 +11,7 @@ import { JwtStrategy } from '../auth/jwt.strategy';
 import { PosAuthRateLimitService } from './pos-auth-rate-limit.service';
 import { PosAuditService } from './pos-audit.service';
 import { PosRefreshTokenService } from './pos-refresh-token.service';
+import { PosSessionsModule } from '../pos-sessions/pos-sessions.module';
 
 @Module({
   imports: [
@@ -19,6 +20,7 @@ import { PosRefreshTokenService } from './pos-refresh-token.service';
     AccountingModule,
     PrismaModule,
     TenantModule,
+    forwardRef(() => PosSessionsModule),
     JwtModule.registerAsync({
       imports: [ConfigModule],
       inject: [ConfigService],

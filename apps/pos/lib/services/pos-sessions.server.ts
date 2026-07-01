@@ -28,3 +28,9 @@ export async function getZReportServer(sessionId: string): Promise<unknown> {
     method: "GET",
   });
 }
+
+export async function getXReportServer(sessionId: string): Promise<unknown> {
+  return serverJsonFetch(`${PREFIX}/sessions/${sessionId}/x-report`, {
+    method: "GET",
+  });
+}

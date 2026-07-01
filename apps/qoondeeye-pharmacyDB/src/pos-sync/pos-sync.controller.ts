@@ -37,6 +37,7 @@ export class PosSyncController {
         actorUserId: req.userId,
         requestUserRole: req.userRole ?? null,
         permissionCodes: req.permissionCodes ?? [],
+        authMode: req.authMode ?? null,
       },
     );
   }

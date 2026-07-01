@@ -645,6 +645,8 @@ model PosSession {
   reopenedAt          DateTime? @map("reopened_at") @db.Timestamp(6)
   varianceApprovedBy  String?   @map("variance_approved_by") @db.Uuid
   varianceApprovedAt  DateTime? @map("variance_approved_at") @db.Timestamp(6)
+  zReportPrintedAt    DateTime? @map("z_report_printed_at") @db.Timestamp(6)
+  closingTotals       Json?     @map("closing_totals") @db.JsonB
 
   branch        Branch         @relation(fields: [branchId], references: [id], onDelete: Cascade)
   staffUser     User?          @relation(fields: [staffUserId], references: [id], onDelete: SetNull)
@@ -742,6 +744,8 @@ model SaleItem {
   total                    Decimal? @db.Decimal(10, 2)
   lineDiscount             Decimal  @default(0) @map("line_discount") @db.Decimal(14, 2)
   discountSource           String?  @map("discount_source") @db.VarChar(50)
+  unitCostSnapshot         Decimal? @map("unit_cost_snapshot") @db.Decimal(14, 4)
+  lineCostSnapshot         Decimal? @map("line_cost_snapshot") @db.Decimal(14, 2)
   miscChargeKind           String?  @map("misc_charge_kind") @db.VarChar(32)
 
   sale             Sale              @relation(fields: [saleId], references: [id], onDelete: Cascade)

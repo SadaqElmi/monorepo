@@ -142,6 +142,21 @@ export const erpKeys = {
   adminStaffUsers: () => ["erp", "admin", "staff-users"] as const,
   dashboardBundle: (tenant: string, facet: string) =>
     ["erp", "dashboard", "bundle", tenant, facet] as const,
+  dashboardTodaySales: (
+    tenant: string,
+    facet: string,
+    branchId: string,
+    aggregateAll: boolean,
+  ) =>
+    [
+      "erp",
+      "dashboard",
+      "today-sales",
+      tenant,
+      facet,
+      branchId,
+      aggregateAll,
+    ] as const,
   dashboardSeries: (
     tenant: string,
     facet: string,

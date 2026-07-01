@@ -1,5 +1,6 @@
 import { BadRequestException, Injectable } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
+import { toCalendarDateString } from '../common/date/calendar-date.util';
 import type { JournalSourceType } from './accounting.types';
 import { AccountingLockDateService } from './accounting-lock-date.service';
 
@@ -120,9 +121,7 @@ export class JournalService {
     );
 
     const dateStr =
-      entryDate instanceof Date
-        ? entryDate.toISOString().slice(0, 10)
-        : String(entryDate).slice(0, 10);
+      toCalendarDateString(entryDate) ?? String(entryDate).slice(0, 10);
 
     const [je] = await tx.$queryRawUnsafe<{ id: string }[]>(
       `INSERT INTO journal_entries (branch_id, entry_date, description, source_type, source_id, journal_book_id)

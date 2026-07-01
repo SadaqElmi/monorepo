@@ -9,9 +9,9 @@ export function usePosHeartbeat(tenantSlug: string | null | undefined) {
 
   useEffect(() => {
     if (!tenantSlug) return;
-    void sendPosHeartbeat(pendingCount);
+    void sendPosHeartbeat(tenantSlug, pendingCount);
     const id = window.setInterval(() => {
-      void sendPosHeartbeat(pendingCount);
+      void sendPosHeartbeat(tenantSlug, pendingCount);
     }, 60000);
     return () => window.clearInterval(id);
   }, [tenantSlug, pendingCount]);

@@ -1799,6 +1799,31 @@ export class FinancialReportsController {
     return this.withScopeMeta(payload, scope);
   }
 
+  @Get('today-sales')
+  @UseGuards(PermissionGuard)
+  @RequirePermissions('view_sales')
+  async todaySales(
+    @Req() req: FastifyRequest,
+    @Query('branchId') branchId?: string,
+    @Query('branchIds') branchIds?: string,
+    @Query('aggregateAll') aggregateAll?: string,
+  ) {
+    this.ensureTenant();
+    const scope = this.reportBranchScope(
+      req,
+      branchId,
+      branchIds,
+      aggregateAll,
+    );
+    const schema = this.tenantContext.getSchemaName()!;
+    await this.tenantService.applyTenantSchemaPatches(schema);
+    const payload = await this.reports.todaySalesSummary(
+      schema,
+      scope.branchIds,
+    );
+    return this.withScopeMeta(payload, scope);
+  }
+
   @Get('dashboard-series')
   async dashboardSeries(
     @Req() req: FastifyRequest,

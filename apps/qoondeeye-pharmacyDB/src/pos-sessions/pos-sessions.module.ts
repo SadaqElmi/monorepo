@@ -1,4 +1,4 @@
-import { Module } from '@nestjs/common';
+import { Module, forwardRef } from '@nestjs/common';
 import { PrismaModule } from '../prisma/prisma.module';
 import { TenantModule } from '../tenant/tenant.module';
 import { AccountingModule } from '../accounting/accounting.module';
@@ -14,7 +14,7 @@ import { PosSessionsService } from './pos-sessions.service';
   imports: [
     PrismaModule,
     TenantModule,
-    PosApprovalsModule,
+    forwardRef(() => PosApprovalsModule),
     AccountingModule,
     ProductsModule,
     UomsModule,

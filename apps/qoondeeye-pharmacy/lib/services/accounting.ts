@@ -1259,6 +1259,30 @@ export async function getTrialBalance(
   );
 }
 
+export type TodaySalesSummary = {
+  todayTotal: number;
+  todayCount: number;
+  yesterdayTotal: number;
+};
+
+export async function getTodaySalesSummary(
+  tenantSlug: string,
+  branchId?: string,
+  aggregateAll?: boolean,
+  init?: Pick<RequestInit, "signal">,
+): Promise<TodaySalesSummary> {
+  const q = new URLSearchParams();
+  appendReportBranchQuery(q, branchId, aggregateAll);
+  const raw = await fetchReportGet<
+    TodaySalesSummary & { scopeMeta?: unknown }
+  >(tenantSlug, `${REPORTS_PREFIX}/today-sales?${q}`, init);
+  return {
+    todayTotal: Number(raw?.todayTotal ?? 0),
+    todayCount: Number(raw?.todayCount ?? 0),
+    yesterdayTotal: Number(raw?.yesterdayTotal ?? 0),
+  };
+}
+
 export type DashboardSeriesPoint = {
   date: string;
   sales: number;

@@ -58,6 +58,7 @@ import { getResolvedStoredUser } from "@/lib/auth-client";
 import {
   getReportBranchSnapshot,
   useReportBranchQuery,
+  useReportScopeBadge,
 } from "@/hooks/use-branch-for-reports";
 import { formatApiErrorForUser } from "@/lib/services/http";
 import { CachedQueryToolbar } from "@/components/api/cached-query-toolbar";
@@ -72,6 +73,7 @@ import {
   getProducts,
   getPurchases,
   getSales,
+  getTodaySalesSummary,
   getTopProducts,
   type Batch,
   type Branch,
@@ -173,6 +175,31 @@ export default function DashboardPageClient({
   });
 
   const { branchId, aggregateAll } = useReportBranchQuery();
+  const scopeBadge = useReportScopeBadge();
+
+  const todaySalesQuery = useQuery({
+    queryKey: erpKeys.dashboardTodaySales(
+      tenantSlug,
+      branchFacet,
+      branchId ?? "",
+      aggregateAll,
+    ),
+    enabled: Boolean(
+      tenantSlug &&
+      (branchFacet || serverPrefetched) &&
+      (Boolean(branchId) || aggregateAll),
+    ),
+    staleTime: ERP_STALE_LIST,
+    queryFn: ({ signal }) => {
+      const scope = getReportBranchSnapshot();
+      return getTodaySalesSummary(
+        tenantSlug,
+        scope.branchId,
+        scope.aggregateAll,
+        { signal },
+      );
+    },
+  });
 
   const bundleQuery = useQuery({
     queryKey: erpKeys.dashboardBundle(tenantSlug, branchFacet),
@@ -333,10 +360,6 @@ export default function DashboardPageClient({
   const stats = React.useMemo(() => {
     const now = new Date();
     const todayStart = startOfDay(now);
-    const tomorrowStart = new Date(todayStart);
-    tomorrowStart.setDate(tomorrowStart.getDate() + 1);
-    const yesterdayStart = new Date(todayStart);
-    yesterdayStart.setDate(yesterdayStart.getDate() - 1);
 
     const monthStart = startOfMonth(now);
     const dayOfMonth = now.getDate();
@@ -353,8 +376,6 @@ export default function DashboardPageClient({
       new Date(now.getFullYear(), now.getMonth() - 1, 1),
     );
 
-    let todayTotal = 0;
-    let yesterdayTotal = 0;
     let monthTotal = 0;
     let lastMonthPeriodTotal = 0;
 
@@ -363,8 +384,6 @@ export default function DashboardPageClient({
       if (!s.sale_date) continue;
       const d = new Date(s.sale_date);
       if (Number.isNaN(d.getTime())) continue;
-      if (d >= todayStart && d < tomorrowStart) todayTotal += t;
-      if (d >= yesterdayStart && d < todayStart) yesterdayTotal += t;
       if (d >= monthStart && d <= now) monthTotal += t;
       if (d >= lastMonthStart && d <= lastMonthSamePeriodEnd)
         lastMonthPeriodTotal += t;
@@ -452,7 +471,6 @@ export default function DashboardPageClient({
     const prevBar = monthBars[4]?.total ?? 0;
     const expenseTrendPct = pctChange(lastBar, prevBar);
 
-    const todayVsYest = pctChange(todayTotal, yesterdayTotal);
     const monthVsLast = pctChange(monthTotal, lastMonthPeriodTotal);
     const purchaseVsLast = pctChange(purchasesMtd, purchasesPrevMtd);
 
@@ -496,14 +514,11 @@ export default function DashboardPageClient({
       });
 
     return {
-      todayTotal,
-      yesterdayTotal,
       monthTotal,
       avgTransaction,
       purchasesMtd,
       lowStockCount,
       expiredCount,
-      todayVsYest,
       monthVsLast,
       purchaseVsLast,
       trendValues,
@@ -515,6 +530,12 @@ export default function DashboardPageClient({
       lowStockDisplay,
     };
   }, [sales, purchases, inventory, batches, productById]);
+
+  const todayTotal = todaySalesQuery.data?.todayTotal ?? 0;
+  const yesterdayTotal = todaySalesQuery.data?.yesterdayTotal ?? 0;
+  const todayVsYest = pctChange(todayTotal, yesterdayTotal);
+  const todaySalesLoading = todaySalesQuery.isPending;
+
   const trendChartData = React.useMemo(
     () =>
       stats.trendKeys.map((k, idx) => {
@@ -633,9 +654,14 @@ export default function DashboardPageClient({
             iconBg="bg-primary/10"
             icon={<CreditCard className="h-5 w-5 text-primary" />}
             label="Today Sales"
-            value={loading ? "—" : formatMoney(stats.todayTotal)}
-            badgeLabel={kpiBadge(stats.todayVsYest).label}
-            badgeClass={kpiBadge(stats.todayVsYest).className}
+            value={
+              loading || todaySalesLoading
+                ? "—"
+                : formatMoney(todayTotal)
+            }
+            badgeLabel={kpiBadge(todayVsYest).label}
+            badgeClass={kpiBadge(todayVsYest).className}
+            hint={scopeBadge.label}
           />
           <KpiCard
             iconBg="bg-blue-500/10"
@@ -1222,6 +1248,7 @@ function KpiCard({
   badgeLabel,
   badgeClass,
   className,
+  hint,
 }: {
   icon: React.ReactNode;
   iconBg: string;
@@ -1230,6 +1257,7 @@ function KpiCard({
   badgeLabel: string;
   badgeClass: string;
   className?: string;
+  hint?: string;
 }) {
   return (
     <div
@@ -1245,6 +1273,11 @@ function KpiCard({
       </div>
       <p className="text-xs font-medium text-muted-foreground">{label}</p>
       <p className="text-xl font-bold">{value}</p>
+      {hint ? (
+        <p className="mt-1 truncate text-[10px] text-muted-foreground" title={hint}>
+          {hint}
+        </p>
+      ) : null}
     </div>
   );
 }

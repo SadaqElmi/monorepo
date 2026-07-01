@@ -50,6 +50,9 @@ function createService() {
       issuePair: jest.fn(),
       rotateRefreshToken: jest.fn(),
     } as never,
+    {
+      ensureShiftForLogin: jest.fn(),
+    } as never,
   );
   authTenantScanHooks(service).logger.warn = jest.fn();
   return { service, prisma };

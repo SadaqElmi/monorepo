@@ -116,6 +116,16 @@ export async function approvePosShiftVariance(
   });
 }
 
+export async function closeShiftViaZReport(
+  tenantSlug: string,
+  sessionId: string,
+): Promise<unknown> {
+  return jsonPos(`${PREFIX}/sessions/${sessionId}/z-report/close`, {
+    method: "POST",
+    tenantSlug,
+  });
+}
+
 export async function getXReport(
   tenantSlug: string,
   sessionId: string,

@@ -18,6 +18,7 @@ export function TerminalResetPasswordDialog({
   open,
   onOpenChange,
   displayName,
+  terminalUsername,
   password,
   onPasswordChange,
   saving,
@@ -26,6 +27,7 @@ export function TerminalResetPasswordDialog({
   open: boolean;
   onOpenChange: (open: boolean) => void;
   displayName?: string | null;
+  terminalUsername?: string | null;
   password: string;
   onPasswordChange: (value: string) => void;
   saving: boolean;
@@ -37,9 +39,12 @@ export function TerminalResetPasswordDialog({
         <DialogHeader>
           <DialogTitle>Reset terminal password</DialogTitle>
           <DialogDescription>
-            Sets a new setup password for {displayName ?? "this terminal"} and
-            clears the device binding. The terminal must be activated again on the
-            physical device.
+            Sets a new setup password for {displayName ?? "this terminal"}
+            {terminalUsername?.trim()
+              ? ` (username: ${terminalUsername.trim()})`
+              : ""}{" "}
+            and clears the device binding. On the POS device, sign in with the
+            terminal username or display label shown in Configuration.
           </DialogDescription>
         </DialogHeader>
         <div className="space-y-2">

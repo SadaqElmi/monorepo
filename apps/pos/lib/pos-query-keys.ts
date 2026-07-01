@@ -10,6 +10,8 @@ export const posKeys = {
     ["pos", "session", tenant, facet] as const,
   zReport: (tenant: string, facet: string, sessionId: string) =>
     ["pos", "z-report", tenant, facet, sessionId] as const,
+  xReport: (tenant: string, facet: string, sessionId: string) =>
+    ["pos", "x-report", tenant, facet, sessionId] as const,
 } as const;
 
 /** Catalog products, batches, categories — warm after login. */

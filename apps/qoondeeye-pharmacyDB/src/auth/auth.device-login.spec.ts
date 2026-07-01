@@ -89,6 +89,9 @@ function createService(overrides?: {
     posAuthRateLimit,
     posAudit as never,
     posRefreshTokens as never,
+    {
+      ensureShiftForLogin: jest.fn(),
+    } as never,
   );
   return { service, prisma, config, posAuthRateLimit, posRefreshTokens };
 }
@@ -312,6 +315,48 @@ describe('AuthService device-bound login helpers', () => {
     expect(result.tenantSlug).toBe('pharmacy1');
     expect(result.terminalId).toBe('terminal-1');
     expect(prisma.$executeRawUnsafe).toHaveBeenCalled();
+  });
+
+  it('setupPosTerminal resolves terminal by display name when tenant code is provided', async () => {
+    const { service, prisma } = createService();
+    const setupHash = await bcrypt.hash('setup-pass', 4);
+
+    prisma.$queryRawUnsafe.mockResolvedValueOnce([
+      {
+        id: 'terminal-1',
+        tenant_id: 'tenant-id',
+        display_name: 'POS1',
+        terminal_username: 'pos01',
+        status: 'active',
+        binding_status: 'unbound',
+        setup_password_hash: setupHash,
+        branch_id: 'branch-1',
+        tenant_schema_name: 'wakiil',
+        tenant_subdomain: 'wakiil',
+        tenant_slug: 'wakiil',
+        tenant_status: 'active',
+        database_url_encrypted: 'encrypted-url',
+      },
+    ]);
+    prisma.withTenantSchema.mockImplementation(
+      async (
+        _schemaName: string,
+        cb: (tx: { $queryRawUnsafe: jest.Mock }) => Promise<unknown>,
+      ) =>
+        cb({
+          $queryRawUnsafe: jest.fn().mockResolvedValue([{ id: 'branch-1' }]),
+        }),
+    );
+
+    const result = await service.setupPosTerminal({
+      tenantCode: 'wakiil',
+      terminalUsername: 'POS1',
+      password: 'setup-pass',
+      deviceFingerprint: 'fp-test',
+    });
+
+    expect(result.terminalId).toBe('terminal-1');
+    expect(result.deviceCredential).toMatch(/^pdv1\.terminal-1\./);
   });
 
   it('setupPosTerminal rejects mismatched tenantCode', async () => {

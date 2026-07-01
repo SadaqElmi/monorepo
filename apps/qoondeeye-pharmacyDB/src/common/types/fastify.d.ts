@@ -34,6 +34,9 @@ declare module 'fastify' {
     permissionCodes?: string[];
     /** Set when JWT type is `super_admin`. */
     isSuperAdmin?: boolean;
+    /** POS staff JWT (`authMode: device_pin`). */
+    authMode?: string;
+    posDeviceId?: string;
     /** Global request idempotency/correlation metadata. */
     idempotencyKey?: string;
     correlationId?: string;

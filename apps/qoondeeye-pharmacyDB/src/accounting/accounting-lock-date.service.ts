@@ -1,5 +1,6 @@
 import { BadRequestException, Injectable } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
+import { toCalendarDateString } from '../common/date/calendar-date.util';
 
 /** Allowed to post on or before branch lock date (strict period close). */
 export const ADJUSTMENT_SOURCE_TYPES = new Set<string>([
@@ -12,10 +13,7 @@ export const ADJUSTMENT_SOURCE_TYPES = new Set<string>([
 @Injectable()
 export class AccountingLockDateService {
   private toDateString(value: Date | string | null | undefined): string | null {
-    if (value == null) return null;
-    if (value instanceof Date) return value.toISOString().slice(0, 10);
-    const s = String(value).trim();
-    return s ? s.slice(0, 10) : null;
+    return toCalendarDateString(value);
   }
 
   /**

@@ -10,7 +10,12 @@ import { getOrCreateDeviceFingerprint, getPosServerUrl } from "../device-client"
 
 
 
-export type AuthUser = { id: string; email: string | null; name: string | null };
+export type AuthUser = {
+  id: string;
+  email: string | null;
+  name: string | null;
+  staffId?: string | null;
+};
 
 
 
@@ -40,6 +45,16 @@ export type LoginResponse = {
   canViewAllBranches?: boolean;
   staffId?: string | null;
   permissions?: string[];
+  posSession?: {
+    id: string;
+    branch_id: string;
+    device_id: string | null;
+    staff_user_id: string | null;
+    status: string;
+    opened_at: string;
+    closed_at: string | null;
+    opening_cash: number;
+  } | null;
 };
 
 

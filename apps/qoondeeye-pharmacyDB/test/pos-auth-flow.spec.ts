@@ -59,6 +59,18 @@ describe('POS auth flow (setup → staff login)', () => {
     };
     const posAudit = { record: jest.fn().mockResolvedValue(undefined) };
     const posRefreshTokens = createPosRefreshTokensMock();
+    const posSessions = {
+      ensureShiftForLogin: jest.fn().mockResolvedValue({
+        id: 'session-uuid',
+        branch_id: 'branch-uuid',
+        device_id: 'terminal-uuid',
+        staff_user_id: 'staff-uuid',
+        status: 'open',
+        opened_at: new Date(),
+        closed_at: null,
+        opening_cash: 0,
+      }),
+    };
 
     const service = new AuthService(
       prisma as never,
@@ -69,6 +81,7 @@ describe('POS auth flow (setup → staff login)', () => {
       posAuthRateLimit as never,
       posAudit as never,
       posRefreshTokens as never,
+      posSessions as never,
     );
 
     prisma.$queryRawUnsafe.mockResolvedValueOnce([
@@ -190,6 +203,7 @@ describe('POS auth flow (setup → staff login)', () => {
       } as never,
       { record: jest.fn() } as never,
       createPosRefreshTokensMock() as never,
+      { ensureShiftForLogin: jest.fn() } as never,
     );
 
     await expect(
@@ -222,6 +236,7 @@ describe('POS auth flow (setup → staff login)', () => {
       } as never,
       { record: jest.fn() } as never,
       createPosRefreshTokensMock() as never,
+      { ensureShiftForLogin: jest.fn() } as never,
     );
 
     await expect(

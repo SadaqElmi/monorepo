@@ -34,6 +34,7 @@ import {
   openPosSession,
   pausePosSession,
   resumePosSession,
+  type PosSessionCurrentResponse,
 } from "@/lib/services/pos-sessions";
 import { getEffectiveClientBranchId } from "@/lib/branch-access";
 import {
@@ -141,7 +142,9 @@ type PosContextType = {
   posSessionOpeningCash: number;
   posSessionLoading: boolean;
   posSessionPaused: boolean;
+  posSessionConflict: string | null;
   refreshPosSession: () => Promise<void>;
+  applyPosSessionFromLogin: (row: PosSessionCurrentResponse) => void;
   openPosShift: (openingCash?: number) => Promise<string | null>;
   pausePosShift: () => Promise<boolean>;
   resumePosShift: () => Promise<boolean>;
@@ -209,6 +212,9 @@ export function PosProvider({ children }: { children: React.ReactNode }) {
   );
   const [posSessionOpeningCash, setPosSessionOpeningCash] = useState(0);
   const [posSessionLoading, setPosSessionLoading] = useState(false);
+  const [posSessionConflict, setPosSessionConflict] = useState<string | null>(
+    null,
+  );
 
   const applyPosSessionRow = useCallback(
     (row: Awaited<ReturnType<typeof getCurrentPosSession>>) => {
@@ -219,6 +225,7 @@ export function PosProvider({ children }: { children: React.ReactNode }) {
         setPosSessionOpeningCash(0);
         return;
       }
+      setPosSessionConflict(null);
       setPosSessionId(row.id);
       setPosSessionStatus(
         row.status === "paused"
@@ -242,6 +249,13 @@ export function PosProvider({ children }: { children: React.ReactNode }) {
       }
     },
     [currentUser?.tenantSlug],
+  );
+
+  const applyPosSessionFromLogin = useCallback(
+    (row: PosSessionCurrentResponse) => {
+      applyPosSessionRow(row);
+    },
+    [applyPosSessionRow],
   );
 
   const hydrateShiftFromCache = useCallback(async (): Promise<boolean> => {
@@ -295,12 +309,15 @@ export function PosProvider({ children }: { children: React.ReactNode }) {
     hydrateShiftFromCache,
   ]);
 
-  /** After login: load existing open/paused shift only (cashier must open shift explicitly). */
-  const ensurePosSessionWithAutoOpen = useCallback(async () => {
+  /** On refresh: load existing open/paused shift (login applies session from API). */
+  const loadOrApplyPosSession = useCallback(async () => {
     const slug = currentUser?.tenantSlug?.trim();
     const branchId = getEffectiveClientBranchId();
     if (!slug || currentUser?.userType !== "tenant" || !branchId) {
       applyPosSessionRow(null);
+      return;
+    }
+    if (posSessionId) {
       return;
     }
     setPosSessionLoading(true);
@@ -316,6 +333,7 @@ export function PosProvider({ children }: { children: React.ReactNode }) {
   }, [
     currentUser?.tenantSlug,
     currentUser?.userType,
+    posSessionId,
     applyPosSessionRow,
     hydrateShiftFromCache,
   ]);
@@ -346,10 +364,6 @@ export function PosProvider({ children }: { children: React.ReactNode }) {
           closed_at: null,
           opening_cash: openingCash,
         });
-        posToast.success(
-          "Shift opened",
-          "You can ring sales for this session.",
-        );
         return row.id;
       } catch (e) {
         posToast.error(
@@ -402,12 +416,17 @@ export function PosProvider({ children }: { children: React.ReactNode }) {
   }, [currentUser?.tenantSlug, posSessionId, posSessionStatus]);
 
   useEffect(() => {
-    void ensurePosSessionWithAutoOpen();
+    if (!currentUser?.tenantSlug || currentUser?.userType !== "tenant") {
+      applyPosSessionRow(null);
+      return;
+    }
+    void loadOrApplyPosSession();
   }, [
     currentUser?.tenantSlug,
     currentUser?.userType,
     currentUser?.id,
-    ensurePosSessionWithAutoOpen,
+    loadOrApplyPosSession,
+    applyPosSessionRow,
   ]);
 
   useEffect(() => {
@@ -1056,7 +1075,9 @@ export function PosProvider({ children }: { children: React.ReactNode }) {
         posSessionOpeningCash,
         posSessionLoading,
         posSessionPaused: posSessionStatus === "paused",
+        posSessionConflict,
         refreshPosSession,
+        applyPosSessionFromLogin,
         openPosShift,
         pausePosShift,
         resumePosShift,

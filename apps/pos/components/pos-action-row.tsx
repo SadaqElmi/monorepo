@@ -28,9 +28,6 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { posToast } from "@/lib/pos-toast";
-import { getXReport } from "@/lib/api";
-import { getEffectiveClientBranchId } from "@/lib/branch-access";
-import { CashMovementDialog } from "@/components/cash-movement-dialog";
 import { SupervisorPinDialog } from "@/features/approvals/ui/supervisor-pin-dialog";
 import {
   isManagerTierRole,
@@ -145,10 +142,6 @@ export function PosActionRow() {
   } = usePos();
 
   const [isCurrencyDialogOpen, setIsCurrencyDialogOpen] = React.useState(false);
-  const [isCashMovementOpen, setIsCashMovementOpen] = React.useState(false);
-  const [isXReportOpen, setIsXReportOpen] = React.useState(false);
-  const [xReportLoading, setXReportLoading] = React.useState(false);
-  const [xReportBody, setXReportBody] = React.useState<string | null>(null);
   const [pendingPayment, setPendingPayment] = React.useState<{
     id: string;
     label: string;
@@ -196,37 +189,9 @@ export function PosActionRow() {
   }, [setSupervisorMode]);
 
   const handleSupervisorBack = React.useCallback(() => {
-    // Spec requirement: return to the previous screen where the cart is empty
-    // and show the default 5-button set.
     clearCart();
     setSupervisorMode(false);
   }, [clearCart, setSupervisorMode]);
-
-  const handleXReport = React.useCallback(() => {
-    const slug = currentUser?.tenantSlug?.trim();
-    if (!slug || !posSessionId) {
-      posToast.warning(
-        "X-Report",
-        "Open a shift with a branch scope before running X-Report.",
-      );
-      return;
-    }
-    setIsXReportOpen(true);
-    setXReportLoading(true);
-    setXReportBody(null);
-    void (async () => {
-      try {
-        const data = await getXReport(slug, posSessionId);
-        setXReportBody(JSON.stringify(data, null, 2));
-      } catch (e) {
-        setXReportBody(
-          e instanceof Error ? e.message : "Could not load X-Report.",
-        );
-      } finally {
-        setXReportLoading(false);
-      }
-    })();
-  }, [currentUser?.tenantSlug, posSessionId]);
 
   const handleComment = React.useCallback(() => {
     if (cart.length === 0) return;
@@ -284,8 +249,9 @@ export function PosActionRow() {
       );
       return;
     }
-    const role =
-      isManagerTierRole(currentUser?.role) ? currentUser?.role : "cashier";
+    const role = isManagerTierRole(currentUser?.role)
+      ? currentUser?.role
+      : "cashier";
     const maxPct = maxDiscountPercentForRole(role);
     if (n > maxPct + 1e-9 && pctKind) {
       setPendingSupervisorPct({ kind: pctKind, pct: n });
@@ -450,23 +416,7 @@ export function PosActionRow() {
         tone: "danger",
         onClick: handleSupervisorBack,
       },
-      {
-        id: "sup-lock",
-        label: posSessionStatus === "paused" ? "Resume" : "Lock",
-        tone: "warning",
-        disabled: !posSessionId,
-        onClick: () => {
-          if (posSessionStatus === "paused") void resumePosShift();
-          else void pausePosShift();
-        },
-      },
-      {
-        id: "sup-close",
-        label: "Close Shift",
-        tone: "danger",
-        href: "/close-shift",
-        disabled: !posSessionId,
-      },
+
       {
         id: "sup-z",
         label: "Z-Report",
@@ -477,30 +427,17 @@ export function PosActionRow() {
         id: "sup-x",
         label: "X-Report",
         tone: "brand",
-        onClick: handleXReport,
-      },
-      {
-        id: "sup-cash",
-        label: "Cash",
-        tone: "brand",
-        disabled: !posSessionId,
-        onClick: () => setIsCashMovementOpen(true),
+        href: "/x-report",
       },
     ],
     [
       handleSupervisorBack,
-      handleXReport,
       posSessionId,
       posSessionStatus,
       pausePosShift,
       resumePosShift,
     ],
   );
-
-  const closeXReport = React.useCallback(() => {
-    setIsXReportOpen(false);
-    setXReportBody(null);
-  }, []);
 
   const buttons =
     mode === "idle"
@@ -738,42 +675,6 @@ export function PosActionRow() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
-
-      <Dialog open={isXReportOpen} onOpenChange={(o) => !o && closeXReport()}>
-        <DialogContent className="max-h-[85vh] max-w-lg overflow-y-auto rounded-none border-slate-600 bg-slate-900 p-4 text-white">
-          <DialogHeader>
-            <DialogTitle className="text-base font-extrabold tracking-tight">
-              X-Report (read-only)
-            </DialogTitle>
-          </DialogHeader>
-          {xReportLoading ? (
-            <p className="text-sm text-slate-300">Loading…</p>
-          ) : (
-            <pre className="max-h-[60vh] overflow-auto whitespace-pre-wrap break-all text-left text-xs text-slate-200">
-              {xReportBody}
-            </pre>
-          )}
-          <DialogFooter className="mt-2">
-            <Button
-              type="button"
-              className="w-full rounded-none"
-              onClick={closeXReport}
-            >
-              Close
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-
-      {posSessionId && currentUser?.tenantSlug ? (
-        <CashMovementDialog
-          open={isCashMovementOpen}
-          onOpenChange={setIsCashMovementOpen}
-          tenantSlug={currentUser.tenantSlug}
-          sessionId={posSessionId}
-          branchId={getEffectiveClientBranchId() ?? ""}
-        />
-      ) : null}
 
       {currentUser?.tenantSlug ? (
         <SupervisorPinDialog

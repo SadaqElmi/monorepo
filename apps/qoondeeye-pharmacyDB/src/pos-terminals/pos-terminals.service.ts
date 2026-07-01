@@ -541,7 +541,7 @@ export class PosTerminalsService implements OnModuleInit {
     await this.findOne(tenantId, schemaName, id);
     const setupPasswordHash = await bcrypt.hash(password, SETUP_PASSWORD_ROUNDS);
 
-    await this.prisma.$executeRawUnsafe(
+    const updated = await this.prisma.$queryRawUnsafe<{ id: string }[]>(
       `UPDATE "public"."pos_devices"
        SET setup_password_hash = $3,
            device_secret_hash = NULL,
@@ -551,12 +551,16 @@ export class PosTerminalsService implements OnModuleInit {
            revoked_at = NULL,
            updated_by_user_id = $4::uuid,
            updated_at = CURRENT_TIMESTAMP
-       WHERE tenant_id = $1::uuid AND id = $2::uuid`,
+       WHERE tenant_id = $1::uuid AND id = $2::uuid
+       RETURNING id`,
       tenantId,
       id,
       setupPasswordHash,
       updatedByUserId ?? null,
     );
+    if (!updated.length) {
+      throw new NotFoundException('POS terminal not found');
+    }
 
     this.logger.log(
       JSON.stringify({

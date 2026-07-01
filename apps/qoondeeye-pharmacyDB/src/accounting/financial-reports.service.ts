@@ -1672,6 +1672,37 @@ export class FinancialReportsService {
     });
   }
 
+  /** Operational KPI: sales totals for today/yesterday (server calendar date). */
+  async todaySalesSummary(schemaName: string, branchIds: string[]) {
+    return this.prisma.withTenantSchema(schemaName, async (tx) => {
+      const { sql: branchWhere, branchParams } = branchColumnPredicate(
+        'branch_id',
+        branchIds,
+        1,
+      );
+      const [row] = await tx.$queryRawUnsafe<
+        {
+          today_total: string | number;
+          today_count: bigint;
+          yesterday_total: string | number;
+        }[]
+      >(
+        `SELECT
+           COALESCE(SUM(CASE WHEN CAST(sale_date AS date) = CURRENT_DATE THEN total_amount ELSE 0 END), 0)::numeric AS today_total,
+           COUNT(*) FILTER (WHERE CAST(sale_date AS date) = CURRENT_DATE)::bigint AS today_count,
+           COALESCE(SUM(CASE WHEN CAST(sale_date AS date) = CURRENT_DATE - INTERVAL '1 day' THEN total_amount ELSE 0 END), 0)::numeric AS yesterday_total
+         FROM sales
+         WHERE ${branchWhere}`,
+        ...branchParams,
+      );
+      return {
+        todayTotal: Number(row?.today_total ?? 0),
+        todayCount: Number(row?.today_count ?? 0),
+        yesterdayTotal: Number(row?.yesterday_total ?? 0),
+      };
+    });
+  }
+
   async dashboardSeries(
     schemaName: string,
     branchIds: string[],

@@ -39,6 +39,10 @@ export interface PosSessionFullRow {
   closed_at: Date | null;
 }
 
+export type EnsureShiftForLoginRow = PosSessionFullRow & {
+  opening_cash: number;
+};
+
 export interface PosStatementLineRow {
   id: string;
   payment_bucket: string;
@@ -164,6 +168,168 @@ export class PosSessionsService {
     }
   }
 
+  private auditShiftEvent(
+    schemaName: string,
+    input: {
+      branchId: string;
+      sessionId: string;
+      action: string;
+      deviceId?: string | null;
+      actorUserId?: string | null;
+      payload?: Record<string, unknown>;
+    },
+  ): void {
+    void this.auditLog.appendInSchema(schemaName, {
+      branchId: input.branchId,
+      actorUserId: input.actorUserId ?? null,
+      tableName: 'pos_auth',
+      recordId: input.deviceId?.trim() ? input.deviceId : input.sessionId,
+      action: input.action,
+      newPayload: {
+        sessionId: input.sessionId,
+        ...input.payload,
+      },
+      entityType: 'pos_auth',
+      entityId: input.deviceId?.trim() ? input.deviceId : input.sessionId,
+    });
+  }
+
+  private mapSessionRow(
+    row: PosSessionFullRow & { opening_cash?: string | number | null },
+  ): EnsureShiftForLoginRow {
+    return {
+      ...row,
+      opening_cash: Number(row.opening_cash ?? 0),
+    };
+  }
+
+  /**
+   * POS MVP: on staff login, resume terminal shift or auto-open with openingCash=0.
+   */
+  async ensureShiftForLogin(
+    schemaName: string,
+    branchId: string,
+    allowedBranchIds: string[],
+    deviceId: string,
+    staffUserId: string,
+  ): Promise<EnsureShiftForLoginRow> {
+    this.ensureBranch(branchId, allowedBranchIds);
+    await this.tenantService.applyTenantSchemaPatches(schemaName);
+    const scopedDeviceId = deviceId.trim();
+    const scopedStaffId = staffUserId.trim();
+    if (!scopedDeviceId || !scopedStaffId) {
+      throw new BadRequestException('Device and staff are required to open a shift');
+    }
+
+    try {
+      return await this.prisma.withTenantSchema(schemaName, async (tx) => {
+        const abandonedShifts = await tx.$queryRawUnsafe<
+          { id: string; device_id: string | null }[]
+        >(
+          `UPDATE pos_sessions
+           SET status = 'closed', closed_at = NOW()
+           WHERE staff_user_id = $1::uuid AND status IN ('open', 'paused')
+             AND (device_id IS NULL OR device_id <> $2::uuid)
+           RETURNING id, device_id`,
+          scopedStaffId,
+          scopedDeviceId,
+        );
+        for (const abandoned of abandonedShifts) {
+          this.auditShiftEvent(schemaName, {
+            branchId,
+            sessionId: abandoned.id,
+            deviceId: abandoned.device_id,
+            actorUserId: scopedStaffId,
+            action: 'SHIFT_CLOSED',
+            payload: {
+              reason: 'login_on_different_terminal',
+              newDeviceId: scopedDeviceId,
+              legacyAction: 'pos_shift_closed',
+            },
+          });
+        }
+
+        const [deviceSession] = await tx.$queryRawUnsafe<
+          (PosSessionFullRow & { opening_cash: string | null })[]
+        >(
+          `SELECT id, branch_id, device_id, staff_user_id, status, opened_at, closed_at,
+                  opening_cash::text
+           FROM pos_sessions
+           WHERE device_id = $1::uuid AND status IN ('open', 'paused')
+           LIMIT 1`,
+          scopedDeviceId,
+        );
+
+        if (deviceSession) {
+          const previousStaff = deviceSession.staff_user_id;
+          if (previousStaff !== scopedStaffId) {
+            await tx.$queryRawUnsafe(
+              `UPDATE pos_sessions SET staff_user_id = $2::uuid WHERE id = $1::uuid`,
+              deviceSession.id,
+              scopedStaffId,
+            );
+            this.auditShiftEvent(schemaName, {
+              branchId,
+              sessionId: deviceSession.id,
+              deviceId: scopedDeviceId,
+              actorUserId: scopedStaffId,
+              action: 'SHIFT_STAFF_HANDOFF',
+              payload: {
+                previousStaffUserId: previousStaff,
+                newStaffUserId: scopedStaffId,
+                legacyAction: 'pos_shift_staff_handoff',
+              },
+            });
+          }
+          return this.mapSessionRow({
+            ...deviceSession,
+            staff_user_id: scopedStaffId,
+          });
+        }
+
+        const [row] = await tx.$queryRawUnsafe<
+          (PosSessionFullRow & { opening_cash: string | null })[]
+        >(
+          `INSERT INTO pos_sessions (branch_id, device_id, staff_user_id, status, opening_cash)
+           VALUES ($1::uuid, $2::uuid, $3::uuid, 'open', 0)
+           RETURNING id, branch_id, device_id, staff_user_id, status, opened_at, closed_at,
+                     opening_cash::text`,
+          branchId,
+          scopedDeviceId,
+          scopedStaffId,
+        );
+
+        this.auditShiftEvent(schemaName, {
+          branchId,
+          sessionId: row.id,
+          deviceId: scopedDeviceId,
+          actorUserId: scopedStaffId,
+          action: 'SHIFT_OPENED',
+          payload: {
+            openingCash: 0,
+            deviceId: scopedDeviceId,
+            legacyAction: 'pos_shift_opened',
+          },
+        });
+
+        return this.mapSessionRow(row);
+      });
+    } catch (e) {
+      if (e instanceof ConflictException) throw e;
+      if (
+        e &&
+        typeof e === 'object' &&
+        'code' in e &&
+        (e as { code?: string }).code === '23505'
+      ) {
+        throw new ConflictException(
+          'An open POS session already exists for this terminal or cashier.',
+        );
+      }
+      throw e;
+    }
+  }
+
   async openSession(
     schemaName: string,
     branchId: string,
@@ -228,19 +394,17 @@ export class PosSessionsService {
           openingCash,
         );
 
-        void this.auditLog.appendInSchema(schemaName, {
+        this.auditShiftEvent(schemaName, {
           branchId,
+          sessionId: row.id,
+          deviceId,
           actorUserId: input.staffUserId?.trim() ? input.staffUserId : null,
-          tableName: 'pos_auth',
-          recordId: deviceId ?? row.id,
-          action: 'pos_shift_opened',
-          newPayload: {
-            sessionId: row.id,
+          action: 'SHIFT_OPENED',
+          payload: {
             openingCash,
             deviceId,
+            legacyAction: 'pos_shift_opened',
           },
-          entityType: 'pos_auth',
-          entityId: deviceId ?? row.id,
         });
 
         return row;
@@ -743,17 +907,28 @@ export class PosSessionsService {
     sessionId: string,
     branchId: string,
     allowedBranchIds: string[],
+    actorUserId?: string | null,
   ) {
     this.ensureBranch(branchId, allowedBranchIds);
     await this.tenantService.applyTenantSchemaPatches(schemaName);
 
-    return this.prisma.withTenantSchema(schemaName, async (tx) => {
+    const report = await this.prisma.withTenantSchema(schemaName, async (tx) => {
       const session = await this.loadSessionOrThrow(tx, sessionId, branchId);
-      if (session.status !== 'open') {
+      if (session.status !== 'open' && session.status !== 'paused') {
         throw new BadRequestException('Session is not open');
       }
       return this.buildSessionReport(tx, session, branchId, 'x');
     });
+
+    this.auditShiftEvent(schemaName, {
+      branchId,
+      sessionId,
+      actorUserId: actorUserId ?? null,
+      action: 'X_REPORT_PRINTED',
+      payload: { legacyAction: 'pos_x_report_printed' },
+    });
+
+    return report;
   }
 
   async getZReport(
@@ -812,6 +987,76 @@ export class PosSessionsService {
     });
   }
 
+  async closeViaZReport(
+    schemaName: string,
+    sessionId: string,
+    branchId: string,
+    allowedBranchIds: string[],
+    actorUserId?: string | null,
+  ) {
+    this.ensureBranch(branchId, allowedBranchIds);
+    await this.tenantService.applyTenantSchemaPatches(schemaName);
+
+    return this.prisma.withTenantSchema(schemaName, async (tx) => {
+      const [session] = await tx.$queryRawUnsafe<
+        (PosSessionFullRow & {
+          z_report_printed_at: Date | null;
+        })[]
+      >(
+        `SELECT id, branch_id, device_id, staff_user_id, status, opened_at, closed_at,
+                z_report_printed_at
+         FROM pos_sessions
+         WHERE id = $1::uuid AND branch_id = $2::uuid`,
+        sessionId,
+        branchId,
+      );
+      if (!session) {
+        throw new NotFoundException('POS session not found');
+      }
+      if (session.status !== 'open' && session.status !== 'paused') {
+        throw new BadRequestException('POS session is already closed');
+      }
+      if (session.z_report_printed_at) {
+        throw new BadRequestException('Z-Report has already been printed for this shift');
+      }
+
+      const report = await this.buildSessionReport(tx, session, branchId, 'z');
+
+      await tx.$queryRawUnsafe(
+        `UPDATE pos_sessions
+         SET status = 'closed',
+             closed_at = NOW(),
+             z_report_printed_at = NOW(),
+             closing_totals = $2::jsonb
+         WHERE id = $1::uuid`,
+        sessionId,
+        JSON.stringify(report),
+      );
+
+      this.auditShiftEvent(schemaName, {
+        branchId,
+        sessionId,
+        deviceId: session.device_id,
+        actorUserId: actorUserId ?? null,
+        action: 'Z_REPORT_PRINTED',
+        payload: { legacyAction: 'pos_z_report_printed' },
+      });
+      this.auditShiftEvent(schemaName, {
+        branchId,
+        sessionId,
+        deviceId: session.device_id,
+        actorUserId: actorUserId ?? null,
+        action: 'SHIFT_CLOSED',
+        payload: {
+          closingTotals: report,
+          legacyAction: 'pos_shift_closed',
+        },
+      });
+
+      return report;
+    });
+  }
+
   async closeSession(
     schemaName: string,
     sessionId: string,
@@ -856,14 +1101,12 @@ export class PosSessionsService {
         sessionId,
       );
 
-      void this.auditLog.appendInSchema(schemaName, {
+      void this.auditShiftEvent(schemaName, {
         branchId,
-        tableName: 'pos_auth',
-        recordId: session.device_id ?? sessionId,
-        action: 'pos_shift_closed',
-        newPayload: { sessionId },
-        entityType: 'pos_auth',
-        entityId: session.device_id ?? sessionId,
+        sessionId,
+        deviceId: session.device_id,
+        action: 'SHIFT_CLOSED',
+        payload: { legacyAction: 'pos_shift_closed' },
       });
 
       const [row] = await tx.$queryRawUnsafe<PosSessionFullRow[]>(

@@ -18,6 +18,8 @@ export type SalesMutationContext = {
   /** JWT role for POS discount caps (cashier/pharmacist 1%; manager/admin 10%). */
   requestUserRole?: string | null;
   permissionCodes?: string[];
+  /** Set when JWT authMode is device_pin (POS register). */
+  authMode?: string | null;
 };
 
 type PosPolicies = {
@@ -480,13 +482,22 @@ export class SalesService {
 
       const receiptNumber = await this.nextReceiptNumber(tx, branchId);
 
+      const isPosSale = ctx?.authMode === 'device_pin';
+
       let posSessionId: string | null = null;
       const psRaw = dto.posSessionId?.trim();
+      if (isPosSale && syncSource !== 'offline' && !psRaw) {
+        throw new BadRequestException(
+          'POS sale requires an open shift (posSessionId)',
+        );
+      }
       if (psRaw) {
         const sessionStatuses =
           syncSource === 'offline'
             ? ['open', 'paused', 'closed']
-            : ['open'];
+            : isPosSale
+              ? ['open']
+              : ['open'];
         const [sess] = await tx.$queryRawUnsafe<{ id: string }[]>(
           `SELECT id FROM pos_sessions
            WHERE id = $1::uuid AND branch_id = $2::uuid AND status = ANY($3::text[])`,
@@ -847,6 +858,25 @@ export class SalesService {
           on_account: onAccount,
         },
       });
+
+      if (posSessionId) {
+        await this.auditLog.append(tx, {
+          branchId,
+          actorUserId: ctx?.actorUserId ?? null,
+          tableName: 'pos_auth',
+          recordId: posSessionId,
+          action: 'SALE_CREATED',
+          newPayload: {
+            saleId: row.id,
+            receipt_number: updatedSale?.receipt_number,
+            total_amount: saleTotal,
+            posSessionId,
+            legacyAction: 'create',
+          },
+          entityType: 'pos_auth',
+          entityId: posSessionId,
+        });
+      }
 
       const paymentMethodOut = onAccount
         ? 'customer-credit'
