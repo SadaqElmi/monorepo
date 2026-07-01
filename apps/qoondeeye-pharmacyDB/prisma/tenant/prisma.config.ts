@@ -2,28 +2,20 @@
 import { defineConfig } from 'prisma/config';
 
 /**
- * Used by `prisma migrate deploy --config prisma/tenant/prisma.config.ts`.
- * `pnpm prisma:migrate:tenant` sets TENANT_DATABASE_URL via scripts/migrate-tenant-cli.ts
- * or scripts/migrate-all-tenants.ts before invoking Prisma.
+ * Used by `prisma generate` and `prisma migrate deploy --config prisma/tenant/prisma.config.ts`.
+ * `prisma generate` does not connect to the DB; a placeholder URL is used when env vars are unset
+ * (e.g. CI/Vercel install). Migrate scripts must set TENANT_DATABASE_URL before deploy:
+ * `pnpm prisma:migrate:tenant`, `pnpm tenant:migrate:all`, or runTenantPrismaMigrate().
  */
+const TENANT_GENERATE_PLACEHOLDER_URL =
+  'postgresql://prisma-generate-only@127.0.0.1:5432/prisma_generate_only';
+
 function resolveTenantMigrateUrl(): string {
-  const url =
+  return (
     process.env.TENANT_DATABASE_URL?.trim() ||
     process.env.TENANT_DB_ADMIN_URL?.trim() ||
-    '';
-
-  if (!url) {
-    throw new Error(
-      [
-        'TENANT_DATABASE_URL is required for tenant Prisma migrate.',
-        'Run: pnpm tenant:migrate:all',
-        'Or: pnpm prisma:migrate:tenant -- --tenant=<slug>',
-        'Or set TENANT_DATABASE_URL to a tenant database connection string.',
-      ].join(' '),
-    );
-  }
-
-  return url;
+    TENANT_GENERATE_PLACEHOLDER_URL
+  );
 }
 
 export default defineConfig({
