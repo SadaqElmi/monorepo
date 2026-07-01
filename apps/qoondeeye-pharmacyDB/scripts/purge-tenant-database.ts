@@ -1,5 +1,4 @@
 import 'dotenv/config';
-import { Pool } from 'pg';
 import { decryptTenantDatabaseUrl } from '../src/tenant/tenant-database-url.crypto';
 import { createPgPool } from '../src/prisma/create-pg-adapter';
 import {
@@ -70,7 +69,7 @@ async function main(): Promise<void> {
       ? databaseName.replace(/_db$/, '_user')
       : null;
 
-    const admin = new Pool({ connectionString: adminUrl, max: 1 });
+    const admin = createPgPool(adminUrl, { max: 1 });
     try {
       if (databaseName) {
         const db = escapeIdentifier(databaseName);

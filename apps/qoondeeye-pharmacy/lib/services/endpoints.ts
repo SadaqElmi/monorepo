@@ -1,24 +1,24 @@
 /** Toggle target: comment one block and uncomment the other. */
-//export const getBaseUrl = () => {
-//  const value = process.env.NEXT_PUBLIC_API_URL_LOCAL?.trim();
-//  if (!value) {
-//    throw new Error(
-//      "NEXT_PUBLIC_API_URL_LOCAL is not set. Configure it in .env.local or your deployment Key Vault.",
-//    );
-//  }
-//  return value.replace(/\/$/, "");
-//};
-
 export const getBaseUrl = () => {
-  const value = process.env.NEXT_PUBLIC_API_URL?.trim();
+  const value = process.env.NEXT_PUBLIC_API_URL_LOCAL?.trim();
   if (!value) {
     throw new Error(
-      "NEXT_PUBLIC_API_URL is not set. Configure it in .env.local or your deployment Key Vault.",
+      "NEXT_PUBLIC_API_URL_LOCAL is not set. Configure it in .env.local or your deployment Key Vault.",
     );
   }
   return value.replace(/\/$/, "");
 };
 
+//export const getBaseUrl = () => {
+//  const value = process.env.NEXT_PUBLIC_API_URL?.trim();
+//  if (!value) {
+//    throw new Error(
+//      "NEXT_PUBLIC_API_URL is not set. Configure it in .env.local or your deployment Key Vault.",
+//    );
+//  }
+//  return value.replace(/\/$/, "");
+//};
+//
 export const API_BASE = getBaseUrl();
 
 /** Join API host with a path segment (no leading/trailing slashes on segment). */

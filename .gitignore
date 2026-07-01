@@ -43,3 +43,6 @@ yarn-error.log*
 apps/qoondeeye-pharmacy/.git.backup-*/
 apps/qoondeeye-pharmacyDB/.git.backup-*/
 apps/qoondeeye-pharmacyDB/tmp/
+
+# Cursor rules files
+.cursor/rules/*.mdc

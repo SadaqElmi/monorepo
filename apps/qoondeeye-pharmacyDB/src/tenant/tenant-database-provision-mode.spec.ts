@@ -16,6 +16,20 @@ describe('usesSharedDatabaseOwner', () => {
     expect(usesSharedDatabaseOwner()).toBe(true);
   });
 
+  it('detects Supabase pooler admin URLs', () => {
+    process.env.TENANT_DB_SHARED_OWNER = '';
+    process.env.TENANT_DB_ADMIN_URL =
+      'postgresql://postgres.ref:pass@aws-1-eu-central-1.pooler.supabase.com:5432/postgres';
+    expect(usesSharedDatabaseOwner()).toBe(true);
+  });
+
+  it('detects Supabase direct admin URLs', () => {
+    process.env.TENANT_DB_SHARED_OWNER = '';
+    process.env.TENANT_DB_ADMIN_URL =
+      'postgresql://postgres:pass@db.jysoktynkaysumsrtuna.supabase.co:5432/postgres';
+    expect(usesSharedDatabaseOwner()).toBe(true);
+  });
+
   it('honors explicit opt-out', () => {
     process.env.TENANT_DB_ADMIN_URL =
       'postgresql://user:pass@ep-example.eu-central-1.aws.neon.tech/neondb';

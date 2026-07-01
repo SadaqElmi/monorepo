@@ -7,7 +7,7 @@ export function resolvePgTool(name: string): string {
     return path.join(binDir, process.platform === 'win32' ? `${name}.exe` : name);
   }
   if (process.platform === 'win32') {
-    for (const version of ['17', '16', '15', '14', '13']) {
+    for (const version of ['18', '17', '16', '15', '14', '13']) {
       const candidate = path.join(
         'C:\\Program Files\\PostgreSQL',
         version,

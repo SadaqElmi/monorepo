@@ -3,7 +3,10 @@ import { UnauthorizedException } from '@nestjs/common';
 import { AuthService } from './auth.service';
 import { listActiveDedicatedTenants } from '../tenant/tenant-control.repository';
 
-jest.mock('bcrypt');
+jest.mock('bcrypt', () => ({
+  compare: jest.fn<Promise<boolean>, [plaintext: string, hash: string]>(),
+  hash: jest.fn(),
+}));
 jest.mock('../tenant/tenant-control.repository', () => ({
   listActiveDedicatedTenants: jest.fn(),
 }));
@@ -13,7 +16,7 @@ const listActiveDedicatedTenantsMock =
     typeof listActiveDedicatedTenants
   >;
 const bcryptCompare = bcrypt.compare as jest.MockedFunction<
-  typeof bcrypt.compare
+  (plaintext: string, hash: string) => Promise<boolean>
 >;
 
 const tenantUser = {
