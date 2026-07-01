@@ -1,14 +1,14 @@
-# Purchase & Supplier — Domain Reference
+# Purchase & Supplier — Domain References
 
 This document describes how **suppliers** (vendors) and **purchases** (vendor bills) work across the PharmCare ERP stack: database schema, backend services, accounting, and frontend UI.
 
 ## Terminology
 
-| UI label | Database / API | Notes |
-|----------|----------------|-------|
-| **Vendors** (nav) | `suppliers` table, `/api/suppliers` | Supplier master data |
-| **Bills** (nav) | `purchases` table, `/api/purchases` | Purchase orders / vendor invoices |
-| **Payments** (nav) | `supplier_payments` table | AP payments to suppliers |
+| UI label           | Database / API                      | Notes                             |
+| ------------------ | ----------------------------------- | --------------------------------- |
+| **Vendors** (nav)  | `suppliers` table, `/api/suppliers` | Supplier master data              |
+| **Bills** (nav)    | `purchases` table, `/api/purchases` | Purchase orders / vendor invoices |
+| **Payments** (nav) | `supplier_payments` table           | AP payments to suppliers          |
 
 Purchases are **branch-scoped**. Suppliers are **tenant-wide** (shared across branches).
 
@@ -28,26 +28,26 @@ A supplier is a vendor you buy inventory from. Suppliers are linked to:
 
 Table: `suppliers` (tenant schema, e.g. `tenant_template`)
 
-| Column | Type | Description |
-|--------|------|-------------|
-| `id` | UUID | Primary key |
-| `name` | VARCHAR(255) | Supplier name |
-| `phone` | VARCHAR(50) | Phone |
-| `email` | VARCHAR(255) | Email |
-| `address` | TEXT | Address |
-| `created_at` | TIMESTAMP | Created timestamp |
+| Column       | Type         | Description       |
+| ------------ | ------------ | ----------------- |
+| `id`         | UUID         | Primary key       |
+| `name`       | VARCHAR(255) | Supplier name     |
+| `phone`      | VARCHAR(50)  | Phone             |
+| `email`      | VARCHAR(255) | Email             |
+| `address`    | TEXT         | Address           |
+| `created_at` | TIMESTAMP    | Created timestamp |
 
 Prisma model: `apps/qoondeeye-pharmacyDB/prisma/schema.prisma` → `Supplier`
 
 ### API — `/api/suppliers`
 
-| Method | Path | Auth / scope | Description |
-|--------|------|--------------|-------------|
-| `GET` | `/api/suppliers` | Tenant (`X-Tenant`) | List all suppliers, ordered by name |
-| `GET` | `/api/suppliers/:id` | Tenant | Get one supplier |
-| `POST` | `/api/suppliers` | Admin or owner only | Create supplier |
-| `PATCH` | `/api/suppliers/:id` | Admin or owner only | Update supplier |
-| `DELETE` | `/api/suppliers/:id` | Admin or owner only | Delete supplier |
+| Method   | Path                 | Auth / scope        | Description                         |
+| -------- | -------------------- | ------------------- | ----------------------------------- |
+| `GET`    | `/api/suppliers`     | Tenant (`X-Tenant`) | List all suppliers, ordered by name |
+| `GET`    | `/api/suppliers/:id` | Tenant              | Get one supplier                    |
+| `POST`   | `/api/suppliers`     | Admin or owner only | Create supplier                     |
+| `PATCH`  | `/api/suppliers/:id` | Admin or owner only | Update supplier                     |
+| `DELETE` | `/api/suppliers/:id` | Admin or owner only | Delete supplier                     |
 
 **Backend:** `SuppliersController` → `SuppliersService`  
 **Frontend client:** `apps/qoondeeye-pharmacy/lib/services/suppliers.ts`
@@ -67,10 +67,10 @@ All fields optional:
 
 ### Frontend UI
 
-| Route | Component |
-|-------|-----------|
+| Route                | Component                                                        |
+| -------------------- | ---------------------------------------------------------------- |
 | `/vendors/suppliers` | `suppliers-client.tsx` — list, search, create/edit sheet, delete |
-| Legacy redirect | `/suppliers` → vendors area |
+| Legacy redirect      | `/suppliers` → vendors area                                      |
 
 Mutation (create/update/delete) requires **admin or owner** role (`hasGlobalBranchAccess`).
 
@@ -88,46 +88,46 @@ A purchase records goods ordered or received from a supplier. It drives:
 
 ### Database schema — `purchases`
 
-| Column | Type | Description |
-|--------|------|-------------|
-| `id` | UUID | Primary key |
-| `supplier_id` | UUID | FK → `suppliers` (optional) |
-| `branch_id` | UUID | FK → `branches` |
-| `invoice_number` | VARCHAR(100) | Legacy / synced invoice number |
-| `supplier_invoice_no` | VARCHAR(100) | Supplier's invoice number |
-| `purchase_order_no` | VARCHAR(100) | Internal PO number |
-| `total_amount` | NUMERIC(12,2) | Header total |
-| `purchase_date` | DATE | Document date |
-| `order_date` | DATE | Order date |
-| `posting_date` | DATE | Accounting posting date |
-| `due_date` | DATE | Payment due date |
-| `status` | VARCHAR(32) | Workflow status (see below) |
-| `notes` | TEXT | Header notes |
-| `on_credit` | BOOLEAN | `true` → credit AP; `false` → credit Cash |
-| `released_at` | TIMESTAMP | When released from draft |
-| `received_at` | TIMESTAMP | When stock received |
-| `invoiced_at` | TIMESTAMP | When accounting posted |
-| `created_at` | TIMESTAMP | Created timestamp |
+| Column                | Type          | Description                               |
+| --------------------- | ------------- | ----------------------------------------- |
+| `id`                  | UUID          | Primary key                               |
+| `supplier_id`         | UUID          | FK → `suppliers` (optional)               |
+| `branch_id`           | UUID          | FK → `branches`                           |
+| `invoice_number`      | VARCHAR(100)  | Legacy / synced invoice number            |
+| `supplier_invoice_no` | VARCHAR(100)  | Supplier's invoice number                 |
+| `purchase_order_no`   | VARCHAR(100)  | Internal PO number                        |
+| `total_amount`        | NUMERIC(12,2) | Header total                              |
+| `purchase_date`       | DATE          | Document date                             |
+| `order_date`          | DATE          | Order date                                |
+| `posting_date`        | DATE          | Accounting posting date                   |
+| `due_date`            | DATE          | Payment due date                          |
+| `status`              | VARCHAR(32)   | Workflow status (see below)               |
+| `notes`               | TEXT          | Header notes                              |
+| `on_credit`           | BOOLEAN       | `true` → credit AP; `false` → credit Cash |
+| `released_at`         | TIMESTAMP     | When released from draft                  |
+| `received_at`         | TIMESTAMP     | When stock received                       |
+| `invoiced_at`         | TIMESTAMP     | When accounting posted                    |
+| `created_at`          | TIMESTAMP     | Created timestamp                         |
 
 ### Database schema — `purchase_items`
 
-| Column | Type | Description |
-|--------|------|-------------|
-| `id` | UUID | Primary key |
-| `purchase_id` | UUID | FK → `purchases` (CASCADE delete) |
-| `branch_id` | UUID | Branch |
-| `product_id` | UUID | FK → `products` |
-| `batch_id` | UUID | FK → `batches` (set on receive) |
-| `quantity` | INTEGER | Ordered quantity |
-| `quantity_received` | INTEGER | Received quantity (0 until receive) |
-| `cost_price` | NUMERIC(10,2) | Unit cost |
-| `selling_price` | NUMERIC(10,2) | Unit selling price |
-| `expiry_date` | DATE | Line expiry (pharmacy) |
-| `line_discount` | NUMERIC(12,2) | Line discount |
-| `tax_amount` | NUMERIC(12,2) | Line tax |
-| `line_notes` | TEXT | Line notes |
-| `planned_batch_number` | VARCHAR(100) | Batch number before receive |
-| `planned_expiry_date` | DATE | Expiry before receive |
+| Column                 | Type          | Description                         |
+| ---------------------- | ------------- | ----------------------------------- |
+| `id`                   | UUID          | Primary key                         |
+| `purchase_id`          | UUID          | FK → `purchases` (CASCADE delete)   |
+| `branch_id`            | UUID          | Branch                              |
+| `product_id`           | UUID          | FK → `products`                     |
+| `batch_id`             | UUID          | FK → `batches` (set on receive)     |
+| `quantity`             | INTEGER       | Ordered quantity                    |
+| `quantity_received`    | INTEGER       | Received quantity (0 until receive) |
+| `cost_price`           | NUMERIC(10,2) | Unit cost                           |
+| `selling_price`        | NUMERIC(10,2) | Unit selling price                  |
+| `expiry_date`          | DATE          | Line expiry (pharmacy)              |
+| `line_discount`        | NUMERIC(12,2) | Line discount                       |
+| `tax_amount`           | NUMERIC(12,2) | Line tax                            |
+| `line_notes`           | TEXT          | Line notes                          |
+| `planned_batch_number` | VARCHAR(100)  | Batch number before receive         |
+| `planned_expiry_date`  | DATE          | Expiry before receive               |
 
 **Line total formula:** `qty × cost_price − line_discount + tax_amount`  
 Header `total_amount` uses provided value if > 0, otherwise sum of line totals.
@@ -136,15 +136,15 @@ Header `total_amount` uses provided value if > 0, otherwise sum of line totals.
 
 Defined in `purchase-workflow.types.ts`:
 
-| Status | Editable? | Inventory posted? | Invoice posted? | Description |
-|--------|-----------|-------------------|-----------------|-------------|
-| `draft` | Yes | No | No | Initial state; lines can be edited |
-| `released` | Yes | No | No | PO sent / approved |
-| `partially_received` | No | Partial | No | Reserved for partial receive (future) |
-| `received` | No | Yes | No | Batches created, stock increased |
-| `invoiced` | No | Yes | Yes | Journal entry posted |
-| `closed` | No | Yes | Yes | Final state |
-| `cancelled` | — | — | — | Deleted; stock/journal reversed if posted |
+| Status               | Editable? | Inventory posted? | Invoice posted? | Description                               |
+| -------------------- | --------- | ----------------- | --------------- | ----------------------------------------- |
+| `draft`              | Yes       | No                | No              | Initial state; lines can be edited        |
+| `released`           | Yes       | No                | No              | PO sent / approved                        |
+| `partially_received` | No        | Partial           | No              | Reserved for partial receive (future)     |
+| `received`           | No        | Yes               | No              | Batches created, stock increased          |
+| `invoiced`           | No        | Yes               | Yes             | Journal entry posted                      |
+| `closed`             | No        | Yes               | Yes             | Final state                               |
+| `cancelled`          | —         | —                 | —               | Deleted; stock/journal reversed if posted |
 
 #### Workflow transitions
 
@@ -178,10 +178,10 @@ cancel (from most states) → reverses stock + journal, deletes purchase
 
 **Create modes** (`workflow` field on POST):
 
-| Mode | Behavior |
-|------|----------|
+| Mode                  | Behavior                                                  |
+| --------------------- | --------------------------------------------------------- |
 | `immediate` (default) | draft → receive → post-invoice → close in one transaction |
-| `draft` | Stops at `draft`; user advances manually via actions |
+| `draft`               | Stops at `draft`; user advances manually via actions      |
 
 **Tenant setting:** `tenant_settings.invoice_before_receive`
 
@@ -209,10 +209,10 @@ On post-invoice (`POST /api/purchases/:id/post-invoice`):
 
 Journal entry (`source_type = 'purchase'`):
 
-| Account | Debit | Credit |
-|---------|-------|--------|
-| Inventory | `total_amount` | |
-| Cash **or** Accounts Payable | | `total_amount` |
+| Account                      | Debit          | Credit         |
+| ---------------------------- | -------------- | -------------- |
+| Inventory                    | `total_amount` |                |
+| Cash **or** Accounts Payable |                | `total_amount` |
 
 - `on_credit = false` → credit **Cash**
 - `on_credit = true` → credit **Accounts Payable**, partner = supplier
@@ -231,13 +231,13 @@ Both lines tag `partner_kind = 'supplier'` and `partner_id = supplier_id` when s
 
 Table: `purchase_refunds` (created via accounting schema extension)
 
-| Column | Type |
-|--------|------|
-| `id`, `branch_id`, `purchase_id` | UUID |
-| `amount` | NUMERIC(14,2) |
-| `refund_date` | DATE |
-| `on_credit` | BOOLEAN |
-| `notes` | TEXT |
+| Column                           | Type          |
+| -------------------------------- | ------------- |
+| `id`, `branch_id`, `purchase_id` | UUID          |
+| `amount`                         | NUMERIC(14,2) |
+| `refund_date`                    | DATE          |
+| `on_credit`                      | BOOLEAN       |
+| `notes`                          | TEXT          |
 
 `POST /api/purchases/:id/refunds` — financial credit without deleting the purchase. Posts `purchase_refund` journal (reverse of purchase AP/cash effect).
 
@@ -247,23 +247,23 @@ Table: `purchase_refunds` (created via accounting schema extension)
 
 All endpoints require tenant context (`X-Tenant`) and branch access (`x-branch-id`).
 
-| Method | Path | Description |
-|--------|------|-------------|
-| `GET` | `/api/purchases` | List purchases for allowed branches |
-| `GET` | `/api/purchases?page=&limit=` | Paginated list |
-| `GET` | `/api/purchases/line-pricing-by-product` | Last purchase pricing per product (for bill form defaults) |
-| `GET` | `/api/purchases/line-pricing-by-product?productId=` | Pricing for one product |
-| `GET` | `/api/purchases/:id` | Purchase with line items |
-| `POST` | `/api/purchases` | Create (immediate or draft) |
-| `PATCH` | `/api/purchases/:id` | Update (draft/released only) |
-| `DELETE` | `/api/purchases/:id` | Delete draft purchase |
-| `DELETE` | `/api/purchases/:id/items` | Remove all lines |
-| `POST` | `/api/purchases/:id/release` | draft → released |
-| `POST` | `/api/purchases/:id/receive` | draft/released → received |
-| `POST` | `/api/purchases/:id/post-invoice` | received → invoiced |
-| `POST` | `/api/purchases/:id/close` | invoiced → closed |
-| `POST` | `/api/purchases/:id/cancel` | Cancel and reverse |
-| `POST` | `/api/purchases/:id/refunds` | Record supplier credit/refund |
+| Method   | Path                                                | Description                                                |
+| -------- | --------------------------------------------------- | ---------------------------------------------------------- |
+| `GET`    | `/api/purchases`                                    | List purchases for allowed branches                        |
+| `GET`    | `/api/purchases?page=&limit=`                       | Paginated list                                             |
+| `GET`    | `/api/purchases/line-pricing-by-product`            | Last purchase pricing per product (for bill form defaults) |
+| `GET`    | `/api/purchases/line-pricing-by-product?productId=` | Pricing for one product                                    |
+| `GET`    | `/api/purchases/:id`                                | Purchase with line items                                   |
+| `POST`   | `/api/purchases`                                    | Create (immediate or draft)                                |
+| `PATCH`  | `/api/purchases/:id`                                | Update (draft/released only)                               |
+| `DELETE` | `/api/purchases/:id`                                | Delete draft purchase                                      |
+| `DELETE` | `/api/purchases/:id/items`                          | Remove all lines                                           |
+| `POST`   | `/api/purchases/:id/release`                        | draft → released                                           |
+| `POST`   | `/api/purchases/:id/receive`                        | draft/released → received                                  |
+| `POST`   | `/api/purchases/:id/post-invoice`                   | received → invoiced                                        |
+| `POST`   | `/api/purchases/:id/close`                          | invoiced → closed                                          |
+| `POST`   | `/api/purchases/:id/cancel`                         | Cancel and reverse                                         |
+| `POST`   | `/api/purchases/:id/refunds`                        | Record supplier credit/refund                              |
 
 **Backend:** `PurchasesController` → `PurchasesService` + `PurchasesWorkflowService`  
 **Frontend client:** `apps/qoondeeye-pharmacy/lib/services/purchases.ts`
@@ -283,14 +283,14 @@ All endpoints require tenant context (`X-Tenant`) and branch access (`x-branch-i
   "dueDate": "2026-07-05",
   "notes": "Monthly restock",
   "onCredit": true,
-  "totalAmount": 1500.00,
+  "totalAmount": 1500.0,
   "items": [
     {
       "productId": "uuid",
       "quantity": 100,
       "batchNumber": "BATCH-A1",
-      "costPrice": 10.00,
-      "sellingPrice": 15.00,
+      "costPrice": 10.0,
+      "sellingPrice": 15.0,
       "expiryDate": "2027-12-31",
       "lineDiscount": 0,
       "taxAmount": 0,
@@ -312,42 +312,42 @@ Records cash/bank payments **to** suppliers, reducing Accounts Payable.
 
 ### Database — `supplier_payments`
 
-| Column | Type |
-|--------|------|
-| `id` | UUID |
-| `branch_id` | UUID (required) |
-| `supplier_id` | UUID (required) |
-| `amount` | NUMERIC(14,2) |
-| `payment_date` | DATE |
-| `reference` | VARCHAR(255) |
-| `notes` | TEXT |
-| `payment_method` | VARCHAR(50) |
-| `created_at` | TIMESTAMP |
+| Column           | Type            |
+| ---------------- | --------------- |
+| `id`             | UUID            |
+| `branch_id`      | UUID (required) |
+| `supplier_id`    | UUID (required) |
+| `amount`         | NUMERIC(14,2)   |
+| `payment_date`   | DATE            |
+| `reference`      | VARCHAR(255)    |
+| `notes`          | TEXT            |
+| `payment_method` | VARCHAR(50)     |
+| `created_at`     | TIMESTAMP       |
 
 ### Accounting entry (`source_type = 'ap_payment'`)
 
-| Account | Debit | Credit |
-|---------|-------|--------|
-| Accounts Payable | amount | |
-| Cash / Bank / Card clearing | | amount |
+| Account                     | Debit  | Credit |
+| --------------------------- | ------ | ------ |
+| Accounts Payable            | amount |        |
+| Cash / Bank / Card clearing |        | amount |
 
 Payment method determines credit account (cash vs bank vs card).
 
 ### API — `/api/accounting/supplier-payments`
 
-| Method | Path | Description |
-|--------|------|-------------|
-| `GET` | `/api/accounting/supplier-payments?branchId=&limit=` | Recent payments |
-| `POST` | `/api/accounting/supplier-payments` | Record payment + journal |
+| Method | Path                                                 | Description              |
+| ------ | ---------------------------------------------------- | ------------------------ |
+| `GET`  | `/api/accounting/supplier-payments?branchId=&limit=` | Recent payments          |
+| `POST` | `/api/accounting/supplier-payments`                  | Record payment + journal |
 
 **Backend:** `SupplierPaymentsService`  
 **Frontend:** `lib/services/accounting.ts` → `getSupplierPayments`, `createSupplierPayment`
 
 ### Frontend UI
 
-| Route | Component |
-|-------|-----------|
-| `/vendors/supplier-payments` | `supplier-payments-client.tsx` |
+| Route                           | Component                        |
+| ------------------------------- | -------------------------------- |
+| `/vendors/supplier-payments`    | `supplier-payments-client.tsx`   |
 | `/accounting/supplier-payments` | Redirect / alias to vendors area |
 
 ---
@@ -358,25 +358,25 @@ Payment method determines credit account (cash vs bank vs card).
 
 Under **Vendors**:
 
-| Label | Route |
-|-------|-------|
-| Bills | `/vendors/bills` |
-| Vendors | `/vendors/suppliers` |
-| Refunds | `/vendors/returns` |
+| Label    | Route                        |
+| -------- | ---------------------------- |
+| Bills    | `/vendors/bills`             |
+| Vendors  | `/vendors/suppliers`         |
+| Refunds  | `/vendors/returns`           |
 | Payments | `/vendors/supplier-payments` |
 
 ### Key components
 
-| File | Role |
-|------|------|
-| `components/features/bills/bills-page.tsx` | Bills list |
-| `components/features/bills/purchase-document-client.tsx` | Create/edit/view purchase document |
-| `components/features/bills/product-search-input.tsx` | Product picker on bill lines |
-| `components/features/bills/purchase-line-defaults.ts` | Default cost/sell from last purchase |
-| `app/(pharmacy)/vendors/bills/new/page.tsx` | New bill |
-| `app/(pharmacy)/vendors/bills/[purchaseId]/page.tsx` | View/edit bill |
-| `app/(pharmacy)/vendors/suppliers/suppliers-client.tsx` | Supplier CRUD |
-| `app/(pharmacy)/vendors/supplier-payments/supplier-payments-client.tsx` | AP payments |
+| File                                                                    | Role                                 |
+| ----------------------------------------------------------------------- | ------------------------------------ |
+| `components/features/bills/bills-page.tsx`                              | Bills list                           |
+| `components/features/bills/purchase-document-client.tsx`                | Create/edit/view purchase document   |
+| `components/features/bills/product-search-input.tsx`                    | Product picker on bill lines         |
+| `components/features/bills/purchase-line-defaults.ts`                   | Default cost/sell from last purchase |
+| `app/(pharmacy)/vendors/bills/new/page.tsx`                             | New bill                             |
+| `app/(pharmacy)/vendors/bills/[purchaseId]/page.tsx`                    | View/edit bill                       |
+| `app/(pharmacy)/vendors/suppliers/suppliers-client.tsx`                 | Supplier CRUD                        |
+| `app/(pharmacy)/vendors/supplier-payments/supplier-payments-client.tsx` | AP payments                          |
 
 ### Line pricing helper
 
@@ -413,8 +413,8 @@ Purchase ──> PurchaseRefund (financial credit)
 
 ## Permissions
 
-| Permission | UI effect |
-|------------|-----------|
+| Permission         | UI effect                        |
+| ------------------ | -------------------------------- |
 | Admin / owner role | Create, update, delete suppliers |
 
 Branch middleware restricts purchases and payments to branches the user can access.
@@ -425,27 +425,27 @@ Branch middleware restricts purchases and payments to branches the user can acce
 
 ### Backend (`qoondeeye-pharmacyDB`)
 
-| Area | Path |
-|------|------|
-| Prisma models | `prisma/schema.prisma` |
-| Purchase workflow | `src/purchases/purchases-workflow.service.ts` |
-| Purchase CRUD | `src/purchases/purchases.service.ts` |
-| Purchase API | `src/purchases/purchases.controller.ts` |
-| Workflow types | `src/purchases/purchase-workflow.types.ts` |
-| Supplier API | `src/suppliers/suppliers.service.ts`, `suppliers.controller.ts` |
-| Accounting posting | `src/accounting/accounting-posting.service.ts` |
-| Supplier payments | `src/accounting/supplier-payments.service.ts` |
-| Migration (workflow) | `prisma/migrations/20260604120000_purchase_workflow/` |
+| Area                 | Path                                                            |
+| -------------------- | --------------------------------------------------------------- |
+| Prisma models        | `prisma/schema.prisma`                                          |
+| Purchase workflow    | `src/purchases/purchases-workflow.service.ts`                   |
+| Purchase CRUD        | `src/purchases/purchases.service.ts`                            |
+| Purchase API         | `src/purchases/purchases.controller.ts`                         |
+| Workflow types       | `src/purchases/purchase-workflow.types.ts`                      |
+| Supplier API         | `src/suppliers/suppliers.service.ts`, `suppliers.controller.ts` |
+| Accounting posting   | `src/accounting/accounting-posting.service.ts`                  |
+| Supplier payments    | `src/accounting/supplier-payments.service.ts`                   |
+| Migration (workflow) | `prisma/migrations/20260604120000_purchase_workflow/`           |
 
 ### Frontend (`qoondeeye-pharmacy`)
 
-| Area | Path |
-|------|------|
-| Purchase API client | `lib/services/purchases.ts` |
-| Supplier API client | `lib/services/suppliers.ts` |
-| Validation | `lib/validation.ts` → `@repo/validation` purchases schemas |
-| Routes | `lib/routes.ts`, `lib/erp-nav-config.ts` |
-| Endpoints | `lib/services/endpoints.ts` |
+| Area                | Path                                                       |
+| ------------------- | ---------------------------------------------------------- |
+| Purchase API client | `lib/services/purchases.ts`                                |
+| Supplier API client | `lib/services/suppliers.ts`                                |
+| Validation          | `lib/validation.ts` → `@repo/validation` purchases schemas |
+| Routes              | `lib/routes.ts`, `lib/erp-nav-config.ts`                   |
+| Endpoints           | `lib/services/endpoints.ts`                                |
 
 ### Shared validation
 
