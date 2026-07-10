@@ -1,21 +1,13 @@
-/** Toggle target: comment one block and uncomment the other. */
-//export const getBaseUrl = () => {
-//  const value = process.env.NEXT_PUBLIC_API_URL_LOCAL?.trim();
-//  if (!value) {
-//    throw new Error(
-//      "NEXT_PUBLIC_API_URL_LOCAL is not set. Configure it in .env.local or your deployment Key Vault.",
-//    );
-//  }
-//  return normalizePublicApiUrl(value);
-//};
-
 import { normalizePublicApiUrl } from "@repo/utils";
 
+/** Deployed environments set NEXT_PUBLIC_API_URL; local dev may use NEXT_PUBLIC_API_URL_LOCAL instead. */
 export const getBaseUrl = () => {
-  const value = process.env.NEXT_PUBLIC_API_URL?.trim();
+  const value =
+    process.env.NEXT_PUBLIC_API_URL?.trim() ||
+    process.env.NEXT_PUBLIC_API_URL_LOCAL?.trim();
   if (!value) {
     throw new Error(
-      "NEXT_PUBLIC_API_URL is not set. Configure it in .env.local or your deployment Key Vault.",
+      "NEXT_PUBLIC_API_URL (or NEXT_PUBLIC_API_URL_LOCAL for local dev) is not set. Configure it in .env.local or your deployment Key Vault.",
     );
   }
   return normalizePublicApiUrl(value);
