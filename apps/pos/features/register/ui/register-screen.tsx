@@ -207,8 +207,14 @@ export function RegisterScreen() {
                 ...hydrated,
                 paymentMethod: tx.paymentMethod || hydrated.paymentMethod,
               });
-            } catch {
-              // Ignore per-sale failures and continue hydrating others.
+            } catch (err) {
+              // Keep this sale's local cache entry and continue hydrating others.
+              if (!ac.signal.aborted) {
+                console.warn(
+                  `[register] failed to hydrate sale ${tx.saleId}`,
+                  err,
+                );
+              }
             }
           }),
         );
@@ -222,8 +228,11 @@ export function RegisterScreen() {
           persistPosTransactions(patched);
           return patched;
         });
-      } catch {
+      } catch (err) {
         // Keep local cache if server history cannot be loaded.
+        if (!ac.signal.aborted) {
+          console.warn("[register] failed to load sale history", err);
+        }
       }
     })();
 
