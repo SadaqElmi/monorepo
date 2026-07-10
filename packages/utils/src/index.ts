@@ -17,6 +17,7 @@ export {
   unwrapListResponse,
   type PagedList,
 } from "./api-client";
+export { normalizePublicApiUrl } from "./public-api-url";
 
 export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs));
